@@ -24,12 +24,17 @@ public record GridPayload(List<Cell> cells, long[] threat) implements CustomPayl
 	public static final PacketCodec<RegistryByteBuf, GridPayload> CODEC = new PacketCodec<>() {
 		@Override
 		public GridPayload decode(RegistryByteBuf buf) {
-			int n = buf.readVarInt();
+			int n = PacketLimits.count(buf.readVarInt(), PacketLimits.GRID_CELLS);
 			List<Cell> cells = new ArrayList<>(n);
 			for (int i = 0; i < n; i++) {
-				cells.add(new Cell(buf.readLong(), buf.readVarInt(), buf.readVarInt() - 1, buf.readBoolean()));
+				long pos = buf.readLong();
+                int cost = buf.readVarInt(), parent = buf.readVarInt() - 1;
+                boolean endable = buf.readBoolean();
+                if (cost < 0 || (i == 0 ? parent != -1 || cost != 0 : parent < 0 || parent >= i))
+                    throw new IllegalArgumentException("Invalid grid path parent/cost");
+                cells.add(new Cell(pos, cost, parent, endable));
 			}
-			long[] threat = new long[buf.readVarInt()];
+			long[] threat = new long[PacketLimits.count(buf.readVarInt(), PacketLimits.THREAT_CELLS)];
 			for (int i = 0; i < threat.length; i++) {
 				threat[i] = buf.readLong();
 			}

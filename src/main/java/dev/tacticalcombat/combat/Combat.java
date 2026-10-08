@@ -45,6 +45,16 @@ public final class Combat {
 	private static final Set<PositionFlag> KEEP_LOOK = EnumSet.of(PositionFlag.X_ROT, PositionFlag.Y_ROT);
 
 	private final ServerWorld world;
+    private final java.util.UUID id = java.util.UUID.randomUUID();
+    private final dev.tacticalcombat.core.TurnRequests requests = new dev.tacticalcombat.core.TurnRequests(id);
+    public java.util.UUID id() { return id; }
+    public boolean acceptRequest(ServerPlayerEntity player, dev.tacticalcombat.net.RequestStamp stamp) {
+        return isTurnOf(player) && isValid(current()) && stamp != null
+                && requests.accept(stamp.encounter(), stamp.turn(), stamp.request());
+    }
+    public dev.tacticalcombat.net.RequestStamp commandStamp() {
+        return new dev.tacticalcombat.net.RequestStamp(id, requests.turn(), java.util.UUID.randomUUID());
+    }
 	private List<Combatant> order = new ArrayList<>();
 	private int turn = 0;
 	private int round = 1;
@@ -63,14 +73,17 @@ public final class Combat {
 
 	// ---------------------------------------------------------------- creation
 
-	public static Combat start(ServerWorld world, Collection<ServerPlayerEntity> players, Collection<MobEntity> enemies) {
+	static Combat start(ServerWorld world, Collection<ServerPlayerEntity> players, Collection<MobEntity> enemies) {
 		Combat combat = new Combat(world);
 		for (ServerPlayerEntity p : players) {
-			combat.order.add(new Combatant(p, rollInitiative(world)));
+			if (combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS - 1 && CombatManager.claim(p, combat))
+                combat.order.add(new Combatant(p, rollInitiative(world)));
 		}
 		for (MobEntity m : enemies) {
-			combat.order.add(new Combatant(m, rollInitiative(world)));
+			if (combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS && CombatManager.claim(m, combat))
+                combat.order.add(new Combatant(m, rollInitiative(world)));
 		}
+		if (combat.order.isEmpty()) return null;
 		combat.sortOrder();
 		combat.turn = 0;
 		combat.beginTurn();
@@ -114,16 +127,23 @@ public final class Combat {
 	// ---------------------------------------------------------------- rules
 
 	/**
-	 * Called whenever a combatant of this fight deals damage. Returns false when the attack must be cancelled
-	 * (not its turn, or action already spent); otherwise spends the action.
+	 * Accepts an action before its effects execute. Invalid actions return null; misses still spend the action.
 	 */
-	public boolean tryUseAction(LivingEntity attacker) {
-		Combatant c = get(attacker);
-		if (c == null) return true;
-		if (current() != c || c.actionUsed) return false;
-		c.actionUsed = true;
-		return true;
-	}
+    public dev.tacticalcombat.core.DamagePermit beginAction(LivingEntity actor) {
+        Combatant c = get(actor);
+        if (c == null || !isValid(c) || current() != c || c.actionUsed || c.moving()) return null;
+        c.actionUsed = true;
+        return new dev.tacticalcombat.core.DamagePermit(id, actor.getUuid());
+    }
+
+    public boolean legalMelee(LivingEntity actor, LivingEntity target) {
+        if (!actor.isAlive() || !target.isAlive() || actor.getWorld() != world || target.getWorld() != world
+                || !contains(actor) || !contains(target) || actor == target) return false;
+        boolean reach = actor instanceof ServerPlayerEntity
+                ? Grid.distanceToBox(actor.getEyePos(), target.getBoundingBox()) <= Grid.ATTACK_REACH
+                : actor instanceof MobEntity mob && inMeleeReach(mob, target);
+        return reach && CombatGeometry.clearAttack(actor, target);
+    }
 
 	/** Ends the current turn and starts the next one. */
 	public void endTurn() {
@@ -140,6 +160,7 @@ public final class Combat {
 	}
 
 	private void beginTurn() {
+        requests.nextTurn();
 		Combatant c = current();
 		c.resetTurnResources(c.isPlayer() ? CombatConfig.PLAYER_MOVEMENT : CombatConfig.MOB_MOVEMENT);
 		if (c.entity instanceof ServerPlayerEntity p) {
@@ -156,13 +177,16 @@ public final class Combat {
 		Combatant c = get(player);
 		if (c == null || current() != c || c.moving() || moveGrid == null) return;
 
+		refreshGrid(); // terrain and occupancy may have changed since the preview
 		Integer idx = moveGrid.index.get(target.asLong());
 		if (idx == null) return;
 		Grid.Node node = moveGrid.nodes.get(idx);
 		if (!node.endable || node.cost <= 0) return;
 		if (c.moveUsed + node.cost > c.moveBudget + 1.0E-6) return;
 
-		c.path = buildPath(moveGrid, idx);
+		List<Vec3d> path = buildPath(moveGrid, idx);
+        if (!clearPath(c, path)) return;
+        c.path = path;
 		c.pathIdx = 0;
 		c.pathPos = player.getPos();
 		c.moveUsed += node.cost;
@@ -182,7 +206,15 @@ public final class Combat {
 			waypoints.addFirst(Grid.centerOf(world, BlockPos.fromLong(n.pos)));
 			i = n.parent;
 		}
-		return waypoints;
+		current().pathLandings = Set.copyOf(waypoints);
+        LinkedList<Vec3d> stepped = new LinkedList<>();
+        Vec3d previous = current().entity.getPos();
+        for (Vec3d next : waypoints) {
+            if (next.y > previous.y + 1.0E-5) stepped.add(new Vec3d(previous.x, next.y, previous.z));
+            else if (next.y < previous.y - 1.0E-5) stepped.add(new Vec3d(next.x, previous.y, next.z));
+            stepped.add(next); previous = next;
+        }
+        return stepped;
 	}
 
 	/** The active player clicked an enemy: spend the action on a melee hit. */
@@ -200,7 +232,12 @@ public final class Combat {
 			return;
 		}
 
-		// turn to face the target (absolute rotation, so the client's model turns too)
+		if (!legalMelee(player, target)) {
+            player.sendMessage(Text.literal("The target is blocked by terrain."), true);
+            return;
+        }
+
+        // turn to face the target (absolute rotation, so the client's model turns too)
 		double dx = target.getX() - player.getX();
 		double dz = target.getZ() - player.getZ();
 		double dy = target.getEyeY() - player.getEyeY();
@@ -209,8 +246,7 @@ public final class Combat {
 		player.networkHandler.requestTeleport(player.getX(), player.getY(), player.getZ(), yaw, pitch);
 
 		player.swingHand(Hand.MAIN_HAND, true);
-		player.attack(target); // the ALLOW_DAMAGE hook spends the action when the hit lands
-		c.actionUsed = true;
+		CombatActions.melee(player, target, () -> { player.attack(target); return true; });
 		sync();
 	}
 
@@ -294,6 +330,7 @@ public final class Combat {
 				kept.add(c);
 			} else {
 				gridDirty = true;
+                CombatManager.release(c.entity, this);
 				if (c.entity instanceof ServerPlayerEntity p) {
 					sendInactive(p);
 					notified.remove(p);
@@ -346,7 +383,8 @@ public final class Combat {
 	}
 
 	private void addCombatant(LivingEntity entity) {
-		if (contains(entity)) return;
+		if (contains(entity) || order.size() >= dev.tacticalcombat.net.PacketLimits.PARTICIPANTS
+                || !CombatManager.claim(entity, this)) return;
 		Combatant cur = current();
 		order.add(new Combatant(entity, rollInitiative(world)));
 		sortOrder();
@@ -362,7 +400,7 @@ public final class Combat {
 
 	/** Slides a player (without touching the client's camera / look direction). */
 	private static void teleportKeepLook(ServerPlayerEntity p, double x, double y, double z) {
-		p.networkHandler.requestTeleport(x, y, z, p.getYaw(), p.getPitch(), KEEP_LOOK);
+		p.networkHandler.requestTeleport(x, y, z, 0, 0, KEEP_LOOK);
 	}
 
 	/**
@@ -370,27 +408,46 @@ public final class Combat {
 	 * @param keepTarget for the mob that is acting right now: do not clear its attack target
 	 */
 	private void freeze(Combatant c, boolean keepTarget) {
-		Vec3d a = c.anchor;
-		LivingEntity e = c.entity;
-		if (e instanceof ServerPlayerEntity p) {
-			double dx = p.getX() - a.x;
-			double dz = p.getZ() - a.z;
-			if (dx * dx + dz * dz > 0.0625) {
-				teleportKeepLook(p, a.x, p.getY(), a.z);
-			}
-		} else if (e instanceof MobEntity m) {
-			if (!keepTarget) m.setTarget(null);
-			m.getNavigation().stop();
-			boolean flying = m instanceof FlyingEntity || m.hasNoGravity();
-			double dx = m.getX() - a.x;
-			double dz = m.getZ() - a.z;
-			double dy = flying ? m.getY() - a.y : 0;
-			if (dx * dx + dz * dz + dy * dy > 0.0025) {
-				m.refreshPositionAndAngles(a.x, flying ? a.y : m.getY(), a.z, m.getYaw(), m.getPitch());
-			}
-			m.setVelocity(flying ? Vec3d.ZERO : new Vec3d(0, m.getVelocity().y, 0));
-		}
-	}
+        Vec3d a = c.anchor;
+        LivingEntity e = c.entity;
+        if (e instanceof ServerPlayerEntity p) {
+            if (p.getPos().squaredDistanceTo(a) > 0.0025) teleportKeepLook(p, a.x, a.y, a.z);
+        } else if (e instanceof MobEntity m) {
+            if (!keepTarget) m.setTarget(null);
+            m.getNavigation().stop();
+            if (m.getPos().squaredDistanceTo(a) > 0.0025) m.refreshPositionAndAngles(a.x, a.y, a.z, m.getYaw(), m.getPitch());
+        }
+        e.setVelocity(Vec3d.ZERO);
+    }
+
+    private boolean clearPath(Combatant c, List<Vec3d> path) {
+        Vec3d previous = c.entity.getPos();
+        for (Vec3d next : path) {
+            if (!clearMoveSegment(c, previous, next, next == path.getLast())) return false;
+            previous = next;
+        }
+        return true;
+    }
+
+    private boolean clearMoveSegment(Combatant c, Vec3d from, Vec3d to, boolean ending) {
+        if (!CombatGeometry.clearSegment(c.entity, from, to)) return false;
+        // Stair waypoints may be suspended briefly; their landing must still exist.
+        if ((ending || c.pathLandings.contains(to)) && !CombatGeometry.validLanding(c.entity, to)) return false;
+        int samples = Math.max(1, (int) Math.ceil(from.distanceTo(to) / 0.125));
+        for (int i = 1; i <= samples; i++) {
+            if (!unoccupied(c, from.lerp(to, (double) i / samples), ending && i == samples)) return false;
+        }
+        return true;
+    }
+
+    private boolean unoccupied(Combatant c, Vec3d at, boolean ending) {
+        Box box = c.entity.getBoundingBox().offset(at.subtract(c.entity.getPos())).contract(1.0E-5);
+        for (Combatant other : order) {
+            if (other != c && other.entity.isAlive() && (ending || other.isPlayer() != c.isPlayer())
+                    && box.intersects(other.entity.getBoundingBox())) return false;
+        }
+        return true;
+    }
 
 	private void tickPlayerTurn(Combatant c) {
 		if (CombatConfig.PLAYER_TURN_TICKS > 0 && c.ticksInTurn >= CombatConfig.PLAYER_TURN_TICKS) {
@@ -406,7 +463,15 @@ public final class Combat {
 
 		while (remaining > 1.0E-6 && c.pathIdx < c.path.size()) {
 			Vec3d target = c.path.get(c.pathIdx);
-			Vec3d delta = target.subtract(pos);
+			if (!clearMoveSegment(c, pos, target, c.pathIdx == c.path.size() - 1)) {
+                c.path = null;
+                c.anchor = c.entity.getPos();
+                c.pathPos = c.anchor;
+                gridDirty = true;
+                sync();
+                return;
+            }
+            Vec3d delta = target.subtract(pos);
 			double len = delta.length();
 			if (len <= remaining) {
 				pos = target;
@@ -517,7 +582,9 @@ public final class Combat {
 			return;
 		}
 
-		c.path = buildPath(r, best);
+		List<Vec3d> path = buildPath(r, best);
+        if (!clearPath(c, path)) return;
+        c.path = path;
 		c.pathIdx = 0;
 		c.pathPos = mob.getPos();
 		c.moveUsed = r.nodes.get(best).cost;
@@ -538,11 +605,10 @@ public final class Combat {
 			if (!c.actionUsed && c.ticksInAction >= CombatConfig.MOB_WINDUP_TICKS && inMeleeReach(mob, target)) {
 				mob.swingHand(Hand.MAIN_HAND);
 				mob.tryAttack(target);
-				c.actionUsed = true;
 			}
 		}
 		// everything else (archers, creepers, ...) uses its normal AI while pinned to its square; the
-		// ALLOW_DAMAGE hook marks the action as used when it deals damage
+		// The mob attack adapter accepts and spends the action before vanilla damage executes.
 
 		if (c.actionUsed) {
 			if (++c.ticksSinceActionUsed >= CombatConfig.MOB_AFTER_ACTION_TICKS) endTurn();
@@ -587,7 +653,8 @@ public final class Combat {
 	private void spendMovement(Combatant c, Vec3d pos) {
 		double dx = pos.x - c.anchor.x;
 		double dz = pos.z - c.anchor.z;
-		double dist = Math.sqrt(dx * dx + dz * dz);
+		double dy = pos.y - c.anchor.y;
+		double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 		if (dist < 1.0E-4) return;
 
 		double remaining = c.moveBudget - c.moveUsed;
@@ -603,12 +670,12 @@ public final class Combat {
 		double bz = c.anchor.z + dz * f;
 		c.moveUsed = c.moveBudget;
 		c.moveExhausted = true;
-		c.anchor = new Vec3d(bx, pos.y, bz);
+		c.anchor = new Vec3d(bx, c.anchor.y + dy * f, bz);
 
 		MobEntity m = (MobEntity) c.entity;
 		m.getNavigation().stop();
-		m.refreshPositionAndAngles(bx, pos.y, bz, m.getYaw(), m.getPitch());
-		m.setVelocity(0, m.getVelocity().y, 0);
+		m.refreshPositionAndAngles(bx, c.anchor.y, bz, m.getYaw(), m.getPitch());
+		m.setVelocity(Vec3d.ZERO);
 	}
 
 	private ServerPlayerEntity nearestPlayer(MobEntity mob) {
@@ -715,7 +782,7 @@ public final class Combat {
 		}
 
 		Combatant cur = current();
-		CombatStatePayload payload = new CombatStatePayload(true, round, turn,
+		CombatStatePayload payload = new CombatStatePayload(true, id, requests.turn(), round, turn,
 				(float) cur.moveUsed, (float) cur.moveBudget, cur.actionUsed, cur.bonusActionUsed, entries);
 
 		for (Combatant c : order) {
@@ -745,6 +812,7 @@ public final class Combat {
 		}
 		notified.clear();
 		for (Combatant c : order) {
+            CombatManager.release(c.entity, this);
 			if (c.entity instanceof MobEntity m) {
 				m.getNavigation().stop();
 			}

@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "dev.tacticalcombat.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": ["MobAttackMixin", "CreeperExplosionMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -34,6 +34,7 @@ public final class Combatant {
 
 	/** Waypoints (square centres) of the grid move the server is currently carrying out; null when standing. */
 	public List<Vec3d> path;
+    public java.util.Set<Vec3d> pathLandings = java.util.Set.of();
 	public int pathIdx;
 	public Vec3d pathPos;
 
@@ -64,6 +65,7 @@ public final class Combatant {
 		this.freeWalk = false;
 		this.ticksInAction = 0;
 		this.path = null;
+        this.pathLandings = java.util.Set.of();
 		this.pathIdx = 0;
 		this.pathPos = null;
 		this.anchor = entity.getPos();

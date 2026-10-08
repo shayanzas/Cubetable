@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "tacticalcombat_test",
+  "version": "1.0.0",
+  "name": "Cubetable development GameTests",
+  "environment": "*",
+  "entrypoints": { "fabric-gametest": ["dev.tacticalcombat.combat.AuthorityGameTests"] },
+  "depends": { "tacticalcombat": "*", "fabric-gametest-api-v1": "*" }
+}

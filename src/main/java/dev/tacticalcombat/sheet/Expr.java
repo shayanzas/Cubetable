@@ -80,20 +80,28 @@ public final class Expr {
 		}
 	}
 
-	private double parseTerm() {
-		double v = parseFactor();
-		while (true) {
-			if (accept('*')) v *= parseFactor();
-			else if (accept('/')) {
-				double d = parseFactor();
-				v = d == 0 ? 0 : v / d;
-			} else return v;
-		}
-	}
+    private double parseTerm() {
+        DiceType before = diceType;
+        double v = parseFactor();
+        boolean diceInTerm = diceType != before;
+        while (true) {
+            boolean multiply = accept('*');
+            if (!multiply && !accept('/')) return v;
+            before = diceType;
+            double right = parseFactor();
+            if (diceInTerm || diceType != before) throw new ExprException("dice may only be added in '" + src + "'");
+            v = multiply ? v * right : right == 0 ? 0 : v / right;
+        }
+    }
 
 	private double parseFactor() {
 		skipSpace();
-		if (accept('-')) return -parseFactor();
+		if (accept('-')) {
+            DiceType before = diceType;
+            double v = parseFactor();
+            if (diceType != before) throw new ExprException("dice cannot be negated");
+            return -v;
+        }
 		if (accept('(')) {
 			double v = parseExpr();
 			if (!accept(')')) throw new ExprException("missing ) in '" + src + "'");
@@ -109,7 +117,8 @@ public final class Expr {
 			// "2d6": a number directly followed by d + sides
 			if (pos < src.length() && src.charAt(pos) == 'd' && pos + 1 < src.length()
 					&& (Character.isDigit(src.charAt(pos + 1)) || src.charAt(pos + 1) == '%')) {
-				return parseDice((int) number);
+				if (number != Math.rint(number)) throw new ExprException("dice count must be an integer");
+                return parseDice((int) number);
 			}
 			return number;
 		}
@@ -136,6 +145,7 @@ public final class Expr {
 
 	/** At pos: 'd' then sides digits or '%'. */
 	private double parseDice(int count) {
+		if (count < 1 || count > dev.tacticalcombat.dice.DiceSpec.MAX_COUNT) throw new ExprException("dice count must be 1..10");
 		if (!allowDice) throw new ExprException("dice are only allowed in rolls: '" + src + "'");
 		if (diceType != null) throw new ExprException("only one kind of dice per roll: '" + src + "'");
 		pos++; // the d
@@ -150,11 +160,13 @@ public final class Expr {
 	}
 
 	private double call(String fn) {
-		java.util.List<Double> args = new java.util.ArrayList<>();
+		DiceType before = diceType;
+        java.util.List<Double> args = new java.util.ArrayList<>();
 		args.add(parseExpr());
 		while (accept(',')) args.add(parseExpr());
 		if (!accept(')')) throw new ExprException("missing ) after " + fn + "(");
-		double a = args.get(0);
+		if (diceType != before) throw new ExprException("dice cannot be arguments to functions");
+        double a = args.get(0);
 		switch (fn) {
 			case "floor": return Math.floor(a);
 			case "ceil": return Math.ceil(a);

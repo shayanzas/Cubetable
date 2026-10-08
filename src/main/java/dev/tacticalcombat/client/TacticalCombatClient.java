@@ -110,7 +110,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 
 	public static void sendEndTurn() {
 		if (ClientCombatState.isMyTurn()) {
-			ClientPlayNetworking.send(EndTurnPayload.INSTANCE);
+			ClientPlayNetworking.send(new EndTurnPayload(ClientCombatState.stamp()));
 		}
 	}
 

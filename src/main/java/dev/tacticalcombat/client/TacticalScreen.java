@@ -77,10 +77,10 @@ public final class TacticalScreen extends Screen {
 		if (button != 0 || !ClientCombatState.isMyTurn()) return true;
 
 		if (ClientGrid.hoverEntity >= 0) {
-			ClientPlayNetworking.send(new AttackRequestPayload(ClientGrid.hoverEntity));
+			ClientPlayNetworking.send(new AttackRequestPayload(ClientGrid.hoverEntity, ClientCombatState.stamp()));
 		} else if (ClientGrid.hover >= 0 && ClientGrid.hover < ClientGrid.cells.size()) {
 			BlockPos target = BlockPos.fromLong(ClientGrid.cells.get(ClientGrid.hover).pos());
-			ClientPlayNetworking.send(new MoveRequestPayload(target));
+			ClientPlayNetworking.send(new MoveRequestPayload(target, ClientCombatState.stamp()));
 			ClientGrid.hover = -1; // the server clears the highlights while the walk is in progress
 		}
 		return true;

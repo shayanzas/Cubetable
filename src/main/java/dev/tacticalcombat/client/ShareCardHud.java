@@ -32,7 +32,7 @@ public final class ShareCardHud {
 	private static final int MAX_HISTORY = 60;
 
 	private static final Map<Long, Entry> HISTORY = new LinkedHashMap<>();
-	private static final ArrayDeque<Entry> QUEUE = new ArrayDeque<>();
+	private static final dev.tacticalcombat.core.BoundedQueue<Entry> QUEUE = new dev.tacticalcombat.core.BoundedQueue<>(16);
 	private static Entry current;
 	private static int age;
 	private static boolean persistent;

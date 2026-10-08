@@ -37,7 +37,7 @@ public final class DiceAnimation {
 	private static final int TUMBLE_TICKS = 40;
 	private static final int HOLD_TICKS = 40;
 
-	private static final ArrayDeque<DiceRollPayload> QUEUE = new ArrayDeque<>();
+	private static final dev.tacticalcombat.core.BoundedQueue<DiceRollPayload> QUEUE = new dev.tacticalcombat.core.BoundedQueue<>(16);
 	private static DiceRollPayload current;
 	/** The clatter that plays while the dice tumble: assets/tacticalcombat/sounds/dice_roll.ogg (see sounds.json). */
 	public static final SoundEvent DICE_SOUND = SoundEvent.of(Identifier.of("tacticalcombat", "dice_roll"));
@@ -48,7 +48,8 @@ public final class DiceAnimation {
 	private DiceAnimation() {}
 
 	public static void enqueue(DiceRollPayload roll) {
-		QUEUE.add(roll);
+		DiceRollPayload skipped = QUEUE.add(roll);
+        if (skipped != null) printResult(MinecraftClient.getInstance(), skipped);
 	}
 
 	public static void clear() {
@@ -102,8 +103,8 @@ public final class DiceAnimation {
 		}
 		if (roll.type() == DiceType.D20 && rolled == 1) {
 			int face = roll.results()[Math.max(kept, 0)];
-			if (face == 20) text = text.copy().append(Text.literal("  Critical hit!").formatted(Formatting.GREEN));
-			if (face == 1) text = text.copy().append(Text.literal("  Critical fail!").formatted(Formatting.RED));
+			if (face == 20) text = text.copy().append(Text.literal("  Natural 20").formatted(Formatting.GREEN));
+			if (face == 1) text = text.copy().append(Text.literal("  Natural 1").formatted(Formatting.RED));
 		}
 		client.inGameHud.getChatHud().addMessage(text);
 	}

@@ -16,6 +16,11 @@ public final class ClientCombatState {
 	private static final float BLEND_STEP = 0.04f; // ~1 second to fully rise
 
 	public static boolean active;
+    private static java.util.UUID encounter = new java.util.UUID(0, 0);
+    private static long turnSerial;
+    public static dev.tacticalcombat.net.RequestStamp stamp() {
+        return new dev.tacticalcombat.net.RequestStamp(encounter, turnSerial, java.util.UUID.randomUUID());
+    }
 	public static int round;
 	public static int activeIndex;
 	public static float moveUsed;
@@ -46,6 +51,8 @@ public final class ClientCombatState {
 
 	public static void apply(CombatStatePayload p) {
 		active = p.active();
+        encounter = p.encounter();
+        turnSerial = p.turnSerial();
 		round = p.round();
 		activeIndex = p.activeIndex();
 		moveUsed = p.moveUsed();

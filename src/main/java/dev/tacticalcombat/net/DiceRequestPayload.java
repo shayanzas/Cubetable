@@ -17,7 +17,7 @@ public record DiceRequestPayload(String label, DiceType type, int count, int mod
 		public DiceRequestPayload decode(RegistryByteBuf buf) {
 			String label = buf.readString(64);
 			int typeIndex = buf.readVarInt();
-			DiceType type = DiceType.values()[Math.floorMod(typeIndex, DiceType.values().length)];
+			DiceType type = DiceType.values()[PacketLimits.count(typeIndex, DiceType.values().length - 1)];
 			return new DiceRequestPayload(label, type, buf.readVarInt(), buf.readVarInt(), buf.readVarInt());
 		}
 

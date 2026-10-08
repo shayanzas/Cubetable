@@ -21,7 +21,7 @@ public record ShareCard(String character, String kind, String title, List<String
 		String character = buf.readString(48);
 		String kind = buf.readString(24);
 		String title = buf.readString(64);
-		int n = Math.min(buf.readVarInt(), MAX_STATS);
+		int n = dev.tacticalcombat.net.PacketLimits.count(buf.readVarInt(), MAX_STATS);
 		List<String> stats = new ArrayList<>();
 		for (int i = 0; i < n; i++) stats.add(buf.readString(80));
 		String body = buf.readString(MAX_BODY + 8);

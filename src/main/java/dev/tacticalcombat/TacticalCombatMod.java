@@ -54,15 +54,27 @@ public class TacticalCombatMod implements ModInitializer {
 		PayloadTypeRegistry.playC2S().register(MoveRequestPayload.ID, MoveRequestPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(AttackRequestPayload.ID, AttackRequestPayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(EndTurnPayload.ID,
-				(payload, context) -> CombatManager.requestEndTurn(context.player()));
+				(payload, context) -> CombatManager.requestEndTurn(context.player(), payload.stamp()));
 		ServerPlayNetworking.registerGlobalReceiver(MoveRequestPayload.ID,
-				(payload, context) -> CombatManager.requestMove(context.player(), payload.target()));
+				(payload, context) -> CombatManager.requestMove(context.player(), payload.target(), payload.stamp()));
 		ServerPlayNetworking.registerGlobalReceiver(AttackRequestPayload.ID,
-				(payload, context) -> CombatManager.requestAttack(context.player(), payload.entityId()));
+				(payload, context) -> CombatManager.requestAttack(context.player(), payload.entityId(), payload.stamp()));
 
 		// Combat loop
 		ServerTickEvents.END_SERVER_TICK.register(CombatManager::tick);
-		ServerLifecycleEvents.SERVER_STOPPING.register(server -> CombatManager.clear());
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            CombatManager.clear(); DiceService.clear(); dev.tacticalcombat.card.CardService.clear();
+        });
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            DiceService.forget(handler.player.getUuid());
+            dev.tacticalcombat.card.CardService.forget(handler.player.getUuid());
+        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, world) ->
+                dev.tacticalcombat.combat.CombatActions.projectileLoaded(entity, world.getServer().getOverworld().getTime()));
+        net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
+                CombatManager.isInCombat(player) || CombatManager.isInCombat(entity) ? ActionResult.FAIL : ActionResult.PASS);
+        net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
+                CombatManager.isInCombat(player) || CombatManager.isInCombat(entity) ? ActionResult.FAIL : ActionResult.PASS);
 
 		// Rules: attacks cost the action, nobody acts out of turn
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register(CombatManager::allowDamage);
@@ -91,7 +103,11 @@ public class TacticalCombatMod implements ModInitializer {
 						.requires(src -> src.hasPermissionLevel(2))
 						.executes(ctx -> {
 							ServerPlayerEntity player = ctx.getSource().getPlayerOrThrow();
-							Combat combat = CombatManager.startAround(player.getServerWorld(), player, false);
+							if (CombatManager.isInCombat(player)) {
+                                ctx.getSource().sendError(Text.literal("You already belong to an encounter."));
+                                return 0;
+                            }
+                            Combat combat = CombatManager.startAround(player.getServerWorld(), player, false);
 							if (combat == null) {
 								ctx.getSource().sendError(Text.translatable("tacticalcombat.cmd.no_enemies"));
 								return 0;
@@ -99,7 +115,17 @@ public class TacticalCombatMod implements ModInitializer {
 							ctx.getSource().sendFeedback(() -> Text.translatable("tacticalcombat.cmd.started"), false);
 							return 1;
 						}))
-				.then(CommandManager.literal("end")
+				.then(CommandManager.literal("advance")
+                        .requires(src -> src.hasPermissionLevel(2))
+                        .executes(ctx -> {
+                            ServerPlayerEntity player = ctx.getSource().getPlayerOrThrow();
+                            Combat combat = CombatManager.get(player);
+                            if (combat == null) return 0;
+                            LOGGER.info("Operator {} advanced encounter {}", player.getUuid(), combat.id());
+                            combat.endTurn();
+                            return 1;
+                        }))
+                .then(CommandManager.literal("end")
 						.requires(src -> src.hasPermissionLevel(2))
 						.executes(ctx -> {
 							ServerPlayerEntity player = ctx.getSource().getPlayerOrThrow();
@@ -134,7 +160,9 @@ public class TacticalCombatMod implements ModInitializer {
 								ctx.getSource().sendError(Text.translatable("tacticalcombat.cmd.not_in_combat"));
 								return 0;
 							}
-							CombatManager.requestEndTurn(player);
+							Combat combat = CombatManager.get(player);
+                            // Server command is a fresh current-turn intent and also recovers a saturated request budget.
+                            if (combat.isTurnOf(player)) combat.endTurn();
 							return 1;
 						})));
 	}

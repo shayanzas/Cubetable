@@ -24,17 +24,18 @@ import java.util.Set;
 /** Keeps track of every running {@link Combat}, starts new ones and exposes the rule checks used by the event hooks. */
 public final class CombatManager {
 	private static final List<Combat> COMBATS = new ArrayList<>();
+	private static final dev.tacticalcombat.core.EncounterIndex<Combat> OWNERS = new dev.tacticalcombat.core.EncounterIndex<>();
 
 	private CombatManager() {}
 
 	// ---------------------------------------------------------------- lookup
 
 	public static Combat get(Entity entity) {
-		for (Combat c : COMBATS) {
-			if (c.contains(entity)) return c;
-		}
-		return null;
+        return OWNERS.get(entity.getUuid());
 	}
+
+    static boolean claim(Entity actor, Combat encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
+    static void release(Entity actor, Combat encounter) { OWNERS.release(actor.getUuid(), encounter); }
 
 	public static boolean isInCombat(Entity entity) {
 		return get(entity) != null;
@@ -50,6 +51,7 @@ public final class CombatManager {
 	// ---------------------------------------------------------------- tick / detection
 
 	public static void tick(MinecraftServer server) {
+		CombatActions.tick(server.getOverworld().getTime());
 		Iterator<Combat> it = COMBATS.iterator();
 		while (it.hasNext()) {
 			Combat combat = it.next();
@@ -93,7 +95,9 @@ public final class CombatManager {
 	}
 
 	private static boolean canFight(ServerPlayerEntity p) {
-		return p.isAlive() && !p.isSpectator();
+		return p.isAlive() && !p.isSpectator()
+                && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p,
+                        dev.tacticalcombat.net.CombatStatePayload.ID);
 	}
 
 	/**
@@ -102,7 +106,8 @@ public final class CombatManager {
 	 * @return the new combat, or null if there was nobody to fight
 	 */
 	public static Combat startAround(ServerWorld world, ServerPlayerEntity center, boolean onlyAggroed) {
-		Box area = center.getBoundingBox().expand(
+		if (!canFight(center) || center.getWorld() != world || isInCombat(center)) return null;
+        Box area = center.getBoundingBox().expand(
 				CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL, CombatConfig.JOIN_RANGE);
 
 		List<MobEntity> enemies = world.getEntitiesByClass(MobEntity.class, area, m ->
@@ -117,7 +122,7 @@ public final class CombatManager {
 				&& isNear(p, center, CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL)));
 
 		Combat combat = Combat.start(world, party, enemies);
-		COMBATS.add(combat);
+		if (combat != null) COMBATS.add(combat);
 		return combat;
 	}
 
@@ -129,31 +134,21 @@ public final class CombatManager {
 	public static void clear() {
 		for (Combat c : COMBATS) c.end();
 		COMBATS.clear();
+        OWNERS.clear();
+        CombatActions.clear();
 	}
 
 	// ---------------------------------------------------------------- rule hooks
 
 	/** ALLOW_DAMAGE hook: gate attacks of combatants by turn and action economy. */
 	public static boolean allowDamage(LivingEntity victim, DamageSource source, float amount) {
-		if (source.getAttacker() instanceof LivingEntity attacker && attacker != victim) {
-			Combat combat = get(attacker);
-			if (combat != null) {
-				boolean ok = combat.tryUseAction(attacker);
-				if (!ok && attacker instanceof ServerPlayerEntity p) {
-					p.sendMessage(Text.translatable(combat.isTurnOf(p)
-							? "tacticalcombat.msg.no_action"
-							: "tacticalcombat.msg.not_your_turn"), true);
-				}
-				return ok;
-			}
-		}
-		return true;
-	}
+        return CombatActions.allowDamage(victim, source);
+    }
 
-	/** True if the player may use items / interact right now (not in combat, or it is their turn). */
+	/** World interactions require explicit action adapters while enrolled in combat. */
 	public static boolean canActNow(PlayerEntity player) {
 		Combat combat = get(player);
-		return combat == null || combat.isTurnOf(player);
+		return combat == null; // world interactions during combat need explicit accepted-action adapters
 	}
 
 	public static void notifyNotYourTurn(PlayerEntity player) {
@@ -163,21 +158,21 @@ public final class CombatManager {
 	}
 
 	/** A player clicked a grid square to walk to. */
-	public static void requestMove(ServerPlayerEntity player, BlockPos target) {
+	public static void requestMove(ServerPlayerEntity player, BlockPos target, dev.tacticalcombat.net.RequestStamp stamp) {
 		Combat combat = get(player);
-		if (combat != null) combat.requestMove(player, target);
+		if (combat != null && combat.acceptRequest(player, stamp)) combat.requestMove(player, target);
 	}
 
 	/** A player clicked an enemy to attack it. */
-	public static void requestAttack(ServerPlayerEntity player, int entityId) {
+	public static void requestAttack(ServerPlayerEntity player, int entityId, dev.tacticalcombat.net.RequestStamp stamp) {
 		Combat combat = get(player);
-		if (combat != null) combat.requestAttack(player, entityId);
+		if (combat != null && combat.acceptRequest(player, stamp)) combat.requestAttack(player, entityId);
 	}
 
 	/** Called when a player presses the End Turn key or runs /tbc endturn. */
-	public static void requestEndTurn(ServerPlayerEntity player) {
+	public static void requestEndTurn(ServerPlayerEntity player, dev.tacticalcombat.net.RequestStamp stamp) {
 		Combat combat = get(player);
-		if (combat != null && combat.isTurnOf(player)) {
+		if (combat != null && combat.acceptRequest(player, stamp)) {
 			combat.endTurn();
 		}
 	}

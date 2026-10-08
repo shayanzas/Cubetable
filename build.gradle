@@ -62,3 +62,35 @@ tasks.register('installPacks', Copy) {
 	into 'run/config/tacticalcombat/packs'
 }
 tasks.matching { it.name == 'runClient' }.configureEach { dependsOn 'installPacks' }
+
+// Dependency-free regression runner; failures propagate to check/build.
+tasks.register('foundationTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.tacticalcombat.FoundationTests'
+}
+tasks.named('check') { dependsOn tasks.named('foundationTest') }
+
+// Headless integration tests are a separate development-only mod, never included in the release JAR.
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+loom {
+    mods {
+        tacticalcombat { sourceSet sourceSets.main }
+        tacticalcombat_test { sourceSet sourceSets.gametest }
+    }
+    runs {
+        gametest {
+            server()
+            name 'Combat authority GameTests'
+            source sourceSets.gametest
+            vmArg '-Dfabric-api.gametest'
+            vmArg "-Dfabric-api.gametest.report-file=${layout.buildDirectory.get()}/gametest-results.xml"
+            runDir 'build/gametest'
+        }
+    }
+}

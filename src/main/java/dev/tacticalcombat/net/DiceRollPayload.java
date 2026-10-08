@@ -18,10 +18,11 @@ public record DiceRollPayload(String roller, String label, DiceType type, int mo
 		public DiceRollPayload decode(RegistryByteBuf buf) {
 			String roller = buf.readString(64);
 			String label = buf.readString(64);
-			DiceType type = DiceType.values()[buf.readVarInt()];
+			DiceType type = DiceType.values()[PacketLimits.count(buf.readVarInt(), DiceType.values().length - 1)];
 			int modifier = buf.readVarInt();
-			int keep = buf.readVarInt();
-			int n = buf.readVarInt();
+			int keep = PacketLimits.count(buf.readVarInt(), 2);
+			int n = PacketLimits.count(buf.readVarInt(), 10);
+            if (n == 0) throw new IllegalArgumentException("Empty dice roll");
 			int[] results = new int[n];
 			for (int i = 0; i < n; i++) {
 				results[i] = buf.readVarInt();
