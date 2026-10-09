@@ -315,6 +315,18 @@ public final class CharacterSheetScreen extends Screen {
 			right -= smallButton(g, right - tw("Formats") - 6, y + 3, view == View.FORMATS ? "Back" : "Formats",
 					() -> view = view == View.FORMATS ? View.SHEET : View.FORMATS, "Installed sheet formats", PANEL, 0xFF3B414C) + 3;
 			if (view == View.SHEET && sheet() != null) {
+                if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(dev.tacticalcombat.net.SubmitCharacterPayload.ID)) {
+                    right -= smallButton(g,right-tw("Submit")-6,y+3,"Submit",()->{
+                        CharacterData current=character();
+                        if(current!=null) {
+                            String json=current.toJson().toString();
+                            if(json.length()>32768) {
+                                if(client.player!=null) client.player.sendMessage(Text.literal("This character is too large to submit (32,768 character limit)."),false);
+                            } else net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
+                                    new dev.tacticalcombat.net.SubmitCharacterPayload(java.util.UUID.randomUUID(),json));
+                        }
+                    },"Submit an independent draft to your selected server campaign; DM approval is required",PANEL,0xFF3B414C)+3;
+                }
 				right -= smallButton(g, right - tw("Edit") - 6, y + 3, "Edit", this::startEdit, "Change this character's details", PANEL, 0xFF3B414C) + 3;
 			}
 			right -= smallButton(g, right - tw("New") - 6, y + 3, "New", this::startNew, "Create a new character", PANEL, 0xFF3B414C) + 3;

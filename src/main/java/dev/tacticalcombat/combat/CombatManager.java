@@ -37,6 +37,8 @@ public final class CombatManager {
     static boolean claim(Entity actor, Combat encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
     static void release(Entity actor, Combat encounter) { OWNERS.release(actor.getUuid(), encounter); }
 
+	public static boolean isInCombat(java.util.UUID actor) { return OWNERS.get(actor) != null; }
+
 	public static boolean isInCombat(Entity entity) {
 		return get(entity) != null;
 	}
@@ -54,6 +56,7 @@ public final class CombatManager {
 	// ---------------------------------------------------------------- tick / detection
 
 	public static void tick(MinecraftServer server) {
+        if(server.getTicks()%20==0) dev.tacticalcombat.character.CharacterService.capture(server);
 		CombatActions.tick(server.getOverworld().getTime());
 		Iterator<Combat> it = COMBATS.iterator();
 		while (it.hasNext()) {
@@ -98,7 +101,7 @@ public final class CombatManager {
 	}
 
 	static boolean canFight(ServerPlayerEntity p) {
-		return p.isAlive() && !p.isSpectator()
+		return dev.tacticalcombat.character.CharacterService.available() && p.isAlive() && !p.isSpectator()
                 && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p,
                         dev.tacticalcombat.net.CombatStatePayload.ID);
 	}
@@ -109,6 +112,13 @@ public final class CombatManager {
 	 * @return the new combat, or null if there was nobody to fight
 	 */
 	public static Combat startAround(ServerWorld world, ServerPlayerEntity center, boolean onlyAggroed) {
+        var context=dev.tacticalcombat.character.CharacterService.context(center);
+        return startAround(world,center,onlyAggroed,context);
+    }
+    public static Combat startAround(ServerWorld world, ServerPlayerEntity center, boolean onlyAggroed,
+            dev.tacticalcombat.character.CharacterService.Context context) {
+        var rules=dev.tacticalcombat.rules.RulesProfiles.get(context.profile());
+        if(!rules.worldCombat() || !dev.tacticalcombat.character.CharacterService.mayJoin(center,context.campaign(),rules)) return null;
 		if (!canFight(center) || center.getWorld() != world || isInCombat(center)) return null;
         Box area = center.getBoundingBox().expand(
 				CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL, CombatConfig.JOIN_RANGE);
@@ -124,7 +134,7 @@ public final class CombatManager {
 		party.addAll(world.getPlayers(p -> canFight(p) && !isInCombat(p)
 				&& isNear(p, center, CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL)));
 
-		Combat combat = Combat.start(world, party, enemies);
+		Combat combat = Combat.start(world, party, enemies,context);
 		if (combat != null) COMBATS.add(combat);
 		return combat;
 	}

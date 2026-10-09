@@ -45,6 +45,12 @@ public final class Combat {
 	private static final Set<PositionFlag> KEEP_LOOK = EnumSet.of(PositionFlag.X_ROT, PositionFlag.Y_ROT);
 
 	private final ServerWorld world;
+    private final dev.tacticalcombat.rules.RulesProfile rules;
+    private final java.util.UUID campaign;
+    public dev.tacticalcombat.rules.RulesProfile rules() { return rules; }
+    public java.util.UUID campaign() { return campaign; }
+    public boolean mayJoin(LivingEntity entity) { return dev.tacticalcombat.character.CharacterService.mayJoin(entity,campaign,rules); }
+    private java.util.Map<String,Double> stats(LivingEntity entity) { return dev.tacticalcombat.character.CharacterService.stats(entity,rules); }
     private final java.util.UUID id = java.util.UUID.randomUUID();
     private final dev.tacticalcombat.core.TurnRequests requests = new dev.tacticalcombat.core.TurnRequests(id);
     public java.util.UUID id() { return id; }
@@ -67,21 +73,29 @@ public final class Combat {
 	private Set<Long> threat = Set.of();
 	private boolean gridDirty;
 
-	private Combat(ServerWorld world) {
-		this.world = world;
-	}
+	private Combat(ServerWorld world, dev.tacticalcombat.character.CharacterService.Context context) {
+        this.world = world; this.campaign=context.campaign();
+        this.rules=dev.tacticalcombat.rules.RulesProfiles.get(context.profile());
+        if(!rules.worldCombat()) throw new IllegalArgumentException("Profile does not implement world combat");
+    }
 
 	// ---------------------------------------------------------------- creation
 
 	static Combat start(ServerWorld world, Collection<ServerPlayerEntity> players, Collection<MobEntity> enemies) {
-		Combat combat = new Combat(world);
+        var context=players.isEmpty()?new dev.tacticalcombat.character.CharacterService.Context(null,dev.tacticalcombat.rules.RulesProfiles.TACTICAL)
+                :dev.tacticalcombat.character.CharacterService.context(players.iterator().next());
+        return start(world,players,enemies,context);
+    }
+    static Combat start(ServerWorld world, Collection<ServerPlayerEntity> players, Collection<MobEntity> enemies,
+                        dev.tacticalcombat.character.CharacterService.Context context) {
+        Combat combat = new Combat(world,context);
 		for (ServerPlayerEntity p : players) {
-			if (combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS - 1 && CombatManager.claim(p, combat))
-                combat.order.add(new Combatant(p, rollInitiative(world)));
+			if (combat.mayJoin(p) && combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS - 1 && CombatManager.claim(p, combat))
+                combat.order.add(new Combatant(p, combat.rules.initiative(rollInitiative(world),combat.stats(p))));
 		}
 		for (MobEntity m : enemies) {
-			if (combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS && CombatManager.claim(m, combat))
-                combat.order.add(new Combatant(m, rollInitiative(world)));
+			if (combat.mayJoin(m) && combat.order.size() < dev.tacticalcombat.net.PacketLimits.PARTICIPANTS && CombatManager.claim(m, combat))
+                combat.order.add(new Combatant(m, combat.rules.initiative(rollInitiative(world),combat.stats(m))));
 		}
 		if (combat.order.isEmpty()) return null;
 		combat.sortOrder();
@@ -163,7 +177,7 @@ public final class Combat {
 	private void beginTurn() {
         requests.nextTurn();
 		Combatant c = current();
-		c.resetTurnResources(c.isPlayer() ? CombatConfig.PLAYER_MOVEMENT : CombatConfig.MOB_MOVEMENT);
+		c.resetTurnResources(rules.movement(stats(c.entity),c.isPlayer()));
 		if (c.entity instanceof ServerPlayerEntity p) {
 			p.sendMessage(Text.translatable("tacticalcombat.msg.your_turn"), true);
 		}
@@ -385,10 +399,10 @@ public final class Combat {
 	}
 
 	private void addCombatant(LivingEntity entity) {
-		if (contains(entity) || order.size() >= dev.tacticalcombat.net.PacketLimits.PARTICIPANTS
+		if (!mayJoin(entity) || contains(entity) || order.size() >= dev.tacticalcombat.net.PacketLimits.PARTICIPANTS
                 || !CombatManager.claim(entity, this)) return;
 		Combatant cur = current();
-		order.add(new Combatant(entity, rollInitiative(world)));
+		order.add(new Combatant(entity, rules.initiative(rollInitiative(world),stats(entity))));
 		sortOrder();
 		turn = order.indexOf(cur);
 		gridDirty = true;
@@ -562,7 +576,7 @@ public final class Combat {
 			if (o.isPlayer()) playerCells.add(key);
 		}
 
-		Grid.Result r = Grid.reachable(world, Grid.cellOf(mob), (int) CombatConfig.MOB_MOVEMENT, playerCells);
+		Grid.Result r = Grid.reachable(world, Grid.cellOf(mob), (int) Math.floor(c.moveBudget-c.moveUsed), playerCells);
 		boolean ranged = mob instanceof RangedAttackMob;
 		Vec3d goal = target.getPos();
 

@@ -7,7 +7,8 @@
   "entrypoints": {
     "fabric-gametest": [
       "dev.tacticalcombat.combat.AuthorityGameTests",
-      "dev.tacticalcombat.combat.PhaseOneGameTests"
+      "dev.tacticalcombat.combat.PhaseOneGameTests",
+      "dev.tacticalcombat.combat.CharacterGameTests"
     ]
   },
   "depends": {

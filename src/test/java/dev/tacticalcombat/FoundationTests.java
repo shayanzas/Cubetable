@@ -85,5 +85,6 @@ public final class FoundationTests {
             }
         }
         System.out.println("Foundation regression checks passed: " + count);
+        CharacterRepositoryTests.run();
     }
 }
