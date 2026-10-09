@@ -1,5 +1,7 @@
 # Phase 2 — Rules profiles and authoritative characters
 
+Historical checkpoint. The subsequent [Phase 2 completion report](phase2-completion.md) supersedes the synchronization, approval policy, revision and schema descriptions below.
+
 Report date: October 9, 2026 (UTC).
 
 ## Checkpoint and scope
