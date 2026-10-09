@@ -1,5 +1,7 @@
 # Combat authority foundation checkpoint
 
+Historical checkpoint: see the [Phase 1 continuation report](phase1-checkpoint.md) for current behavior and verification.
+
 Date: 2026-10-08. Branch: `dev/combat-authority-foundation`.
 
 ## Scope and baseline
