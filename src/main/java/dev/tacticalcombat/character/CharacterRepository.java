@@ -9,12 +9,18 @@ import java.util.*;
 /** Immutable snapshots, server-authenticated principals and revision-checked durable mutations. */
 public final class CharacterRepository {
     public record Principal(UUID id, boolean admin) {}
-    public record Campaign(UUID id,String name,UUID owner,Set<UUID> dms,Set<UUID> members,String profile,long revision) {
-        public Campaign { dms=Set.copyOf(dms); members=Set.copyOf(members); }
+    public record Campaign(UUID id,String name,UUID owner,Set<UUID> dms,Set<UUID> members,String profile,long revision,ApprovalPolicy policy) {
+        public Campaign { dms=Set.copyOf(dms); members=Set.copyOf(members); Objects.requireNonNull(policy); }
+        public Campaign(UUID id,String name,UUID owner,Set<UUID> dms,Set<UUID> members,String profile,long revision) {
+            this(id,name,owner,dms,members,profile,revision,ApprovalPolicy.secureDefault());
+        }
     }
     public record Character(UUID id,UUID campaign,UUID owner,String profile,int profileVersion,
-                            String sheet,Map<String,Double> stats,boolean approved,long revision) {
+                            String sheet,Map<String,Double> stats,boolean approved,long revision,long runtimeRevision) {
         public Character { stats=Map.copyOf(stats); }
+        public Character(UUID id,UUID campaign,UUID owner,String profile,int profileVersion,String sheet,Map<String,Double> stats,boolean approved,long revision) {
+            this(id,campaign,owner,profile,profileVersion,sheet,stats,approved,revision,0);
+        }
     }
     public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings) {
         public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings); }
@@ -23,7 +29,10 @@ public final class CharacterRepository {
     private final AtomicJsonFile file;
     private State state;
     public CharacterRepository(Path path) throws IOException {
-        file=new AtomicJsonFile(path); state=file.read(CharacterRepository::decode,new State(Map.of(),Map.of(),Map.of()));
+        this(new AtomicJsonFile(path));
+    }
+    CharacterRepository(AtomicJsonFile storage) throws IOException {
+        file=storage; state=file.read(CharacterRepository::decode,new State(Map.of(),Map.of(),Map.of()));
     }
     public State state() { return state; }
     public boolean recoveredFromBackup() { return file.recoveredFromBackup(); }
@@ -47,18 +56,23 @@ public final class CharacterRepository {
         var dms=new HashSet<>(c.dms); var members=new HashSet<>(c.members);
         require(members.size()<256 || members.contains(player),"Campaign member limit");
         members.add(player); if(dm) dms.add(player);
-        updateCampaign(new Campaign(id,c.name,c.owner,dms,members,c.profile,c.revision+1));
+        updateCampaign(new Campaign(id,c.name,c.owner,dms,members,c.profile,c.revision+1,c.policy));
     }
     public void revokeDm(Principal p,UUID id,long revision,UUID player) throws IOException {
         Campaign c=campaign(id); require(c.revision==revision,"Stale campaign revision");
         require(p.admin || c.owner.equals(p.id),"Only the owner/admin appoints or removes co-DMs");
         var dms=new HashSet<>(c.dms); dms.remove(player);
-        updateCampaign(new Campaign(id,c.name,c.owner,dms,c.members,c.profile,c.revision+1));
+        updateCampaign(new Campaign(id,c.name,c.owner,dms,c.members,c.profile,c.revision+1,c.policy));
     }
     public void profile(Principal p,UUID id,long revision,String profile) throws IOException {
         Campaign c=campaign(id); require(c.revision==revision,"Stale campaign revision");
         require(manages(p,id),"Campaign permission denied"); RulesProfiles.get(profile);
-        updateCampaign(new Campaign(id,c.name,c.owner,c.dms,c.members,profile,c.revision+1));
+        updateCampaign(new Campaign(id,c.name,c.owner,c.dms,c.members,profile,c.revision+1,c.policy));
+    }
+    public void policy(Principal p,UUID id,long revision,ApprovalPolicy policy) throws IOException {
+        Campaign c=campaign(id); require(manages(p,id),"Campaign permission denied");
+        require(c.revision==revision,"Stale campaign revision");
+        updateCampaign(new Campaign(id,c.name,c.owner,c.dms,c.members,c.profile,revision+1,policy));
     }
     private void updateCampaign(Campaign c) throws IOException {
         var campaigns=new HashMap<>(state.campaigns); campaigns.put(c.id,c);
@@ -69,6 +83,12 @@ public final class CharacterRepository {
         require(state.characters.size()<1024,"Character limit reached");
         require(state.characters.values().stream().filter(c->c.owner.equals(p.id)).count()<32,"Owner character limit reached");
         RulesProfiles.get(profile); validateSheet(sheet);
+        Campaign campaignRecord=campaign(campaign);
+        if(!manages(p,campaign)) {
+            require(!campaignRecord.policy.ownerLocked(),"Owner editing is locked");
+            for(String field:CharacterEdits.fields(JsonParser.parseString(sheet).getAsJsonObject()).keySet())
+                if(!field.equals("format")) require(campaignRecord.policy.permits(field),"Owner cannot edit "+field);
+        }
         UUID id=UUID.randomUUID();
         var records=new HashMap<>(state.characters);
         // Submission is an independent, unapproved copy; it never imports ownership or permissions.
@@ -80,22 +100,58 @@ public final class CharacterRepository {
                 if(values.has(key)) stats.put(key,values.get(key).getAsDouble());
         }
         validateStats(stats);
-        records.put(id,new Character(id,campaign,p.id,profile,1,sheet,stats,false,1));
+        records.put(id,new Character(id,campaign,p.id,profile,1,sheet,stats,!campaignRecord.policy.requireNewApproval(),1));
         commit(new State(state.campaigns,records,state.bindings)); return id;
     }
     public Character visible(Principal p,UUID id) {
-        Character c=character(id); require(c.owner.equals(p.id) || manages(p,c.campaign),"Character permission denied"); return c;
+        Character c=state.characters.get(id);
+        require(c!=null && member(p,c.campaign) && (c.owner.equals(p.id) || manages(p,c.campaign)),"Character permission denied"); return c;
     }
+    public JsonObject effectiveSheet(Character c) {
+        JsonObject sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
+        if(!sheet.has("values")) sheet.add("values",new JsonObject());
+        c.stats.forEach((key,value)->sheet.getAsJsonObject("values").addProperty(key,value));
+        return sheet;
+    }
+    public UUID binding(UUID character) {
+        return state.bindings.entrySet().stream().filter(e->e.getValue().equals(character)).map(Map.Entry::getKey).findFirst().orElse(null);
+    }
+    public void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes) throws IOException {
+        edit(p,id,revision,runtimeRevision,changes,false);
+    }
+    private void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes,boolean explicitStatCommand) throws IOException {
+        Character c=visible(p,id); require(c.revision==revision,"Stale character revision; refresh and reconcile");
+        require(binding(id)==null,"Unbind the character before editing its approved stats");
+        if(changes.size()==0) return;
+        if(!manages(p,c.campaign)) for(String field:changes.keySet())
+            require(campaign(c.campaign).policy.permits(field),"Owner editing locked or field forbidden: "+field);
+        if(changes.has("values.hp")) require(c.runtimeRevision==runtimeRevision,"Stale health revision; refresh and reconcile HP");
+        JsonObject sheet=CharacterEdits.apply(effectiveSheet(c),changes); validateSheet(sheet.toString());
+        var stats=new HashMap<>(c.stats);
+        for(var entry:changes.entrySet()) if(entry.getKey().startsWith("values.")) {
+            String key=entry.getKey().substring(7);
+            // Only explicit core/resource inputs are combat stats. Other manual pack numbers remain inert sheet data.
+            require(!entry.getValue().isJsonNull() || !stats.containsKey(key),"Cannot remove authoritative stat "+key);
+            if(!entry.getValue().isJsonNull() && (explicitStatCommand || stats.containsKey(key) || CORE.contains(key) || key.startsWith("resource_"))) {
+                stats.put(key,entry.getValue().getAsDouble());
+            }
+        }
+        validateStats(stats);
+        boolean approved=c.approved && !campaign(c.campaign).policy.requireEditApproval();
+        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),stats,approved,revision+1,c.runtimeRevision));
+    }
+    private static final Set<String> CORE=Set.of("hp","hp_max","ac","movement_blocks","initiative_bonus","str","dex","con","int","wis","cha","prof","level");
     public void stat(Principal p,UUID id,long revision,String key,double value) throws IOException {
-        Character c=visible(p,id); require(c.revision==revision,"Stale character revision");
-        require(!state.bindings.containsValue(id),"Unbind the character before editing its approved stats");
+        Character c=visible(p,id);
+        var changes=new JsonObject(); changes.addProperty("values."+key,value);
+        // Validate arbitrary command-created stats, including resource fields, before entering the shared edit path.
         var stats=new HashMap<>(c.stats); stats.put(key,value); validateStats(stats);
-        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,false,revision+1));
+        edit(p,id,revision,c.runtimeRevision,changes,true);
     }
     public void approve(Principal p,UUID id,long revision) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs approve characters");
         require(c.revision==revision,"Stale character revision");
-        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,true,revision+1));
+        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,true,revision+1,c.runtimeRevision));
     }
     public void bind(Principal p,UUID id,long revision,UUID entity,UUID playerOwner) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs bind characters");
@@ -117,7 +173,7 @@ public final class CharacterRepository {
             Character c=records.get(id); double hp=Math.clamp(entry.getValue(),0,c.stats.get("hp_max"));
             if(c.stats.get("hp")==hp) continue;
             var stats=new HashMap<>(c.stats); stats.put("hp",hp);
-            records.put(id,new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,c.approved,c.revision+1)); changed=true;
+            records.put(id,new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,c.approved,c.revision,c.runtimeRevision+1)); changed=true;
         }
         if(changed) commit(new State(state.campaigns,records,state.bindings));
     }
@@ -140,29 +196,46 @@ public final class CharacterRepository {
     public static void validateSheet(String text) {
         require(text!=null && text.length()<=32768,"Sheet exceeds 32,768 characters");
         // Parse bounded JSON without invoking the sheet formula engine. Preserve manual pack data verbatim.
+        checkDepth(text,20);
+        JsonObject o=JsonParser.parseString(text).getAsJsonObject();
+        require(o.has("format") && o.get("format").getAsString().matches("[a-z0-9_:-]{1,64}"),"Invalid sheet format");
+        for(String group:List.of("text","values","collections")) if(o.has(group)) {
+            require(o.get(group).isJsonObject(),"Invalid sheet group "+group);
+            for(var e:o.getAsJsonObject(group).entrySet()) {
+                require(e.getKey().matches("[a-z0-9_:-]{1,64}"),"Invalid sheet field name");
+                if(group.equals("values")) require(e.getValue().isJsonPrimitive() && e.getValue().getAsJsonPrimitive().isNumber()
+                    && Double.isFinite(e.getValue().getAsDouble()),"Raw values must be finite numbers");
+                if(group.equals("text")) require(e.getValue().isJsonPrimitive() && e.getValue().getAsJsonPrimitive().isString(),"Text must be a string");
+                if(group.equals("collections")) require(e.getValue().isJsonArray(),"Collection must be an array");
+            }
+        }
+        for(var e:o.entrySet()) require(Set.of("format","kind","theme","ui","text","values","collections").contains(e.getKey()),"Unknown sheet field: "+e.getKey());
+    }
+    public static void checkDepth(String text,int limit) {
         int depth=0; boolean quoted=false,escaped=false;
         for(char c:text.toCharArray()) {
             if(quoted) { if(escaped) escaped=false; else if(c=='\\') escaped=true; else if(c=='"') quoted=false; }
             else if(c=='"') quoted=true;
-            else if(c=='{' || c=='[') require(++depth<=20,"Sheet nesting limit");
+            else if(c=='{' || c=='[') require(++depth<=limit,"JSON nesting limit");
             else if(c=='}' || c==']') depth--;
         }
-        JsonObject o=JsonParser.parseString(text).getAsJsonObject();
-        require(o.has("format") && o.get("format").getAsString().matches("[a-z0-9_:-]{1,64}"),"Invalid sheet format");
-        for(var e:o.entrySet()) require(Set.of("format","kind","theme","ui","text","values","collections").contains(e.getKey()),"Unknown sheet field: "+e.getKey());
     }
     private static void require(boolean value,String message) { if(!value) throw new IllegalArgumentException(message); }
     private static String encode(State s) {
-        JsonObject root=new JsonObject(); root.addProperty("schema",1);
+        JsonObject root=new JsonObject(); root.addProperty("schema",2);
         root.add("campaigns",GSON.toJsonTree(new ArrayList<>(s.campaigns.values()))); root.add("characters",GSON.toJsonTree(new ArrayList<>(s.characters.values())));
         root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
     }
     private static State decode(String json) {
+        checkDepth(json,24);
         JsonObject root=JsonParser.parseString(json).getAsJsonObject();
-        if(root.get("schema").getAsInt()!=1) throw new UnsupportedOperationException("Unsupported save schema");
+        int schema=root.get("schema").getAsInt();
+        if(schema!=1 && schema!=2) throw new UnsupportedOperationException("Unsupported save schema");
         var campaigns=new HashMap<UUID,Campaign>(); var characters=new HashMap<UUID,Character>(); var bindings=new HashMap<UUID,UUID>();
         require(root.getAsJsonArray("campaigns").size()<=64 && root.getAsJsonArray("characters").size()<=1024,"Save limits exceeded");
         for(JsonElement e:root.getAsJsonArray("campaigns")) {
+            if(schema==1) e.getAsJsonObject().add("policy",GSON.toJsonTree(ApprovalPolicy.secureDefault()));
+            ApprovalPolicy.parse(e.getAsJsonObject().getAsJsonObject("policy"));
             Campaign c=GSON.fromJson(e,Campaign.class); RulesProfiles.get(c.profile);
             require(c.id!=null && c.owner!=null && c.revision>0 && c.name.length()<=64 && c.members.size()<=256 && c.members.contains(c.owner)
                     && c.members.containsAll(c.dms),"Invalid campaign");
@@ -170,7 +243,7 @@ public final class CharacterRepository {
         }
         for(JsonElement e:root.getAsJsonArray("characters")) {
             Character c=GSON.fromJson(e,Character.class); RulesProfiles.get(c.profile);
-            require(c.id!=null && c.owner!=null && campaigns.containsKey(c.campaign) && c.profileVersion==1 && c.revision>0,"Invalid character");
+            require(c.id!=null && c.owner!=null && campaigns.containsKey(c.campaign) && c.profileVersion==1 && c.revision>0 && c.runtimeRevision>=0,"Invalid character");
             validateSheet(c.sheet); validateStats(c.stats); require(characters.put(c.id,c)==null,"Duplicate character");
         }
         var used=new HashSet<UUID>();

@@ -314,19 +314,13 @@ public final class CharacterSheetScreen extends Screen {
 			right -= smallButton(g, right - tw("Reload") - 6, y + 3, "Reload", () -> SheetLibrary.reload(), "Read the sheets and characters folders again", PANEL, 0xFF3B414C) + 3;
 			right -= smallButton(g, right - tw("Formats") - 6, y + 3, view == View.FORMATS ? "Back" : "Formats",
 					() -> view = view == View.FORMATS ? View.SHEET : View.FORMATS, "Installed sheet formats", PANEL, 0xFF3B414C) + 3;
-			if (view == View.SHEET && sheet() != null) {
-                if (net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.canSend(dev.tacticalcombat.net.SubmitCharacterPayload.ID)) {
-                    right -= smallButton(g,right-tw("Submit")-6,y+3,"Submit",()->{
-                        CharacterData current=character();
-                        if(current!=null) {
-                            String json=current.toJson().toString();
-                            if(json.length()>32768) {
-                                if(client.player!=null) client.player.sendMessage(Text.literal("This character is too large to submit (32,768 character limit)."),false);
-                            } else net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(
-                                    new dev.tacticalcombat.net.SubmitCharacterPayload(java.util.UUID.randomUUID(),json));
-                        }
-                    },"Submit an independent draft to your selected server campaign; DM approval is required",PANEL,0xFF3B414C)+3;
+                if (ClientCharacters.available()) {
+                    right -= smallButton(g,right-tw("Server")-6,y+3,"Server",()->
+                        client.setScreen(new ServerCharactersScreen(this,character()==null?null:character().toJson())),
+                        "Local draft: open authorized server characters; refresh never overwrites this local sheet",PANEL,0xFF3B414C)+3;
                 }
+			if (view == View.SHEET && sheet() != null) {
+
 				right -= smallButton(g, right - tw("Edit") - 6, y + 3, "Edit", this::startEdit, "Change this character's details", PANEL, 0xFF3B414C) + 3;
 			}
 			right -= smallButton(g, right - tw("New") - 6, y + 3, "New", this::startNew, "Create a new character", PANEL, 0xFF3B414C) + 3;
@@ -334,7 +328,7 @@ public final class CharacterSheetScreen extends Screen {
 
 		// character switcher on the left
 		CharacterData c = character();
-		String name = c == null ? "No characters" : textRenderer.trimToWidth(c.displayName(), 90);
+		String name = c == null ? "No characters" : textRenderer.trimToWidth("Local: "+c.displayName(), Math.max(20,Math.min(90,right-x-52)));
 		int cx = x + 6;
 		if (view == View.SHEET && SheetLibrary.CHARACTERS.size() > 1) {
 			cx += smallButton(g, cx, y + 3, "<", () -> { charIndex--; resetScroll(); }, "Previous character", PANEL, 0xFF3B414C) + 3;

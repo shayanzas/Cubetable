@@ -9,9 +9,12 @@ import java.util.function.Function;
 /** Same-directory, fsynced replacement with a validated last-good backup. Never silently resets bad data. */
 public final class AtomicJsonFile {
     private final Path path;
+    @FunctionalInterface interface BeforeReplace { void run(Path destination) throws IOException; }
+    private final BeforeReplace beforeReplace;
     private boolean recovered;
     public boolean recoveredFromBackup() { return recovered; }
-    public AtomicJsonFile(Path path) { this.path=path; }
+    public AtomicJsonFile(Path path) { this(path,destination->{}); }
+    AtomicJsonFile(Path path,BeforeReplace beforeReplace) { this.path=path; this.beforeReplace=beforeReplace; }
     public <T> T read(Function<String,T> decode, T empty) throws IOException {
         if(!Files.exists(path) && !Files.exists(backup())) return empty;
         Exception primary;
@@ -45,6 +48,7 @@ public final class AtomicJsonFile {
             Files.writeString(temp,text,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING);
             try(FileChannel channel=FileChannel.open(temp,StandardOpenOption.WRITE)) { channel.force(true); }
             // Refuse an unsafe fallback on filesystems lacking atomic replacement.
+            beforeReplace.run(destination);
             Files.move(temp,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
         } finally { Files.deleteIfExists(temp); }
     }

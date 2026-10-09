@@ -19,9 +19,13 @@ public final class CharacterService {
     private static boolean failed;
     private CharacterService() {}
     public static void start(MinecraftServer server) {
+        start(server,server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/campaigns.json"));
+    }
+    /** Trusted bootstrap/test seam; this path never comes from a client request. */
+    public static void start(MinecraftServer server,java.nio.file.Path storage) {
         SELECTED.clear(); failed=false;
         try {
-            repository=new CharacterRepository(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/campaigns.json"));
+            repository=new CharacterRepository(storage);
             if(repository.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("Recovered character storage from validated backup; latest save was unreadable");
             // Initial world entities may have loaded before SERVER_STARTED. Reconcile their saved modifiers too.
             for(var world:server.getWorlds()) for(var entity:world.iterateEntities())
@@ -77,6 +81,9 @@ public final class CharacterService {
     }
     public static void unbind(ServerPlayerEntity requester,LivingEntity target) throws IOException {
         if(CombatManager.isInCombat(target)) throw new IllegalArgumentException("Cannot unbind during combat");
+        var record=bound(target);
+        if(record==null || !repository().manages(principal(requester),record.campaign())) throw new IllegalArgumentException("Campaign permission denied");
+        if(record.profile().equals(RulesProfiles.TACTICAL)) repository().captureHealth(Map.of(target.getUuid(),(double)target.getHealth()));
         repository().unbind(principal(requester),target.getUuid()); apply(target);
     }
     /** Release by character ID also works when an NPC was removed or a player is offline. */
@@ -115,6 +122,23 @@ public final class CharacterService {
         }
         try { repository.captureHealth(values); }
         catch(Exception e) { dev.tacticalcombat.TacticalCombatMod.LOGGER.error("Could not persist character health",e); }
+    }
+    public static void captureForViewer(ServerPlayerEntity viewer,UUID character) throws IOException {
+        var record=repository().visible(principal(viewer),character);
+        if(!record.profile().equals(RulesProfiles.TACTICAL)) return;
+        UUID actor=repository().binding(character); if(actor==null) return;
+        for(var world:viewer.getServer().getWorlds()) {
+            var entity=world.getEntity(actor);
+            if(entity instanceof LivingEntity living) {
+                repository.captureHealth(Map.of(actor,(double)living.getHealth())); return;
+            }
+        }
+    }
+    public static void captureEntity(LivingEntity entity) {
+        var record=bound(entity);
+        if(record==null || !record.profile().equals(RulesProfiles.TACTICAL)) return;
+        try { repository.captureHealth(Map.of(entity.getUuid(),(double)entity.getHealth())); }
+        catch(Exception e) { dev.tacticalcombat.TacticalCombatMod.LOGGER.error("Could not persist departing character health",e); }
     }
     public static void forget(UUID player) { SELECTED.remove(player); }
     public static void stop(MinecraftServer server) { capture(server); repository=null; SELECTED.clear(); failed=false; }

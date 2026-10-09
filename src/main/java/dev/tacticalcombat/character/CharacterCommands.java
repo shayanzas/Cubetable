@@ -58,6 +58,20 @@ public final class CharacterCommands {
                 UUID campaign=CharacterService.selected(player(c)); var current=repo().campaign(campaign);
                 repo().revokeDm(who(c),campaign,current.revision(),EntityArgumentType.getPlayer(c,"target").getUuid()); return "Co-DM removed.";
             }))))
+            .then(CommandManager.literal("policy").executes(c->run(c,()->{
+                UUID id=CharacterService.selected(player(c));
+                return "Policy revision="+repo().campaign(id).revision()+" "+repo().campaign(id).policy();
+            })).then(CommandManager.argument("revision",LongArgumentType.longArg(1))
+                .then(CommandManager.argument("newApproval",BoolArgumentType.bool())
+                .then(CommandManager.argument("editApproval",BoolArgumentType.bool())
+                .then(CommandManager.argument("locked",BoolArgumentType.bool())
+                .then(CommandManager.argument("fields",StringArgumentType.greedyString()).executes(c->run(c,()->{
+                    String fields=StringArgumentType.getString(c,"fields");
+                    java.util.Set<String> allowed=fields.equals("none")?java.util.Set.of():new java.util.HashSet<>(java.util.Arrays.asList(fields.split(",")));
+                    var policy=new ApprovalPolicy(BoolArgumentType.getBool(c,"newApproval"),BoolArgumentType.getBool(c,"editApproval"),BoolArgumentType.getBool(c,"locked"),allowed);
+                    repo().policy(who(c),CharacterService.selected(player(c)),LongArgumentType.getLong(c,"revision"),policy);
+                    return "Policy updated for future operations. Existing approvals are unchanged.";
+                }))))))))
             .then(CommandManager.literal("rules").then(CommandManager.argument("profile",StringArgumentType.word()).executes(c->run(c,()->{
                 UUID campaign=CharacterService.selected(player(c)); var current=repo().campaign(campaign);
                 String profile=StringArgumentType.getString(c,"profile"); repo().profile(who(c),campaign,current.revision(),profile);
@@ -70,13 +84,13 @@ public final class CharacterCommands {
                     .map(x->x.id()+" revision="+x.revision()+" "+(x.approved()?"approved":"draft")+" "+x.profile()).collect(java.util.stream.Collectors.joining("\n"));
             })))
             .then(CommandManager.literal("show").then(CommandManager.argument("character",StringArgumentType.word()).executes(c->run(c,()->{
-                var x=repo().visible(who(c),id(c,"character")); return x.id()+" revision="+x.revision()+" approved="+x.approved()+" stats="+x.stats();
+                var x=repo().visible(who(c),id(c,"character")); return x.id()+" revision="+x.revision()+" runtimeRevision="+x.runtimeRevision()+" approved="+x.approved()+" bound="+repo().binding(x.id())+" stats="+x.stats();
             }))))
             .then(CommandManager.literal("stat").then(CommandManager.argument("character",StringArgumentType.word())
                 .then(CommandManager.argument("revision",LongArgumentType.longArg(1)).then(CommandManager.argument("key",StringArgumentType.word())
                 .then(CommandManager.argument("value",DoubleArgumentType.doubleArg()).executes(c->run(c,()->{
                     repo().stat(who(c),id(c,"character"),LongArgumentType.getLong(c,"revision"),StringArgumentType.getString(c,"key"),DoubleArgumentType.getDouble(c,"value"));
-                    return "Draft updated; DM approval required.";
+                    return "Character updated. Approval="+repo().character(id(c,"character")).approved()+"; use show for the current revision.";
                 })))))))
             .then(CommandManager.literal("approve").then(CommandManager.argument("character",StringArgumentType.word())
                 .then(CommandManager.argument("revision",LongArgumentType.longArg(1)).executes(c->run(c,()->{

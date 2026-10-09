@@ -53,7 +53,7 @@ public final class CharacterRepositoryTests {
             check(repo.character(character).stats().get("hp")==12,"server resource update retained");
             repo.unbind(owner,actor);
             check(!repo.state().bindings().containsKey(actor),"unbind persists");
-            repo.stat(member,character,4,"ac",17);
+            repo.stat(member,character,3,"ac",17);
             check(!repo.character(character).approved(),"editing invalidates approval");
             repo.invite(owner,campaign,2,member.id(),true);
             check(repo.manages(member,campaign),"owner can appoint co-DM");
@@ -81,7 +81,7 @@ public final class CharacterRepositoryTests {
             reject(()->new CharacterRepository(file),"future schema must not silently roll back to backup");
             Files.delete(file); Files.createDirectory(file);
             var previous=repo.state();
-            reject(()->repo.stat(member,character,5,"ac",18),"failed write reported");
+            reject(()->repo.stat(member,character,4,"ac",18),"failed write reported");
             check(repo.state()==previous,"failed write does not publish new memory state");
             // A campaign with no valid primary or backup must not reset to an empty save.
             Files.writeString(dir.resolve("state.json.bak"),"broken backup");

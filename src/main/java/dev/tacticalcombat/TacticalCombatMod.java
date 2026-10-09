@@ -60,6 +60,7 @@ public class TacticalCombatMod implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(AttackRequestPayload.ID,
 				(payload, context) -> CombatManager.requestAttack(context.player(), payload.entityId(), payload.stamp()));
 
+        dev.tacticalcombat.character.CharacterNetworking.register();
         PayloadTypeRegistry.playC2S().register(dev.tacticalcombat.net.SubmitCharacterPayload.ID,dev.tacticalcombat.net.SubmitCharacterPayload.CODEC);
         var submitLimit=new dev.tacticalcombat.core.RateLimit(2,100);
         java.util.Map<java.util.UUID,java.util.Set<java.util.UUID>> submissions=new java.util.HashMap<>();
@@ -72,13 +73,16 @@ public class TacticalCombatMod implements ModInitializer {
                 var repo=dev.tacticalcombat.character.CharacterService.repository();
                 var campaign=dev.tacticalcombat.character.CharacterService.selected(p);
                 var id=repo.submit(dev.tacticalcombat.character.CharacterService.principal(p),campaign,repo.campaign(campaign).profile(),payload.sheet());
-                p.sendMessage(Text.literal("Server draft submitted: "+id+" (revision 1). A campaign DM must approve and bind it."),false);
+                p.sendMessage(Text.literal("Server draft submitted: "+id+" (revision 1). Use Server characters to review approval and binding status."),false);
             } catch(Exception e) { p.sendMessage(Text.literal("Submission rejected: "+e.getMessage()),false); }
         });
         ServerLifecycleEvents.SERVER_STARTED.register(dev.tacticalcombat.character.CharacterService::start);
-        net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer,newPlayer,alive)->dev.tacticalcombat.character.CharacterService.apply(newPlayer));
+        net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer,newPlayer,alive)->{
+            dev.tacticalcombat.character.CharacterService.apply(newPlayer); dev.tacticalcombat.character.CharacterService.captureEntity(newPlayer);
+        });
         ServerLifecycleEvents.SERVER_STOPPING.register(server->{submitLimit.clear(); submissions.clear();});
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{
+            dev.tacticalcombat.character.CharacterService.captureEntity(handler.player);
             submitLimit.forget(handler.player.getUuid()); submissions.remove(handler.player.getUuid()); dev.tacticalcombat.character.CharacterService.forget(handler.player.getUuid());
         });
 
@@ -89,12 +93,16 @@ public class TacticalCombatMod implements ModInitializer {
         });
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             dev.tacticalcombat.character.CharacterService.apply(handler.player);
+            dev.tacticalcombat.character.CharacterService.captureEntity(handler.player);
             if (!ServerPlayNetworking.canSend(handler.player, CombatStatePayload.ID))
                 handler.player.sendMessage(Text.literal("Cubetable tactical combat requires an updated client with the v2 combat protocol. You will not be recruited; update the client mod to play."), false);
         });
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             DiceService.forget(handler.player.getUuid());
             dev.tacticalcombat.card.CardService.forget(handler.player.getUuid());
+        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_UNLOAD.register((entity,world)->{
+            if(entity instanceof net.minecraft.entity.LivingEntity living) dev.tacticalcombat.character.CharacterService.captureEntity(living);
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, world) -> {
                 dev.tacticalcombat.combat.CombatActions.projectileLoaded(entity, world.getServer().getOverworld().getTime());
