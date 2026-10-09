@@ -10,7 +10,8 @@
       "dev.tacticalcombat.combat.PhaseOneGameTests",
       "dev.tacticalcombat.combat.CharacterGameTests",
       "dev.tacticalcombat.combat.CharacterSyncGameTests",
-      "dev.tacticalcombat.combat.SrdFoundationGameTests"
+      "dev.tacticalcombat.combat.SrdFoundationGameTests",
+      "dev.tacticalcombat.combat.SrdMovementGameTests"
     ]
   },
   "depends": {
