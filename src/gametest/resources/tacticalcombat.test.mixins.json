@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "dev.tacticalcombat.testmixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "CreeperAccess",
+    "SlimeAccess",
+    "MobGoalsAccess",
+    "BeamAccess",
+    "ConsumeAccess",
+    "ArrowAccess",
+    "BlazeAccess",
+    "PotionAccess"
+  ]
+}

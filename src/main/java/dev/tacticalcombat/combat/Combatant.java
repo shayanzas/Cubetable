@@ -37,6 +37,7 @@ public final class Combatant {
     public java.util.Set<Vec3d> pathLandings = java.util.Set.of();
 	public int pathIdx;
 	public Vec3d pathPos;
+    public dev.tacticalcombat.core.MovementCharge pathCharge;
 
 	public Combatant(LivingEntity entity, int initiative) {
 		this.entity = entity;
@@ -65,6 +66,7 @@ public final class Combatant {
 		this.freeWalk = false;
 		this.ticksInAction = 0;
 		this.path = null;
+        this.pathCharge = null;
         this.pathLandings = java.util.Set.of();
 		this.pathIdx = 0;
 		this.pathPos = null;

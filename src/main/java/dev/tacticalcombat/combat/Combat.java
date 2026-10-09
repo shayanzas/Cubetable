@@ -148,6 +148,7 @@ public final class Combat {
 	/** Ends the current turn and starts the next one. */
 	public void endTurn() {
 		Combatant cur = current();
+        CombatInteractions.cancel(cur.entity);
 		cur.path = null;
 		cur.anchor = cur.entity.getPos();
 		turn++;
@@ -189,7 +190,7 @@ public final class Combat {
         c.path = path;
 		c.pathIdx = 0;
 		c.pathPos = player.getPos();
-		c.moveUsed += node.cost;
+		setPathCharge(c, path, node.cost);
 
 		moveGrid = null;
 		threat = Set.of();
@@ -330,6 +331,7 @@ public final class Combat {
 				kept.add(c);
 			} else {
 				gridDirty = true;
+                CombatInteractions.cancel(c.entity);
                 CombatManager.release(c.entity, this);
 				if (c.entity instanceof ServerPlayerEntity p) {
 					sendInactive(p);
@@ -373,7 +375,7 @@ public final class Combat {
 							&& CombatManager.isNear(m, p, CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL)));
 
 			joiners.addAll(world.getPlayers(o ->
-					!o.isSpectator() && o.isAlive()
+					CombatManager.canFight(o)
 							&& !CombatManager.isInCombat(o)
 							&& CombatManager.isNear(o, p, CombatConfig.JOIN_RANGE, CombatConfig.JOIN_VERTICAL)));
 		}
@@ -420,6 +422,13 @@ public final class Combat {
         e.setVelocity(Vec3d.ZERO);
     }
 
+    private void setPathCharge(Combatant c, List<Vec3d> path, double cost) {
+        double length = 0;
+        Vec3d from = c.entity.getPos();
+        for (Vec3d to : path) { length += from.distanceTo(to); from = to; }
+        c.pathCharge = new dev.tacticalcombat.core.MovementCharge(cost, Math.max(length, 1.0E-9));
+    }
+
     private boolean clearPath(Combatant c, List<Vec3d> path) {
         Vec3d previous = c.entity.getPos();
         for (Vec3d next : path) {
@@ -459,20 +468,24 @@ public final class Combat {
 	private void tickMove(Combatant c) {
 		Vec3d before = c.pathPos;
 		Vec3d pos = before;
+        // Check all remaining segments before entering a stair transit point with no floor beneath it.
+        Vec3d checkFrom = pos;
+        for (int i = c.pathIdx; i < c.path.size(); i++) {
+            Vec3d to = c.path.get(i);
+            if (!clearMoveSegment(c, checkFrom, to, i == c.path.size() - 1)) {
+                c.path = null; c.pathCharge = null; c.anchor = c.entity.getPos();
+                c.pathPos = c.anchor; gridDirty = true; sync(); return;
+            }
+            checkFrom = to;
+        }
+        double traversed = 0;
 		double remaining = c.isPlayer() ? CombatConfig.MOVE_SPEED : CombatConfig.MOB_MOVE_SPEED;
 
 		while (remaining > 1.0E-6 && c.pathIdx < c.path.size()) {
 			Vec3d target = c.path.get(c.pathIdx);
-			if (!clearMoveSegment(c, pos, target, c.pathIdx == c.path.size() - 1)) {
-                c.path = null;
-                c.anchor = c.entity.getPos();
-                c.pathPos = c.anchor;
-                gridDirty = true;
-                sync();
-                return;
-            }
             Vec3d delta = target.subtract(pos);
 			double len = delta.length();
+            traversed += Math.min(len, remaining);
 			if (len <= remaining) {
 				pos = target;
 				remaining -= len;
@@ -483,6 +496,7 @@ public final class Combat {
 			}
 		}
 
+        if (c.pathCharge != null) c.moveUsed = Math.min(c.moveBudget, c.moveUsed + c.pathCharge.advance(traversed));
 		c.pathPos = pos;
 		if (c.entity instanceof ServerPlayerEntity p) {
 			teleportKeepLook(p, pos.x, pos.y, pos.z);
@@ -577,6 +591,7 @@ public final class Combat {
 				c.path = settle;
 				c.pathIdx = 0;
 				c.pathPos = mob.getPos();
+                setPathCharge(c, settle, mob.getPos().distanceTo(centre));
 				sync();
 			}
 			return;
@@ -587,7 +602,7 @@ public final class Combat {
         c.path = path;
 		c.pathIdx = 0;
 		c.pathPos = mob.getPos();
-		c.moveUsed = r.nodes.get(best).cost;
+		setPathCharge(c, path, r.nodes.get(best).cost);
 		sync();
 	}
 
@@ -607,8 +622,7 @@ public final class Combat {
 				mob.tryAttack(target);
 			}
 		}
-		// everything else (archers, creepers, ...) uses its normal AI while pinned to its square; the
-		// The mob attack adapter accepts and spends the action before vanilla damage executes.
+        // Specialized mobs retain their AI; adapters admit their effects before damage executes.
 
 		if (c.actionUsed) {
 			if (++c.ticksSinceActionUsed >= CombatConfig.MOB_AFTER_ACTION_TICKS) endTurn();
@@ -621,6 +635,9 @@ public final class Combat {
 	private static boolean isDirectMelee(MobEntity mob) {
 		return !(mob instanceof RangedAttackMob)
 				&& !(mob instanceof CreeperEntity)
+                && !(mob instanceof net.minecraft.entity.mob.SlimeEntity)
+                && !(mob instanceof net.minecraft.entity.mob.GuardianEntity)
+                && !(mob instanceof net.minecraft.entity.mob.BlazeEntity)
 				&& mob.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE) != null;
 	}
 
@@ -812,6 +829,7 @@ public final class Combat {
 		}
 		notified.clear();
 		for (Combatant c : order) {
+            CombatInteractions.cancel(c.entity);
             CombatManager.release(c.entity, this);
 			if (c.entity instanceof MobEntity m) {
 				m.getNavigation().stop();

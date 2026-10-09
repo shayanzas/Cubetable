@@ -4,6 +4,17 @@
   "version": "1.0.0",
   "name": "Cubetable development GameTests",
   "environment": "*",
-  "entrypoints": { "fabric-gametest": ["dev.tacticalcombat.combat.AuthorityGameTests"] },
-  "depends": { "tacticalcombat": "*", "fabric-gametest-api-v1": "*" }
+  "entrypoints": {
+    "fabric-gametest": [
+      "dev.tacticalcombat.combat.AuthorityGameTests",
+      "dev.tacticalcombat.combat.PhaseOneGameTests"
+    ]
+  },
+  "depends": {
+    "tacticalcombat": "*",
+    "fabric-gametest-api-v1": "*"
+  },
+  "mixins": [
+    "tacticalcombat.test.mixins.json"
+  ]
 }

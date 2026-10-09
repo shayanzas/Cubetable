@@ -134,7 +134,7 @@ public final class Grid {
 		return world.isChunkLoaded(p.getX() >> 4, p.getZ() >> 4);
 	}
 
-	private static boolean isHazard(BlockState s) {
+	public static boolean isHazard(BlockState s) {
 		return s.isOf(Blocks.MAGMA_BLOCK)
 				|| s.isOf(Blocks.CACTUS)
 				|| s.isOf(Blocks.SWEET_BERRY_BUSH)

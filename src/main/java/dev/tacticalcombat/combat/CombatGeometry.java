@@ -24,6 +24,7 @@ public final class CombatGeometry {
     }
     public static boolean clearSegment(LivingEntity actor, Vec3d from, Vec3d to) {
         int samples = Math.max(1, (int) Math.ceil(from.distanceTo(to) / 0.125));
+        if (samples > 512) return false;
         Box shape = actor.getBoundingBox().offset(actor.getPos().negate());
         for (int i = 1; i <= samples; i++) {
             Vec3d at = from.lerp(to, (double) i / samples);
@@ -32,6 +33,12 @@ public final class CombatGeometry {
                     || !actor.getWorld().isChunkLoaded((int) Math.floor(box.minX) >> 4, (int) Math.floor(box.minZ) >> 4)
                     || !actor.getWorld().isChunkLoaded((int) Math.floor(box.maxX) >> 4, (int) Math.floor(box.maxZ) >> 4)
                     || actor.getWorld().getBlockCollisions(actor, box).iterator().hasNext()) return false;
+            for (var cell : net.minecraft.util.math.BlockPos.iterate(
+                    net.minecraft.util.math.BlockPos.ofFloored(box.minX, box.minY - 0.02, box.minZ),
+                    net.minecraft.util.math.BlockPos.ofFloored(box.maxX, box.maxY, box.maxZ))) {
+                var state = actor.getWorld().getBlockState(cell);
+                if (dev.tacticalcombat.grid.Grid.isHazard(state) || !state.getFluidState().isEmpty()) return false;
+            }
         }
         return true;
     }

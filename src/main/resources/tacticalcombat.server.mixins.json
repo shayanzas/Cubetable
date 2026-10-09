@@ -2,6 +2,23 @@
   "required": true,
   "package": "dev.tacticalcombat.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["MobAttackMixin", "CreeperExplosionMixin"],
-  "injectors": {"defaultRequire": 1}
+  "mixins": [
+    "MobAttackMixin",
+    "CreeperExplosionMixin",
+    "RangedWeaponMixin",
+    "SlimeAttackMixin",
+    "GuardianBeamMixin",
+    "ItemInteractionMixin",
+    "ActiveItemMixin",
+    "PlayerInteractionMixin",
+    "ArmorStandInteractionMixin",
+    "InventoryAuthorityMixin",
+    "BlazeVolleyMixin",
+    "PotionBoundaryMixin",
+    "CloudBoundaryMixin",
+    "ArrowImpactMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

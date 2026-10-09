@@ -52,6 +52,18 @@ public final class FoundationTests {
         check(permit.admit(encounter, victim), "admit authorized effect");
         check(!permit.admit(encounter, victim), "no duplicate effect");
         check(permit.admit(encounter, UUID.randomUUID()), "multi-victim action costs only once");
+        UUID secondEffect = permit.newEffect();
+        check(permit.admit(encounter, secondEffect, victim, false), "distinct effect can hit same victim");
+        check(!permit.admit(encounter, secondEffect, victim, false), "effect replay rejected");
+        check(!permit.admit(encounter, UUID.randomUUID(), victim, false), "unissued effect rejected");
+        for (int i = 2; i < DamagePermit.MAX_EFFECTS; i++) check(permit.newEffect() != null, "bounded effect issuance");
+        check(permit.newEffect() == null, "effect issuance capped");
+        MovementCharge charge = new MovementCharge(3, 6);
+        check(charge.advance(1) == 0.5, "partial route cost");
+        check(charge.advance(1) == 0.5, "incremental cost, unused allowance not charged");
+        check(charge.advance(100) == 2 && charge.advance(1) == 0, "route cost cannot overcharge");
+        rejects(() -> charge.advance(-1), "cannot refund completed travel");
+        rejects(() -> new MovementCharge(1, Double.NaN), "invalid route length");
         rejects(() -> PacketLimits.count(-1, 10), "negative length");
         rejects(() -> PacketLimits.count(11, 10), "excess length");
         check(PacketLimits.count(10, 10) == 10, "boundary length");

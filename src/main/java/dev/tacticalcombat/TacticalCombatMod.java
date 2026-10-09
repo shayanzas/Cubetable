@@ -65,6 +65,10 @@ public class TacticalCombatMod implements ModInitializer {
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             CombatManager.clear(); DiceService.clear(); dev.tacticalcombat.card.CardService.clear();
         });
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            if (!ServerPlayNetworking.canSend(handler.player, CombatStatePayload.ID))
+                handler.player.sendMessage(Text.literal("Cubetable tactical combat requires an updated client with the v2 combat protocol. You will not be recruited; update the client mod to play."), false);
+        });
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             DiceService.forget(handler.player.getUuid());
             dev.tacticalcombat.card.CardService.forget(handler.player.getUuid());
@@ -73,23 +77,16 @@ public class TacticalCombatMod implements ModInitializer {
                 dev.tacticalcombat.combat.CombatActions.projectileLoaded(entity, world.getServer().getOverworld().getTime()));
         net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
                 CombatManager.isInCombat(player) || CombatManager.isInCombat(entity) ? ActionResult.FAIL : ActionResult.PASS);
-        net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
-                CombatManager.isInCombat(player) || CombatManager.isInCombat(entity) ? ActionResult.FAIL : ActionResult.PASS);
 
-		// Rules: attacks cost the action, nobody acts out of turn
-		ServerLivingEntityEvents.ALLOW_DAMAGE.register(CombatManager::allowDamage);
-
-		UseItemCallback.EVENT.register((player, world, hand) -> {
-			if (world.isClient || CombatManager.canActNow(player)) {
-				return TypedActionResult.pass(player.getStackInHand(hand));
-			}
-			CombatManager.notifyNotYourTurn(player);
-			return TypedActionResult.fail(player.getStackInHand(hand));
-		});
-		UseBlockCallback.EVENT.register((player, world, hand, hit) ->
-				world.isClient || CombatManager.canActNow(player) ? ActionResult.PASS : ActionResult.FAIL);
-		AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) ->
-				world.isClient || CombatManager.canActNow(player) ? ActionResult.PASS : ActionResult.FAIL);
+        // Unknown entity-specific interaction handlers must also fail closed.
+        net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+            if (world.isClient || !(player instanceof ServerPlayerEntity p)) return ActionResult.PASS;
+            return dev.tacticalcombat.combat.CombatInteractions.entity(p, entity, () -> ActionResult.PASS);
+        });
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register(CombatManager::allowDamage);
+        // Terrain mining is deliberately unsupported during a tactical turn; outside players remain vanilla.
+        AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) ->
+                world.isClient || !CombatManager.isInCombat(player) ? ActionResult.PASS : ActionResult.FAIL);
 
 		// Commands
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerCommands(dispatcher));
@@ -107,9 +104,13 @@ public class TacticalCombatMod implements ModInitializer {
                                 ctx.getSource().sendError(Text.literal("You already belong to an encounter."));
                                 return 0;
                             }
+                            if (!ServerPlayNetworking.canSend(player, CombatStatePayload.ID)) {
+                                ctx.getSource().sendError(Text.literal("Update the client mod: tactical combat requires the v2 combat protocol."));
+                                return 0;
+                            }
                             Combat combat = CombatManager.startAround(player.getServerWorld(), player, false);
 							if (combat == null) {
-								ctx.getSource().sendError(Text.translatable("tacticalcombat.cmd.no_enemies"));
+								ctx.getSource().sendError(Text.literal("No supported enemies nearby. Evokers, wardens, withers and ender dragons are excluded from this tactical checkpoint."));
 								return 0;
 							}
 							ctx.getSource().sendFeedback(() -> Text.translatable("tacticalcombat.cmd.started"), false);

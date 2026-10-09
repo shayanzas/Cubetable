@@ -45,7 +45,10 @@ public final class CombatManager {
 		return m instanceof Monster
 				&& m.isAlive()
 				&& !(m instanceof EnderDragonEntity)
-				&& !(m instanceof WitherEntity);
+				&& !(m instanceof WitherEntity)
+                // These attacks need non-projectile or sonic effect adapters; keep them in vanilla world combat.
+                && !(m instanceof net.minecraft.entity.mob.EvokerEntity)
+                && !(m instanceof net.minecraft.entity.mob.WardenEntity);
 	}
 
 	// ---------------------------------------------------------------- tick / detection
@@ -94,7 +97,7 @@ public final class CombatManager {
 		return dx * dx + dz * dz <= horizontal * horizontal && Math.abs(a.getY() - b.getY()) <= vertical;
 	}
 
-	private static boolean canFight(ServerPlayerEntity p) {
+	static boolean canFight(ServerPlayerEntity p) {
 		return p.isAlive() && !p.isSpectator()
                 && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(p,
                         dev.tacticalcombat.net.CombatStatePayload.ID);
@@ -136,6 +139,7 @@ public final class CombatManager {
 		COMBATS.clear();
         OWNERS.clear();
         CombatActions.clear();
+        CombatInteractions.clear();
 	}
 
 	// ---------------------------------------------------------------- rule hooks
