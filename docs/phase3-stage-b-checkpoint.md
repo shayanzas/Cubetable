@@ -2,6 +2,8 @@
 
 October 9, 2026 (UTC). Repository `shayanzas/Cubetable`; branch `dev/phase3-srd-combat`.
 
+Continuation: [current Phase 3 status and Stage C prerequisites](phase3-completion-status.md). This report preserves historical Stage B results.
+
 ## Checkpoint and verification
 
 Continued the existing clean workspace at `0d4a29b5bf2f5e025f15ccd8ff03f8196875efb6`, retaining Stage A implementation `0d5b1f66eaf6b9b1712d301e6c57470b9f7dc328` and Phase 2 base `6b28e42caeb447ba3578cac60c0d0b58e6e4e5a0`. Read the Stage A checkpoint, approved movement specification, audit F05/F06 and SRD 5.1 movement/creature-space rules (pp. 91–92) before implementing. Baseline rerun passed **742 assertions and 38 GameTests**.
