@@ -42,7 +42,7 @@ public final class CharacterNetworking {
             }
             String json=reply.data().toString();
             if(json.length()>CharacterReplyPayload.LIMIT) throw new IllegalArgumentException("Result too large; use a smaller page");
-            if(reply.code().equals("OK") && java.util.Set.of("create","edit","approve","policy").contains(request.operation()))
+            if(reply.code().equals("OK") && java.util.Set.of("create","srd_create","edit","approve","policy").contains(request.operation()))
                 dev.tacticalcombat.TacticalCombatMod.LOGGER.info("Character {} by {}",request.operation(),player.getUuid());
             return new CharacterReplyPayload(request.sequence(),reply.code(),reply.message(),json);
         } catch(java.io.IOException e) {

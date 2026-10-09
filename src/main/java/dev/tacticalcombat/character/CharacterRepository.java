@@ -141,7 +141,11 @@ public final class CharacterRepository {
         if(!manages(p,c.campaign)) for(String field:changes.keySet())
             require(campaign(c.campaign).policy.permits(field),"Owner editing locked or field forbidden: "+field);
         if(changes.has("values.hp")) require(c.runtimeRevision==runtimeRevision,"Stale health revision; refresh and reconcile HP");
+        if(c.profile.equals(RulesProfiles.SRD) && changes.has("collections.srd_combat"))
+            require(c.runtimeRevision==runtimeRevision,"Stale SRD health revision; refresh and reconcile before replacing combat data");
         JsonObject sheet=CharacterEdits.apply(effectiveSheet(c),changes); validateSheet(sheet.toString());
+        if(c.profile.equals(RulesProfiles.SRD) && changes.has("collections.srd_combat"))
+            dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
         var stats=new HashMap<>(c.stats);
         for(var entry:changes.entrySet()) if(entry.getKey().startsWith("values.")) {
             String key=entry.getKey().substring(7);
@@ -185,12 +189,31 @@ public final class CharacterRepository {
         var records=new HashMap<>(state.characters); boolean changed=false;
         for(var entry:health.entrySet()) {
             UUID id=state.bindings.get(entry.getKey()); if(id==null) continue;
-            Character c=records.get(id); double hp=Math.clamp(entry.getValue(),0,c.stats.get("hp_max"));
+            Character c=records.get(id); if(!c.profile.equals(RulesProfiles.TACTICAL)) continue;
+            double hp=Math.clamp(entry.getValue(),0,c.stats.get("hp_max"));
             if(c.stats.get("hp")==hp) continue;
             var stats=new HashMap<>(c.stats); stats.put("hp",hp);
             records.put(id,new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,c.approved,c.revision,c.runtimeRevision+1)); changed=true;
         }
         if(changed) commit(new State(state.campaigns,records,state.bindings));
+    }
+    /** Trusted accepted-effect persistence seam. No packet/command exposes this API.
+     * The caller must retain its action identity and expected snapshot across retries: this is CAS,
+     * not permission to reroll/retry a consumed action against a fresh revision.
+     */
+    public SrdSnapshot commitSrdHealth(SrdSnapshot expected,dev.tacticalcombat.rules.srd.SrdHealth health) throws IOException {
+        SrdSnapshot current=srdSnapshot(expected.actor,expected.campaign);
+        require(current.equals(expected),"Stale SRD runtime snapshot; effect not committed");
+        require(health.maximum()==current.stats.maximumHp(),"Runtime effects cannot change approved maximum HP");
+        Character c=character(current.character);
+        JsonObject sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
+        JsonObject data=dev.tacticalcombat.rules.srd.SrdAuthoring.data(sheet);
+        data.addProperty("hp",health.current()); data.addProperty("temporary_hp",health.temporary());
+        dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
+        require(c.runtimeRevision<Long.MAX_VALUE,"SRD runtime revision exhausted");
+        // Even a no-op effect advances CAS revision; retrying the same expected state cannot apply twice.
+        replace(new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
+        return srdSnapshot(current.actor,current.campaign);
     }
     private void replace(Character c) throws IOException {
         var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings));

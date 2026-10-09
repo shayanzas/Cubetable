@@ -90,5 +90,7 @@ public final class FoundationTests {
         dev.tacticalcombat.character.PersistenceFaultTests.run();
         SrdRulesTests.run();
         SrdMovementTests.run();
+        SrdAuthoringTests.run();
+        dev.tacticalcombat.character.SrdResourceFaultTests.run();
     }
 }

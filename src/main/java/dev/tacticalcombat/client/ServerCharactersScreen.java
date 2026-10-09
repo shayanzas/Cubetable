@@ -23,6 +23,7 @@ public final class ServerCharactersScreen extends Screen {
     private TextFieldWidget field,value;
     private final List<ClickableWidget> operations=new ArrayList<>();
     private boolean requested;
+    private boolean srdAuthoring;
     public ServerCharactersScreen(Screen parent,JsonObject local) {
         super(Text.literal("Server characters")); this.parent=parent; this.local=local==null?null:local.deepCopy();
     }
@@ -62,7 +63,16 @@ public final class ServerCharactersScreen extends Screen {
             button("Use latest",2,3,height-102,()->confirm("Discard staged changes and use the latest server snapshot?",()->{workspace.useLatest(); fieldDirty=false; field=null; value=null; rebuild();}));
             button("Reconcile",0,3,height-78,()->attempt(()->workspace.rebase(false)));
             button("Keep my edits",1,3,height-78,()->confirm("Apply your changed fields over the latest snapshot, including conflicts "+workspace.conflicts()+"? Saving still requires server permission.",()->attempt(()->workspace.rebase(true))));
-            button("Import local",2,3,height-78,()->confirm("Stage fields from the local sheet? Server-only fields are retained. The local file stays unchanged.",()->attempt(()->{if(local==null) throw new IllegalArgumentException("No local sheet selected"); workspace.importLocal(local);})));
+            if(workspace.latest().has("srd")) button("SRD fields",2,3,height-78,()->{
+                if(fieldDirty) { message="Stage the typed field before opening the SRD form."; return; }
+                client.setScreen(new SrdCharacterFormScreen(this,workspace.draft(),edited->{
+                    var diff=CharacterEdits.diff(workspace.draft(),edited);
+                    diff.entrySet().forEach(e->workspace.stage(e.getKey(),e.getValue()));
+                    message="SRD fields staged locally. Save changes submits them for approval.";
+                    field=null; value=null; rebuild();
+                }));
+            });
+            else button("Import local",2,3,height-78,()->confirm("Stage fields from the local sheet? Server-only fields are retained. The local file stays unchanged.",()->attempt(()->{if(local==null) throw new IllegalArgumentException("No local sheet selected"); workspace.importLocal(local);})));
             button("Save changes",0,3,height-54,()->{if(fieldDirty) message="Stage the typed field before saving."; else if(!workspace.dirty()) message="No changes staged. Use latest to update the working draft."; else request("edit",workspace.request(),true);});
             button("Approve",1,3,height-54,()->{
                 if(workspace.dirty() || fieldDirty) { message="Save or discard the staged changes before approving."; return; }
@@ -93,13 +103,16 @@ public final class ServerCharactersScreen extends Screen {
                 else if((page+1)*8<total) { if(view.equals("campaigns")) campaigns(page+1); else characters(page+1); }
             });
             button("Refresh",2,3,height-76,()->{if(view.equals("campaigns")) campaigns(page); else characters(page);});
-            button("Campaigns",0,2,height-52,()->campaigns(0));
-            button("New from local",1,2,height-52,()->{
+            boolean canCreateSrd=srdAuthoring && campaign!=null && campaign.get("profile").getAsString().equals("srd_5_1");
+            int columns=canCreateSrd?3:2;
+            button("Campaigns",0,columns,height-52,()->campaigns(0));
+            button("New from local",1,columns,height-52,()->{
                 if(campaign==null || local==null) { message="Select a campaign and open this screen from a local character sheet."; return; }
                 confirm("Create a NEW server character from this local sheet? To revise an existing record, select it and use Import local instead.",()->{
                     var args=new JsonObject(); args.addProperty("sheet",local.toString()); request("create",args,true);
                 });
             });
+            if(canCreateSrd) button("New SRD",2,3,height-52,()->confirm("Create a new SRD server draft? It starts unarmored with average abilities and no class assumptions. Edit SRD fields, save and request approval.",()->request("srd_create",new JsonObject(),true)));
         }
         button("Back to local sheet",0,1,height-28,this::close);
     }
@@ -145,7 +158,7 @@ public final class ServerCharactersScreen extends Screen {
             CharacterRepository.checkDepth(reply.json(),24);
             JsonObject data=JsonParser.parseString(reply.json()).getAsJsonObject();
             switch(operation) {
-                case "campaigns" -> { rows=data.getAsJsonArray("campaigns"); view="campaigns"; total=data.get("total").getAsInt(); offset=0; }
+                case "campaigns" -> { srdAuthoring=data.has("srdAuthoringVersion") && data.get("srdAuthoringVersion").getAsInt()==1; rows=data.getAsJsonArray("campaigns"); view="campaigns"; total=data.get("total").getAsInt(); offset=0; }
                 case "select" -> { campaign=pendingCampaign; pendingCampaign=null; characters(0); return; }
                 case "list" -> { rows=data.getAsJsonArray("characters"); view="characters"; total=data.get("total").getAsInt(); offset=0; }
                 default -> {
@@ -178,10 +191,16 @@ public final class ServerCharactersScreen extends Screen {
             line(g,"Selected: "+selectedCharacter,37,0xFFCCCCCC);
             line(g,"Server edit rev "+state.get("revision")+" / HP rev "+state.get("runtimeRevision")+" / staged fields "+workspace.changes().size(),49,0xFFCCCCCC);
             if(height>235) {
-                var stats=state.getAsJsonObject("stats");
-                line(g,"Live HP "+stats.get("hp")+"/"+stats.get("hp_max")+"  Move "+stats.get("movement_blocks")+"  Initiative "+stats.get("initiative_bonus"),61,0xFFCCCCCC);
+                if(state.has("srd")) {
+                    var srd=state.getAsJsonObject("srd");
+                    line(g,srd.get("valid").getAsBoolean()?"D&D HP "+srd.get("hp")+"/"+srd.get("maximumHp")+" + "+srd.get("temporaryHp")+" temp / AC "+srd.get("ac")+" / Move "+srd.get("speedFeet")+" ft":"SRD schema invalid",61,0xFFCCCCCC);
+                } else {
+                    var stats=state.getAsJsonObject("stats");
+                    line(g,"Live HP "+stats.get("hp")+"/"+stats.get("hp_max")+"  Move "+stats.get("movement_blocks")+"  Initiative "+stats.get("initiative_bonus"),61,0xFFCCCCCC);
+                }
             }
-            if(height>260) line(g,"Profile: "+state.get("profile").getAsString()+" / owner lock: "+state.getAsJsonObject("policy").get("ownerLocked"),73,0xFFCCCCCC);
+            if(height>260) line(g,state.has("srd")?"SRD: "+state.getAsJsonObject("srd").get("reason").getAsString():"Profile: "+state.get("profile").getAsString()+" / owner lock: "+state.getAsJsonObject("policy").get("ownerLocked"),73,0xFFCCCCCC);
+            if(height>280 && state.has("srd")) line(g,state.getAsJsonObject("srd").get("worldCombatEnabled").getAsBoolean()?"SRD encounter engine enabled":"SRD encounter engine disabled — character readiness is not encounter readiness",85,0xFFFFCC66);
             line(g,"Field (< / > to browse) / working draft value",height-139,0xFFBBBBBB);
         } else line(g,(campaign==null?"No campaign selected": "Selected campaign: "+campaign.get("name").getAsString())+" / page "+(page+1),24,0xFFCCCCCC);
         int messageY=view.equals("detail")?height-164:height-98;

@@ -15,6 +15,7 @@ public final class CharacterSyncService {
             JsonObject data=new JsonObject();
             switch(operation) {
                 case "campaigns" -> {
+                    data.addProperty("srdAuthoringVersion",1);
                     var rows=new JsonArray();
                     int page=args.has("page")?args.get("page").getAsInt():0;
                     if(page<0 || page>8) throw new IllegalArgumentException("Invalid page");
@@ -42,6 +43,14 @@ public final class CharacterSyncService {
                 case "create" -> {
                     if(selected==null) throw new IllegalArgumentException("Select a campaign first");
                     UUID id=repo.submit(who,selected,repo.campaign(selected).profile(),args.get("sheet").getAsString());
+                    data=snapshot(who,id);
+                }
+                case "srd_create" -> {
+                    if(selected==null || !repo.campaign(selected).profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD))
+                        throw new IllegalArgumentException("Select an SRD 5.1 campaign to create an SRD character");
+                    var template=dev.tacticalcombat.rules.srd.SrdAuthoring.template();
+                    dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(template.toString());
+                    UUID id=repo.submit(who,selected,dev.tacticalcombat.rules.RulesProfiles.SRD,template.toString());
                     data=snapshot(who,id);
                 }
                 case "edit" -> {
@@ -83,7 +92,28 @@ public final class CharacterSyncService {
     public JsonObject snapshot(CharacterRepository.Principal who,UUID id) {
         var c=repo.visible(who,id); var result=summary(who,c);
         result.add("sheet",repo.effectiveSheet(c)); result.add("stats",GSON.toJsonTree(c.stats()));
-        result.add("policy",GSON.toJsonTree(repo.campaign(c.campaign()).policy())); return result;
+        result.add("policy",GSON.toJsonTree(repo.campaign(c.campaign()).policy()));
+        if(c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD)) {
+            var srd=new JsonObject(); srd.addProperty("authoringVersion",1);
+            srd.addProperty("worldCombatEnabled",dev.tacticalcombat.rules.RulesProfiles.get(c.profile()).worldCombat());
+            try {
+                var stats=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet());
+                srd.addProperty("valid",true); srd.addProperty("hp",stats.hp()); srd.addProperty("maximumHp",stats.maximumHp());
+                srd.addProperty("temporaryHp",stats.temporaryHp()); srd.addProperty("ac",stats.armorClass());
+                srd.addProperty("speedFeet",stats.walkingSpeedFeet());
+                srd.addProperty("initiativeModifier",stats.modifier(dev.tacticalcombat.rules.srd.SrdCharacter.Ability.DEX)+stats.initiativeBonus());
+                boolean member=repo.member(new CharacterRepository.Principal(c.owner(),false),c.campaign());
+                boolean ready=c.approved() && repo.binding(id)!=null && member && stats.hp()>0;
+                srd.addProperty("characterReady",ready);
+                srd.addProperty("reason",!member?"Owner is not a campaign member":!c.approved()?"Needs campaign approval":repo.binding(id)==null?"Needs server binding":stats.hp()==0?"Zero HP requires adjudication":"Character prerequisites satisfied; encounter activation is separate");
+            } catch(RuntimeException e) {
+                srd.addProperty("valid",false); srd.addProperty("characterReady",false);
+                String error=e.getMessage()==null?"Invalid SRD character data":e.getMessage();
+                srd.addProperty("reason",error.substring(0,Math.min(error.length(),240)));
+            }
+            result.add("srd",srd);
+        }
+        return result;
     }
     private static UUID id(JsonObject args,String key) { return UUID.fromString(args.get(key).getAsString()); }
 }
