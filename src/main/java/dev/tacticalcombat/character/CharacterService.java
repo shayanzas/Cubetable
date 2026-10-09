@@ -72,6 +72,11 @@ public final class CharacterService {
         var record=bound(entity);
         return record!=null && record.approved() && record.profile().equals(profile.id())?record.stats():Map.of();
     }
+    /** Explicit SRD adapter; no fallback to Tactical, vanilla attributes or local client sheets. */
+    public static CharacterRepository.SrdSnapshot srdStats(LivingEntity entity,UUID campaign) {
+        if(entity.getWorld().isClient) throw new IllegalArgumentException("SRD combat input lookup requires a server entity");
+        return repository().srdSnapshot(entity.getUuid(),campaign);
+    }
     public static void bind(ServerPlayerEntity requester,UUID character,long revision,LivingEntity target) throws IOException {
         if(CombatManager.isInCombat(target)) throw new IllegalArgumentException("Cannot change binding during combat");
         var record=repository().visible(principal(requester),character);

@@ -116,6 +116,21 @@ public final class CharacterRepository {
     public UUID binding(UUID character) {
         return state.bindings.entrySet().stream().filter(e->e.getValue().equals(character)).map(Map.Entry::getKey).findFirst().orElse(null);
     }
+    /** Trusted server-only combat input lookup; never send this private snapshot to arbitrary clients.
+     * The future encounter gateway must additionally validate ownership, turn and action identity.
+     */
+    public record SrdSnapshot(UUID character,UUID actor,UUID campaign,long revision,long runtimeRevision,
+                              dev.tacticalcombat.rules.srd.SrdCharacter stats) {}
+    public SrdSnapshot srdSnapshot(UUID actor,UUID expectedCampaign) {
+        UUID id=state.bindings.get(actor);
+        require(id!=null,"SRD combat requires an approved bound character");
+        Character c=character(id);
+        require(c.approved && c.profile.equals(RulesProfiles.SRD) && c.profileVersion==1,"Approved SRD 5.1 profile required");
+        require(c.campaign.equals(expectedCampaign),"SRD character belongs to another campaign");
+        require(member(new Principal(c.owner,false),c.campaign),"SRD character owner is no longer a campaign member");
+        var inputs=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet);
+        return new SrdSnapshot(c.id,actor,c.campaign,c.revision,c.runtimeRevision,inputs);
+    }
     public void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes) throws IOException {
         edit(p,id,revision,runtimeRevision,changes,false);
     }

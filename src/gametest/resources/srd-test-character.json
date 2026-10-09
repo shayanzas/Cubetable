@@ -1,0 +1,30 @@
+{
+  "format": "generic_d20",
+  "text": {"name": "SRD calculation fixture — not a playable pack"},
+  "collections": {
+    "srd_combat": [{
+      "version": 1,
+      "abilities": {"str": 16, "dex": 14, "con": 12, "int": 10, "wis": 10, "cha": 8},
+      "level": 1,
+      "initiative_bonus": 0,
+      "hp": 12,
+      "hp_max": 20,
+      "temporary_hp": 0,
+      "speed_feet": 30,
+      "size": "medium",
+      "reach_feet": 5,
+      "armor": "leather",
+      "shield": false,
+      "armor_proficiencies": ["light", "medium", "heavy"],
+      "shield_proficient": true,
+      "ac_bonus": 0,
+      "weapons": ["dagger", "longsword", "shortsword", "greatsword", "shortbow", "longbow", "light_crossbow"],
+      "weapon_proficiencies": ["dagger", "longsword", "shortsword", "greatsword", "shortbow", "longbow", "light_crossbow"],
+      "attack_bonus": 0,
+      "damage_bonus": 0,
+      "resistances": [],
+      "immunities": [],
+      "vulnerabilities": []
+    }]
+  }
+}

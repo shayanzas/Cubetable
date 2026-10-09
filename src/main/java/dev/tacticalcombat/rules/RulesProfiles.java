@@ -16,7 +16,7 @@ public final class RulesProfiles {
         }
     }
     private static final Map<String,RulesProfile> PROFILES=Map.of(
-            TACTICAL,new Profile(TACTICAL,true),MANUAL,new Profile(MANUAL,false),SRD,new Profile(SRD,false));
+            TACTICAL,new Profile(TACTICAL,true),MANUAL,new Profile(MANUAL,false),SRD,new dev.tacticalcombat.rules.srd.SrdRulesProfile());
     public static RulesProfile get(String id) {
         RulesProfile p=PROFILES.get(id);
         if(p==null) throw new IllegalArgumentException("Unknown rules profile: "+id);

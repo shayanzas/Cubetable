@@ -9,7 +9,8 @@
       "dev.tacticalcombat.combat.AuthorityGameTests",
       "dev.tacticalcombat.combat.PhaseOneGameTests",
       "dev.tacticalcombat.combat.CharacterGameTests",
-      "dev.tacticalcombat.combat.CharacterSyncGameTests"
+      "dev.tacticalcombat.combat.CharacterSyncGameTests",
+      "dev.tacticalcombat.combat.SrdFoundationGameTests"
     ]
   },
   "depends": {
