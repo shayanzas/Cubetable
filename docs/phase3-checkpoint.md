@@ -2,6 +2,8 @@
 
 October 9, 2026 (UTC). Repository: `shayanzas/Cubetable`.
 
+Continuation: [Stage B movement checkpoint](phase3-stage-b-checkpoint.md). This document retains the historical Stage A implementation and test results.
+
 ## Publication and local checkpoint
 
 Phase 2 was verified before publication: Java 21 `build runGametest` succeeded, with **423 assertions and 35 Minecraft GameTests**. The working tree was clean, commits `91437ac` and `6b28e42` were present, and origin was `https://github.com/shayanzas/Cubetable.git`. The remote development branch did not yet exist.
