@@ -54,6 +54,7 @@ public final class SrdMovementTurn {
     public int spentFeet() { return spent; }
     public int remainingFeet() { return budget-spent; }
     public boolean moving() { return !route.isEmpty(); }
+    public boolean closed() { return closed; }
     private void requireServerThread() {
         if(actor.getServer()==null || !actor.getServer().isOnThread())
             throw new IllegalStateException("SRD movement must run on the authoritative server thread");

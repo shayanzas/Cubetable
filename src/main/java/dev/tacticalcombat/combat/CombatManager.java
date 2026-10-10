@@ -43,6 +43,7 @@ public final class CombatManager {
     static boolean claim(Entity actor, Encounter encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
     static void release(Entity actor, Encounter encounter) { OWNERS.release(actor.getUuid(), encounter); }
     static void schedule(Encounter encounter) { if(!COMBATS.contains(encounter)) COMBATS.add(encounter); }
+    static List<Encounter> encounters() { return List.copyOf(COMBATS); }
 
 	public static boolean isInCombat(java.util.UUID actor) { return OWNERS.get(actor) != null; }
 

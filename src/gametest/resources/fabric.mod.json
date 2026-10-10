@@ -13,7 +13,8 @@
       "dev.tacticalcombat.combat.SrdFoundationGameTests",
       "dev.tacticalcombat.combat.SrdMovementGameTests",
       "dev.tacticalcombat.combat.SrdCharacterLifecycleGameTests",
-      "dev.tacticalcombat.combat.SrdEncounterGameTests"
+      "dev.tacticalcombat.combat.SrdEncounterGameTests",
+      "dev.tacticalcombat.combat.SrdLiveGameTests"
     ]
   },
   "depends": {
