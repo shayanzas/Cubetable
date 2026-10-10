@@ -28,6 +28,47 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     public record Metrics(long blockReads,long collisionChecks,long occupancyQueries,long occupantDecodes,
                           long occupancyChecks,long steps,long cacheHits,int retainedEntries) {}
     public record SearchResult(Preview preview,Metrics metrics) {}
+    private static final Set<Pending> PENDING=Collections.newSetFromMap(new IdentityHashMap<>());
+    /** Called for actual chunk block mutations, including changes that suppress neighbor notifications. */
+    public static void changed(net.minecraft.world.World world,BlockPos pos) {
+        for(var pending:PENDING) if(pending.owner.world==world && pending.area.contains(Vec3d.ofCenter(pos))) pending.invalid=true;
+    }
+    public Pending pending(Cell start,int feet) {
+        if(!world.getServer().isOnThread()) throw new IllegalStateException("SRD search requires server thread");
+        if(PENDING.size()>=8) throw new IllegalArgumentException("Grid service busy; retry shortly");
+        return new Pending(this,start,feet);
+    }
+    /** Server-thread-only job. Geometry memoization expires at each yield; execution never consumes this cache. */
+    public static final class Pending implements AutoCloseable {
+        private final SrdTerrain owner;
+        private final Cell start;
+        private final int feet;
+        private final Box area,actorBox;
+        private final dev.tacticalcombat.rules.srd.SrdMovement.Search search;
+        private List<Occupant> occupants;
+        private List<net.minecraft.world.chunk.WorldChunk> chunks;
+        private List<Double> border;
+        private boolean invalid,closed;
+        private Pending(SrdTerrain owner,Cell start,int feet) {
+            this.owner=owner;this.start=start;this.feet=feet;area=owner.body(start).expand(feet/5+6);
+            actorBox=owner.actor.getBoundingBox();search=new dev.tacticalcombat.rules.srd.SrdMovement.Search(start,feet);PENDING.add(this);
+        }
+        public boolean advance(long deadline) {
+            if(!owner.world.getServer().isOnThread()) throw new IllegalStateException("SRD search requires server thread");
+            if(closed || invalid || !actorBox.equals(owner.actor.getBoundingBox())) throw new IllegalArgumentException("Grid cancelled: terrain or actor changed; refresh");
+            var scope=owner.capture(start,feet);
+            var currentChunks=new ArrayList<net.minecraft.world.chunk.WorldChunk>();
+            for(int x=MathHelper.floor(area.minX)>>4;x<=MathHelper.floor(area.maxX)>>4;x++)
+                for(int z=MathHelper.floor(area.minZ)>>4;z<=MathHelper.floor(area.maxZ)>>4;z++) currentChunks.add(owner.world.getChunkManager().getWorldChunk(x,z));
+            var b=owner.world.getWorldBorder();var currentBorder=List.of(b.getBoundWest(),b.getBoundEast(),b.getBoundNorth(),b.getBoundSouth());
+            if(occupants!=null && (!occupants.equals(scope.occupants) || !chunks.equals(currentChunks) || !border.equals(currentBorder)))
+                throw new IllegalArgumentException("Grid cancelled: occupancy, chunks or border changed; refresh");
+            occupants=List.copyOf(scope.occupants);chunks=currentChunks;border=currentBorder;
+            return search.advance(new SrdTerrain(owner,scope),256,deadline);
+        }
+        public Preview result() {return search.result();}
+        @Override public void close() {closed=true;PENDING.remove(this);occupants=null;chunks=null;border=null;}
+    }
     private record Edge(Cell from,int dx,int dz) {}
     private record Occupant(Box physical,Box logical) {}
     /** All caches live only on this synchronous call's stack. Execution keeps using the uncached adapter. */
@@ -35,6 +76,13 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     public SearchResult measuredSearch(Cell start,int feet) {
         if(!world.getServer().isOnThread()) throw new IllegalStateException("SRD search requires server thread");
         if(feet<0 || feet>300) throw new IllegalArgumentException("Invalid movement allowance");
+        var scope=capture(start,feet);
+        var preview=dev.tacticalcombat.rules.srd.SrdMovement.search(start,feet,new SrdTerrain(this,scope));
+        return new SearchResult(preview,new Metrics(scope.blockReads,scope.collisionChecks,scope.occupancyQueries,
+                scope.occupantDecodes,scope.occupancyChecks,scope.steps,scope.cacheHits,
+                scope.blocks.size()+scope.clear.size()+scope.landings.size()+scope.edges.size()));
+    }
+    private SearchCache capture(Cell start,int feet) {
         var scope=new SearchCache();
         // Include the extra neighbor explored at the budget boundary, ascent sweeps and the old query's 4-block margin.
         Box area=body(start).expand(feet/5+6);
@@ -44,10 +92,7 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
         scope.occupancyQueries++;
         if(nearby.size()>256) throw new IllegalArgumentException("SRD grid occupancy limit exceeded (256 nearby creatures)");
         for(var other:nearby) scope.occupants.add(new Occupant(other.getBoundingBox(),occupied(other,scope)));
-        var preview=dev.tacticalcombat.rules.srd.SrdMovement.search(start,feet,new SrdTerrain(this,scope));
-        return new SearchResult(preview,new Metrics(scope.blockReads,scope.collisionChecks,scope.occupancyQueries,
-                scope.occupantDecodes,scope.occupancyChecks,scope.steps,scope.cacheHits,
-                scope.blocks.size()+scope.clear.size()+scope.landings.size()+scope.edges.size()));
+        return scope;
     }
     private static final class SearchCache {
         // Stop retaining new entries at the cap; a miss still performs every check. No correctness-changing eviction.

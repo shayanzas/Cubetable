@@ -22,6 +22,9 @@ public final class ClientSrdCombat {
     private ClientSrdCombat() {}
     public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear(); }
     public static void receive(SrdStatePayload payload) {
+        if(payload.code().equals("GRID_CANCELLED")) {
+            if(payload.encounter().equals(encounter)) {grid=null;movement.clear();message=payload.message();}return;
+        }
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)) clear(); message=payload.message(); return;
         }
@@ -35,6 +38,7 @@ public final class ClientSrdCombat {
             if(!payload.encounter().equals(encounter)) presented.clear();
             if(changed) { preview=null; grid=null; movement.clear(); }
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong(); message=payload.message();
+            if(payload.code().equals("GRID_PENDING")) {grid=null;movement.clear();}
             if(data.has("preview")) preview=data.getAsJsonObject("preview");
             if(data.has("result")) {
                 var result=data.getAsJsonObject("result"); message="Authoritative attack: "+result.get("total")+(result.get("critical").getAsBoolean()?" critical hit":result.get("hit").getAsBoolean()?" hit":" miss");

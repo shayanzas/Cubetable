@@ -173,11 +173,18 @@ public final class SrdEncounter implements Encounter {
         turnIndex++; if(turnIndex==order.size()) { turnIndex=0; round++; } beginTurn();
     }
     SrdMovement.Preview grid(CharacterRepository.Principal p) {
+        validateGrid(p);
+        return movement.preview(p);
+    }
+    void validateGrid(CharacterRepository.Principal p) {
         require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
         if(!manager(p)) require(world.getEntitiesByClass(LivingEntity.class,current().getBoundingBox().expand(64),LivingEntity::isInvisible).isEmpty(),
                 "Movement preview unavailable in this unsupported visibility situation");
-        return movement.preview(p);
+        movement.validatePreview(p);
     }
+    boolean budgetedGrid() {return movement!=null && movement.remainingFeet()>60;}
+    dev.tacticalcombat.grid.SrdTerrain.Pending pendingGrid(CharacterRepository.Principal p) {validateGrid(p);return movement.pendingPreview(p);}
+    void completedGrid(CharacterRepository.Principal p,SrdMovement.Preview preview) {validateGrid(p);movement.completePreview(p,preview);}
     SrdMovementTurn.Result move(CharacterRepository.Principal p,UUID request,SrdMovement.Cell destination) {
         thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
         intent=null;

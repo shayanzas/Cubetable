@@ -1,0 +1,263 @@
+run,measurement,fields
+baseline,SRD_BENCH,case=small20 mode=reference n=12 median_us=51043 p95_us=85577 max_us=85577 cpu_median_us=45397 allocated_median=64532072 nodes=49 truncated=false grid_bytes=2371
+baseline,SRD_SERIALIZE,case=small20 mode=reference median_us=128 p95_us=215 max_us=215
+baseline,SRD_BENCH,case=small20 mode=current n=12 median_us=1463 p95_us=1599 max_us=1599 cpu_median_us=1467 allocated_median=1080704 nodes=49 truncated=false grid_bytes=2371
+baseline,SRD_SERIALIZE,case=small20 mode=current median_us=101 p95_us=130 max_us=130
+baseline,SRD_PROFILE,case=small20 steps=392 block_reads=17907 collision_calls=4257 occupancy_queries=3105 occupant_decodes=1894 collision_us=4068 occupancy_us=32271 total_us=41247
+baseline,SRD_OPT_PROFILE,"case=small20 Metrics[blockReads=341, collisionChecks=307, occupancyQueries=1, occupantDecodes=1, occupancyChecks=210, steps=392, cacheHits=5399, retainedEntries=1075]"
+baseline,SRD_BENCH,case=small30 mode=reference n=12 median_us=65341 p95_us=147962 max_us=147962 cpu_median_us=65254 allocated_median=114540696 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=small30 mode=reference median_us=197 p95_us=580 max_us=580
+baseline,SRD_BENCH,case=small30 mode=current n=12 median_us=1975 p95_us=4232 max_us=4232 cpu_median_us=1980 allocated_median=1614672 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=small30 mode=current median_us=130 p95_us=415 max_us=415
+baseline,SRD_PROFILE,case=small30 steps=632 block_reads=29247 collision_calls=6941 occupancy_queries=5089 occupant_decodes=3452 collision_us=5546 occupancy_us=56694 total_us=68234
+baseline,SRD_OPT_PROFILE,"case=small30 Metrics[blockReads=505, collisionChecks=479, occupancyQueries=1, occupantDecodes=1, occupancyChecks=338, steps=632, cacheHits=8783, retainedEntries=1659]"
+baseline,SRD_BENCH,case=small60 mode=reference n=12 median_us=110743 p95_us=315473 max_us=315473 cpu_median_us=104808 allocated_median=174573688 nodes=143 truncated=false grid_bytes=6977
+baseline,SRD_SERIALIZE,case=small60 mode=reference median_us=208 p95_us=864 max_us=864
+baseline,SRD_BENCH,case=small60 mode=current n=12 median_us=3484 p95_us=9147 max_us=9147 cpu_median_us=3490 allocated_median=2803192 nodes=143 truncated=false grid_bytes=6977
+baseline,SRD_SERIALIZE,case=small60 mode=current median_us=181 p95_us=751 max_us=751
+baseline,SRD_PROFILE,case=small60 steps=1144 block_reads=51352 collision_calls=12228 occupancy_queries=8872 occupant_decodes=5227 collision_us=9452 occupancy_us=92647 total_us=108741
+baseline,SRD_OPT_PROFILE,"case=small60 Metrics[blockReads=836, collisionChecks=772, occupancyQueries=1, occupantDecodes=1, occupancyChecks=525, steps=1144, cacheHits=15330, retainedEntries=2857]"
+baseline,SRD_BENCH,case=medium30 mode=reference n=12 median_us=92327 p95_us=100050 max_us=100050 cpu_median_us=91836 allocated_median=167920392 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=medium30 mode=reference median_us=132 p95_us=166 max_us=166
+baseline,SRD_BENCH,case=medium30 mode=current n=12 median_us=1809 p95_us=2036 max_us=2036 cpu_median_us=1812 allocated_median=1677288 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=medium30 mode=current median_us=104 p95_us=167 max_us=167
+baseline,SRD_PROFILE,case=medium30 steps=632 block_reads=29247 collision_calls=6941 occupancy_queries=5089 occupant_decodes=5175 collision_us=5784 occupancy_us=83682 total_us=93425
+baseline,SRD_OPT_PROFILE,"case=medium30 Metrics[blockReads=505, collisionChecks=479, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1004, steps=632, cacheHits=8783, retainedEntries=1659]"
+baseline,SRD_BENCH,case=medium60 mode=reference n=12 median_us=251592 p95_us=261358 max_us=261358 cpu_median_us=249824 allocated_median=443280064 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=medium60 mode=reference median_us=190 p95_us=327 max_us=327
+baseline,SRD_BENCH,case=medium60 mode=current n=12 median_us=5030 p95_us=5394 max_us=5394 cpu_median_us=5008 allocated_median=4397424 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=medium60 mode=current median_us=147 p95_us=268 max_us=268
+baseline,SRD_PROFILE,case=medium60 steps=1752 block_reads=83006 collision_calls=19645 occupancy_queries=14524 occupant_decodes=13625 collision_us=16101 occupancy_us=222711 total_us=250020
+baseline,SRD_OPT_PROFILE,"case=medium60 Metrics[blockReads=1189, collisionChecks=1222, occupancyQueries=1, occupantDecodes=3, occupancyChecks=2703, steps=1752, cacheHits=24533, retainedEntries=4235]"
+baseline,SRD_BENCH,case=large60 mode=reference n=12 median_us=457176 p95_us=461838 max_us=461838 cpu_median_us=452952 allocated_median=844658400 nodes=197 truncated=false grid_bytes=9623
+baseline,SRD_SERIALIZE,case=large60 mode=reference median_us=153 p95_us=193 max_us=193
+baseline,SRD_BENCH,case=large60 mode=current n=12 median_us=4484 p95_us=5109 max_us=5109 cpu_median_us=4495 allocated_median=4069368 nodes=197 truncated=false grid_bytes=9623
+baseline,SRD_SERIALIZE,case=large60 mode=current median_us=136 p95_us=170 max_us=170
+baseline,SRD_PROFILE,case=large60 steps=1576 block_reads=70893 collision_calls=16831 occupancy_queries=12381 occupant_decodes=26590 collision_us=14348 occupancy_us=430459 total_us=455649
+baseline,SRD_OPT_PROFILE,"case=large60 Metrics[blockReads=1125, collisionChecks=1108, occupancyQueries=1, occupantDecodes=7, occupancyChecks=5591, steps=1576, cacheHits=21538, retainedEntries=3888]"
+baseline,SRD_BENCH,case=large120 mode=reference n=12 median_us=633195 p95_us=639474 max_us=639474 cpu_median_us=631214 allocated_median=1118132552 nodes=700 truncated=false grid_bytes=34515
+baseline,SRD_SERIALIZE,case=large120 mode=reference median_us=492 p95_us=835 max_us=835
+baseline,SRD_BENCH,case=large120 mode=current n=12 median_us=15939 p95_us=18005 max_us=18005 cpu_median_us=15946 allocated_median=13801784 nodes=700 truncated=false grid_bytes=34515
+baseline,SRD_SERIALIZE,case=large120 mode=current median_us=473 p95_us=486 max_us=486
+baseline,SRD_PROFILE,case=large120 steps=5600 block_reads=272174 collision_calls=64271 occupancy_queries=47804 occupant_decodes=33940 collision_us=51054 occupancy_us=555522 total_us=640635
+baseline,SRD_OPT_PROFILE,"case=large120 Metrics[blockReads=3357, collisionChecks=3722, occupancyQueries=1, occupantDecodes=7, occupancyChecks=19857, steps=5600, cacheHits=79379, retainedEntries=12806]"
+baseline,SRD_BENCH,case=walls30 mode=reference n=12 median_us=49586 p95_us=52526 max_us=52526 cpu_median_us=49549 allocated_median=88259040 nodes=61 truncated=false grid_bytes=2959
+baseline,SRD_SERIALIZE,case=walls30 mode=reference median_us=66 p95_us=117 max_us=117
+baseline,SRD_BENCH,case=walls30 mode=current n=12 median_us=1396 p95_us=1499 max_us=1499 cpu_median_us=1399 allocated_median=1325680 nodes=61 truncated=false grid_bytes=2959
+baseline,SRD_SERIALIZE,case=walls30 mode=current median_us=43 p95_us=45 max_us=45
+baseline,SRD_PROFILE,case=walls30 steps=488 block_reads=20521 collision_calls=4916 occupancy_queries=3497 occupant_decodes=2681 collision_us=3819 occupancy_us=43403 total_us=49847
+baseline,SRD_OPT_PROFILE,"case=walls30 Metrics[blockReads=456, collisionChecks=385, occupancyQueries=1, occupantDecodes=3, occupancyChecks=729, steps=488, cacheHits=6443, retainedEntries=1386]"
+baseline,SRD_BENCH,case=walls60 mode=reference n=12 median_us=159066 p95_us=163965 max_us=163965 cpu_median_us=158892 allocated_median=287152200 nodes=157 truncated=false grid_bytes=7663
+baseline,SRD_SERIALIZE,case=walls60 mode=reference median_us=129 p95_us=186 max_us=186
+baseline,SRD_BENCH,case=walls60 mode=current n=12 median_us=3279 p95_us=3349 max_us=3349 cpu_median_us=3282 allocated_median=3145736 nodes=157 truncated=false grid_bytes=7663
+baseline,SRD_SERIALIZE,case=walls60 mode=current median_us=104 p95_us=138 max_us=138
+baseline,SRD_PROFILE,case=walls60 steps=1256 block_reads=51978 collision_calls=12459 occupancy_queries=8855 occupant_decodes=8832 collision_us=10027 occupancy_us=142385 total_us=159604
+baseline,SRD_OPT_PROFILE,"case=walls60 Metrics[blockReads=1001, collisionChecks=888, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1735, steps=1256, cacheHits=16346, retainedEntries=3264]"
+baseline,SRD_BENCH,case=stairs30 mode=reference n=12 median_us=92613 p95_us=94029 max_us=94029 cpu_median_us=92382 allocated_median=164390088 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=stairs30 mode=reference median_us=93 p95_us=168 max_us=168
+baseline,SRD_BENCH,case=stairs30 mode=current n=12 median_us=2112 p95_us=3440 max_us=3440 cpu_median_us=2115 allocated_median=1871072 nodes=79 truncated=false grid_bytes=3841
+baseline,SRD_SERIALIZE,case=stairs30 mode=current median_us=74 p95_us=117 max_us=117
+baseline,SRD_PROFILE,case=stairs30 steps=632 block_reads=29572 collision_calls=7074 occupancy_queries=4999 occupant_decodes=5038 collision_us=6867 occupancy_us=82131 total_us=93325
+baseline,SRD_OPT_PROFILE,"case=stairs30 Metrics[blockReads=561, collisionChecks=574, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1151, steps=632, cacheHits=9026, retainedEntries=1851]"
+baseline,SRD_BENCH,case=stairs60 mode=reference n=12 median_us=248000 p95_us=257742 max_us=257742 cpu_median_us=246979 allocated_median=435272896 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=stairs60 mode=reference median_us=181 p95_us=270 max_us=270
+baseline,SRD_BENCH,case=stairs60 mode=current n=12 median_us=5663 p95_us=6701 max_us=6701 cpu_median_us=5667 allocated_median=4994400 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=stairs60 mode=current median_us=157 p95_us=217 max_us=217
+baseline,SRD_PROFILE,case=stairs60 steps=1752 block_reads=85069 collision_calls=20365 occupancy_queries=14344 occupant_decodes=13269 collision_us=21793 occupancy_us=224064 total_us=258232
+baseline,SRD_OPT_PROFILE,"case=stairs60 Metrics[blockReads=1367, collisionChecks=1493, occupancyQueries=1, occupantDecodes=3, occupancyChecks=3117, steps=1752, cacheHits=25274, retainedEntries=4808]"
+baseline,SRD_BENCH,case=uneven60 mode=reference n=12 median_us=208908 p95_us=220396 max_us=220396 cpu_median_us=208519 allocated_median=369534408 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=uneven60 mode=reference median_us=171 p95_us=200 max_us=200
+baseline,SRD_BENCH,case=uneven60 mode=current n=12 median_us=5283 p95_us=5656 max_us=5656 cpu_median_us=5287 allocated_median=4735768 nodes=219 truncated=false grid_bytes=10701
+baseline,SRD_SERIALIZE,case=uneven60 mode=current median_us=150 p95_us=185 max_us=185
+baseline,SRD_PROFILE,case=uneven60 steps=1752 block_reads=73077 collision_calls=17317 occupancy_queries=12180 occupant_decodes=11331 collision_us=13972 occupancy_us=185506 total_us=209516
+baseline,SRD_OPT_PROFILE,"case=uneven60 Metrics[blockReads=1397, collisionChecks=1547, occupancyQueries=1, occupantDecodes=3, occupancyChecks=3152, steps=1752, cacheHits=25336, retainedEntries=4816]"
+baseline,SRD_BENCH,case=largeBody30 mode=reference n=12 median_us=113888 p95_us=116378 max_us=116378 cpu_median_us=113362 allocated_median=195068384 nodes=75 truncated=false grid_bytes=3645
+baseline,SRD_SERIALIZE,case=largeBody30 mode=reference median_us=77 p95_us=195 max_us=195
+baseline,SRD_BENCH,case=largeBody30 mode=current n=12 median_us=2269 p95_us=2364 max_us=2364 cpu_median_us=2271 allocated_median=1958192 nodes=75 truncated=false grid_bytes=3645
+baseline,SRD_SERIALIZE,case=largeBody30 mode=current median_us=55 p95_us=60 max_us=60
+baseline,SRD_PROFILE,case=largeBody30 steps=600 block_reads=85139 collision_calls=11302 occupancy_queries=4704 occupant_decodes=5961 collision_us=10267 occupancy_us=95146 total_us=113491
+baseline,SRD_OPT_PROFILE,"case=largeBody30 Metrics[blockReads=597, collisionChecks=738, occupancyQueries=1, occupantDecodes=3, occupancyChecks=942, steps=600, cacheHits=15650, retainedEntries=1701]"
+baseline,SRD_BENCH,case=largeBody60 mode=reference n=12 median_us=258479 p95_us=263124 max_us=263124 cpu_median_us=257823 allocated_median=428188432 nodes=208 truncated=false grid_bytes=10162
+baseline,SRD_SERIALIZE,case=largeBody60 mode=reference median_us=123 p95_us=125 max_us=125
+baseline,SRD_BENCH,case=largeBody60 mode=current n=12 median_us=5962 p95_us=6149 max_us=6149 cpu_median_us=5966 allocated_median=5120832 nodes=208 truncated=false grid_bytes=10162
+baseline,SRD_SERIALIZE,case=largeBody60 mode=current median_us=113 p95_us=121 max_us=121
+baseline,SRD_PROFILE,case=largeBody60 steps=1664 block_reads=241959 collision_calls=32043 occupancy_queries=13457 occupant_decodes=12899 collision_us=30280 occupancy_us=207284 total_us=260312
+baseline,SRD_OPT_PROFILE,"case=largeBody60 Metrics[blockReads=1326, collisionChecks=1876, occupancyQueries=1, occupantDecodes=3, occupancyChecks=2550, steps=1664, cacheHits=43180, retainedEntries=4233]"
+baseline,SRD_BENCH,case=occupied8 mode=reference n=12 median_us=163138 p95_us=168337 max_us=168337 cpu_median_us=162070 allocated_median=304637904 nodes=73 truncated=false grid_bytes=3547
+baseline,SRD_SERIALIZE,case=occupied8 mode=reference median_us=55 p95_us=77 max_us=77
+baseline,SRD_BENCH,case=occupied8 mode=current n=12 median_us=1756 p95_us=1961 max_us=1961 cpu_median_us=1758 allocated_median=1678328 nodes=73 truncated=false grid_bytes=3547
+baseline,SRD_SERIALIZE,case=occupied8 mode=current median_us=41 p95_us=43 max_us=43
+baseline,SRD_PROFILE,case=occupied8 steps=584 block_reads=25779 collision_calls=6137 occupancy_queries=4475 occupant_decodes=9587 collision_us=5128 occupancy_us=155771 total_us=164934
+baseline,SRD_OPT_PROFILE,"case=occupied8 Metrics[blockReads=489, collisionChecks=450, occupancyQueries=1, occupantDecodes=7, occupancyChecks=2143, steps=584, cacheHits=7966, retainedEntries=1568]"
+baseline,SRD_BENCH,case=occupied16 mode=reference n=12 median_us=633134 p95_us=658958 max_us=658958 cpu_median_us=630881 allocated_median=1190299264 nodes=171 truncated=false grid_bytes=8349
+baseline,SRD_SERIALIZE,case=occupied16 mode=reference median_us=104 p95_us=127 max_us=127
+baseline,SRD_BENCH,case=occupied16 mode=current n=12 median_us=4239 p95_us=6015 max_us=6015 cpu_median_us=4194 allocated_median=3751376 nodes=171 truncated=false grid_bytes=8349
+baseline,SRD_SERIALIZE,case=occupied16 mode=current median_us=96 p95_us=149 max_us=149
+baseline,SRD_PROFILE,case=occupied16 steps=1368 block_reads=55953 collision_calls=13365 occupancy_queries=9737 occupant_decodes=37791 collision_us=11586 occupancy_us=606578 total_us=627721
+baseline,SRD_OPT_PROFILE,"case=occupied16 Metrics[blockReads=1061, collisionChecks=969, occupancyQueries=1, occupantDecodes=15, occupancyChecks=9986, steps=1368, cacheHits=17875, retainedEntries=3490]"
+baseline,SRD_BENCH,case=weighted29 mode=reference n=12 median_us=47115 p95_us=48687 max_us=48687 cpu_median_us=46930 allocated_median=82569336 nodes=53 truncated=false grid_bytes=2593
+baseline,SRD_SERIALIZE,case=weighted29 mode=reference median_us=43 p95_us=61 max_us=61
+baseline,SRD_BENCH,case=weighted29 mode=current n=12 median_us=1275 p95_us=1324 max_us=1324 cpu_median_us=1277 allocated_median=1200496 nodes=53 truncated=false grid_bytes=2593
+baseline,SRD_SERIALIZE,case=weighted29 mode=current median_us=32 p95_us=34 max_us=34
+baseline,SRD_PROFILE,case=weighted29 steps=424 block_reads=19202 collision_calls=4597 occupancy_queries=3348 occupant_decodes=2501 collision_us=4146 occupancy_us=42568 total_us=49337
+baseline,SRD_OPT_PROFILE,"case=weighted29 Metrics[blockReads=411, collisionChecks=348, occupancyQueries=1, occupantDecodes=3, occupancyChecks=717, steps=424, cacheHits=5757, retainedEntries=1222]"
+baseline,SRD_LIMIT,"nodes=4096 truncated=true metrics=Metrics[blockReads=17432, collisionChecks=21263, occupancyQueries=1, occupantDecodes=1, occupancyChecks=16905, steps=32768, cacheHits=476949, retainedEntries=71463]"
+baseline,SRD_LIMIT_BENCH,n=12 median_us=115024 p95_us=127601 max_us=127601 allocated_median=78961184 grid_bytes=203249
+baseline,SRD_MULTI,two_encounter_grids n=20 median_us=3056 p95_us=3215 max_us=3231
+baseline,SRD_HANDLER,grid_us=2064 response_json_bytes=4241
+baseline,SRD_HANDLER,grid_us=1729 response_json_bytes=4135
+checkpoint_a,SRD_BENCH,case=small20 mode=reference n=12 median_us=42104 p95_us=63266 max_us=63266 cpu_median_us=41741 allocated_median=64571384 nodes=49 truncated=false grid_bytes=2371
+checkpoint_a,SRD_SERIALIZE,case=small20 mode=reference median_us=135 p95_us=525 max_us=525
+checkpoint_a,SRD_BENCH,case=small20 mode=current n=12 median_us=1381 p95_us=1923 max_us=1923 cpu_median_us=1376 allocated_median=1135272 nodes=49 truncated=false grid_bytes=2371
+checkpoint_a,SRD_SERIALIZE,case=small20 mode=current median_us=88 p95_us=140 max_us=140
+checkpoint_a,SRD_PROFILE,case=small20 steps=392 block_reads=17907 collision_calls=4257 occupancy_queries=3105 occupant_decodes=1894 collision_us=4002 occupancy_us=36088 total_us=46351
+checkpoint_a,SRD_OPT_PROFILE,"case=small20 Metrics[blockReads=341, collisionChecks=307, occupancyQueries=1, occupantDecodes=1, occupancyChecks=210, steps=392, cacheHits=5399, retainedEntries=1075]"
+checkpoint_a,SRD_BENCH,case=small30 mode=reference n=12 median_us=67479 p95_us=86400 max_us=86400 cpu_median_us=66803 allocated_median=114210648 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=small30 mode=reference median_us=139 p95_us=445 max_us=445
+checkpoint_a,SRD_BENCH,case=small30 mode=current n=12 median_us=1891 p95_us=5025 max_us=5025 cpu_median_us=1870 allocated_median=1707392 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=small30 mode=current median_us=138 p95_us=223 max_us=223
+checkpoint_a,SRD_PROFILE,case=small30 steps=632 block_reads=29247 collision_calls=6941 occupancy_queries=5089 occupant_decodes=3452 collision_us=5823 occupancy_us=63705 total_us=74238
+checkpoint_a,SRD_OPT_PROFILE,"case=small30 Metrics[blockReads=505, collisionChecks=479, occupancyQueries=1, occupantDecodes=1, occupancyChecks=338, steps=632, cacheHits=8783, retainedEntries=1659]"
+checkpoint_a,SRD_BENCH,case=small60 mode=reference n=12 median_us=109350 p95_us=175131 max_us=175131 cpu_median_us=102485 allocated_median=174612928 nodes=143 truncated=false grid_bytes=6977
+checkpoint_a,SRD_SERIALIZE,case=small60 mode=reference median_us=217 p95_us=437 max_us=437
+checkpoint_a,SRD_BENCH,case=small60 mode=current n=12 median_us=3138 p95_us=4427 max_us=4427 cpu_median_us=3116 allocated_median=2965696 nodes=143 truncated=false grid_bytes=6977
+checkpoint_a,SRD_SERIALIZE,case=small60 mode=current median_us=198 p95_us=257 max_us=257
+checkpoint_a,SRD_PROFILE,case=small60 steps=1144 block_reads=51352 collision_calls=12228 occupancy_queries=8872 occupant_decodes=5227 collision_us=9751 occupancy_us=86371 total_us=102951
+checkpoint_a,SRD_OPT_PROFILE,"case=small60 Metrics[blockReads=836, collisionChecks=772, occupancyQueries=1, occupantDecodes=1, occupancyChecks=525, steps=1144, cacheHits=15330, retainedEntries=2857]"
+checkpoint_a,SRD_BENCH,case=medium30 mode=reference n=12 median_us=95229 p95_us=103221 max_us=103221 cpu_median_us=94309 allocated_median=167826800 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=medium30 mode=reference median_us=127 p95_us=171 max_us=171
+checkpoint_a,SRD_BENCH,case=medium30 mode=current n=12 median_us=1780 p95_us=1894 max_us=1894 cpu_median_us=1788 allocated_median=1769864 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=medium30 mode=current median_us=108 p95_us=128 max_us=128
+checkpoint_a,SRD_PROFILE,case=medium30 steps=632 block_reads=29247 collision_calls=6941 occupancy_queries=5089 occupant_decodes=5175 collision_us=5681 occupancy_us=85138 total_us=94970
+checkpoint_a,SRD_OPT_PROFILE,"case=medium30 Metrics[blockReads=505, collisionChecks=479, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1004, steps=632, cacheHits=8783, retainedEntries=1659]"
+checkpoint_a,SRD_BENCH,case=medium60 mode=reference n=12 median_us=251221 p95_us=255886 max_us=255886 cpu_median_us=248617 allocated_median=442947760 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=medium60 mode=reference median_us=170 p95_us=367 max_us=367
+checkpoint_a,SRD_BENCH,case=medium60 mode=current n=12 median_us=4581 p95_us=9181 max_us=9181 cpu_median_us=4586 allocated_median=4660024 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=medium60 mode=current median_us=153 p95_us=265 max_us=265
+checkpoint_a,SRD_PROFILE,case=medium60 steps=1752 block_reads=83006 collision_calls=19645 occupancy_queries=14524 occupant_decodes=13625 collision_us=15814 occupancy_us=223989 total_us=251023
+checkpoint_a,SRD_OPT_PROFILE,"case=medium60 Metrics[blockReads=1189, collisionChecks=1222, occupancyQueries=1, occupantDecodes=3, occupancyChecks=2703, steps=1752, cacheHits=24533, retainedEntries=4235]"
+checkpoint_a,SRD_BENCH,case=large60 mode=reference n=12 median_us=464858 p95_us=549493 max_us=549493 cpu_median_us=462382 allocated_median=843910136 nodes=197 truncated=false grid_bytes=9623
+checkpoint_a,SRD_SERIALIZE,case=large60 mode=reference median_us=155 p95_us=183 max_us=183
+checkpoint_a,SRD_BENCH,case=large60 mode=current n=12 median_us=4243 p95_us=5027 max_us=5027 cpu_median_us=4249 allocated_median=4297232 nodes=197 truncated=false grid_bytes=9623
+checkpoint_a,SRD_SERIALIZE,case=large60 mode=current median_us=138 p95_us=156 max_us=156
+checkpoint_a,SRD_PROFILE,case=large60 steps=1576 block_reads=70893 collision_calls=16831 occupancy_queries=12381 occupant_decodes=26598 collision_us=14266 occupancy_us=454498 total_us=482324
+checkpoint_a,SRD_OPT_PROFILE,"case=large60 Metrics[blockReads=1125, collisionChecks=1108, occupancyQueries=1, occupantDecodes=7, occupancyChecks=5591, steps=1576, cacheHits=21538, retainedEntries=3888]"
+checkpoint_a,SRD_BENCH,case=large120 mode=reference n=12 median_us=650874 p95_us=662598 max_us=662598 cpu_median_us=649182 allocated_median=1118542072 nodes=700 truncated=false grid_bytes=34515
+checkpoint_a,SRD_SERIALIZE,case=large120 mode=reference median_us=500 p95_us=513 max_us=513
+checkpoint_a,SRD_BENCH,case=large120 mode=current n=12 median_us=15290 p95_us=15641 max_us=15641 cpu_median_us=15296 allocated_median=14674960 nodes=700 truncated=false grid_bytes=34515
+checkpoint_a,SRD_SERIALIZE,case=large120 mode=current median_us=473 p95_us=634 max_us=634
+checkpoint_a,SRD_PROFILE,case=large120 steps=5600 block_reads=272174 collision_calls=64271 occupancy_queries=47804 occupant_decodes=33940 collision_us=51354 occupancy_us=565647 total_us=651536
+checkpoint_a,SRD_OPT_PROFILE,"case=large120 Metrics[blockReads=3357, collisionChecks=3722, occupancyQueries=1, occupantDecodes=7, occupancyChecks=19857, steps=5600, cacheHits=79379, retainedEntries=12806]"
+checkpoint_a,SRD_BENCH,case=walls30 mode=reference n=12 median_us=51036 p95_us=57085 max_us=57085 cpu_median_us=51011 allocated_median=88255864 nodes=61 truncated=false grid_bytes=2959
+checkpoint_a,SRD_SERIALIZE,case=walls30 mode=reference median_us=67 p95_us=84 max_us=84
+checkpoint_a,SRD_BENCH,case=walls30 mode=current n=12 median_us=1382 p95_us=1726 max_us=1726 cpu_median_us=1386 allocated_median=1390376 nodes=61 truncated=false grid_bytes=2959
+checkpoint_a,SRD_SERIALIZE,case=walls30 mode=current median_us=45 p95_us=50 max_us=50
+checkpoint_a,SRD_PROFILE,case=walls30 steps=488 block_reads=20521 collision_calls=4916 occupancy_queries=3497 occupant_decodes=2681 collision_us=4086 occupancy_us=47445 total_us=54618
+checkpoint_a,SRD_OPT_PROFILE,"case=walls30 Metrics[blockReads=456, collisionChecks=385, occupancyQueries=1, occupantDecodes=3, occupancyChecks=729, steps=488, cacheHits=6443, retainedEntries=1386]"
+checkpoint_a,SRD_BENCH,case=walls60 mode=reference n=12 median_us=163044 p95_us=172207 max_us=172207 cpu_median_us=161868 allocated_median=286933896 nodes=157 truncated=false grid_bytes=7663
+checkpoint_a,SRD_SERIALIZE,case=walls60 mode=reference median_us=134 p95_us=171 max_us=171
+checkpoint_a,SRD_BENCH,case=walls60 mode=current n=12 median_us=3165 p95_us=3595 max_us=3595 cpu_median_us=3169 allocated_median=3312520 nodes=157 truncated=false grid_bytes=7663
+checkpoint_a,SRD_SERIALIZE,case=walls60 mode=current median_us=110 p95_us=171 max_us=171
+checkpoint_a,SRD_PROFILE,case=walls60 steps=1256 block_reads=51978 collision_calls=12459 occupancy_queries=8855 occupant_decodes=8832 collision_us=10157 occupancy_us=146875 total_us=164182
+checkpoint_a,SRD_OPT_PROFILE,"case=walls60 Metrics[blockReads=1001, collisionChecks=888, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1735, steps=1256, cacheHits=16346, retainedEntries=3264]"
+checkpoint_a,SRD_BENCH,case=stairs30 mode=reference n=12 median_us=94575 p95_us=97119 max_us=97119 cpu_median_us=94116 allocated_median=164299704 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=stairs30 mode=reference median_us=84 p95_us=202 max_us=202
+checkpoint_a,SRD_BENCH,case=stairs30 mode=current n=12 median_us=2091 p95_us=2212 max_us=2212 cpu_median_us=2094 allocated_median=1963592 nodes=79 truncated=false grid_bytes=3841
+checkpoint_a,SRD_SERIALIZE,case=stairs30 mode=current median_us=62 p95_us=119 max_us=119
+checkpoint_a,SRD_PROFILE,case=stairs30 steps=632 block_reads=29572 collision_calls=7074 occupancy_queries=4999 occupant_decodes=5038 collision_us=6955 occupancy_us=83150 total_us=94465
+checkpoint_a,SRD_OPT_PROFILE,"case=stairs30 Metrics[blockReads=561, collisionChecks=574, occupancyQueries=1, occupantDecodes=3, occupancyChecks=1151, steps=632, cacheHits=9026, retainedEntries=1851]"
+checkpoint_a,SRD_BENCH,case=stairs60 mode=reference n=12 median_us=250891 p95_us=253272 max_us=253272 cpu_median_us=250118 allocated_median=434953864 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=stairs60 mode=reference median_us=185 p95_us=302 max_us=302
+checkpoint_a,SRD_BENCH,case=stairs60 mode=current n=12 median_us=5522 p95_us=5919 max_us=5919 cpu_median_us=5526 allocated_median=5256512 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=stairs60 mode=current median_us=159 p95_us=239 max_us=239
+checkpoint_a,SRD_PROFILE,case=stairs60 steps=1752 block_reads=85069 collision_calls=20365 occupancy_queries=14344 occupant_decodes=13269 collision_us=20973 occupancy_us=220221 total_us=253514
+checkpoint_a,SRD_OPT_PROFILE,"case=stairs60 Metrics[blockReads=1367, collisionChecks=1493, occupancyQueries=1, occupantDecodes=3, occupancyChecks=3117, steps=1752, cacheHits=25274, retainedEntries=4808]"
+checkpoint_a,SRD_BENCH,case=uneven60 mode=reference n=12 median_us=209448 p95_us=215462 max_us=215462 cpu_median_us=209013 allocated_median=369224432 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=uneven60 mode=reference median_us=174 p95_us=1849 max_us=1849
+checkpoint_a,SRD_BENCH,case=uneven60 mode=current n=12 median_us=5067 p95_us=5197 max_us=5197 cpu_median_us=5073 allocated_median=4998168 nodes=219 truncated=false grid_bytes=10701
+checkpoint_a,SRD_SERIALIZE,case=uneven60 mode=current median_us=151 p95_us=172 max_us=172
+checkpoint_a,SRD_PROFILE,case=uneven60 steps=1752 block_reads=73077 collision_calls=17317 occupancy_queries=12180 occupant_decodes=11331 collision_us=13807 occupancy_us=186256 total_us=210151
+checkpoint_a,SRD_OPT_PROFILE,"case=uneven60 Metrics[blockReads=1397, collisionChecks=1547, occupancyQueries=1, occupantDecodes=3, occupancyChecks=3152, steps=1752, cacheHits=25336, retainedEntries=4816]"
+checkpoint_a,SRD_BENCH,case=largeBody30 mode=reference n=12 median_us=115529 p95_us=119097 max_us=119097 cpu_median_us=115538 allocated_median=194898488 nodes=75 truncated=false grid_bytes=3645
+checkpoint_a,SRD_SERIALIZE,case=largeBody30 mode=reference median_us=119 p95_us=234 max_us=234
+checkpoint_a,SRD_BENCH,case=largeBody30 mode=current n=12 median_us=2345 p95_us=2461 max_us=2461 cpu_median_us=2347 allocated_median=2041928 nodes=75 truncated=false grid_bytes=3645
+checkpoint_a,SRD_SERIALIZE,case=largeBody30 mode=current median_us=57 p95_us=126 max_us=126
+checkpoint_a,SRD_PROFILE,case=largeBody30 steps=600 block_reads=85139 collision_calls=11302 occupancy_queries=4704 occupant_decodes=5961 collision_us=10874 occupancy_us=98262 total_us=117715
+checkpoint_a,SRD_OPT_PROFILE,"case=largeBody30 Metrics[blockReads=597, collisionChecks=738, occupancyQueries=1, occupantDecodes=3, occupancyChecks=942, steps=600, cacheHits=15650, retainedEntries=1701]"
+checkpoint_a,SRD_BENCH,case=largeBody60 mode=reference n=12 median_us=262843 p95_us=264918 max_us=264918 cpu_median_us=261538 allocated_median=427851392 nodes=208 truncated=false grid_bytes=10162
+checkpoint_a,SRD_SERIALIZE,case=largeBody60 mode=reference median_us=125 p95_us=324 max_us=324
+checkpoint_a,SRD_BENCH,case=largeBody60 mode=current n=12 median_us=5915 p95_us=6099 max_us=6099 cpu_median_us=5918 allocated_median=5358312 nodes=208 truncated=false grid_bytes=10162
+checkpoint_a,SRD_SERIALIZE,case=largeBody60 mode=current median_us=115 p95_us=336 max_us=336
+checkpoint_a,SRD_PROFILE,case=largeBody60 steps=1664 block_reads=241959 collision_calls=32043 occupancy_queries=13457 occupant_decodes=12899 collision_us=32732 occupancy_us=242680 total_us=302036
+checkpoint_a,SRD_OPT_PROFILE,"case=largeBody60 Metrics[blockReads=1326, collisionChecks=1876, occupancyQueries=1, occupantDecodes=3, occupancyChecks=2550, steps=1664, cacheHits=43180, retainedEntries=4233]"
+checkpoint_a,SRD_BENCH,case=occupied8 mode=reference n=12 median_us=166461 p95_us=167582 max_us=167582 cpu_median_us=166031 allocated_median=304037912 nodes=73 truncated=false grid_bytes=3547
+checkpoint_a,SRD_SERIALIZE,case=occupied8 mode=reference median_us=54 p95_us=58 max_us=58
+checkpoint_a,SRD_BENCH,case=occupied8 mode=current n=12 median_us=1701 p95_us=1901 max_us=1901 cpu_median_us=1704 allocated_median=1758896 nodes=73 truncated=false grid_bytes=3547
+checkpoint_a,SRD_SERIALIZE,case=occupied8 mode=current median_us=43 p95_us=85 max_us=85
+checkpoint_a,SRD_PROFILE,case=occupied8 steps=584 block_reads=25779 collision_calls=6137 occupancy_queries=4475 occupant_decodes=9578 collision_us=5102 occupancy_us=156419 total_us=165533
+checkpoint_a,SRD_OPT_PROFILE,"case=occupied8 Metrics[blockReads=489, collisionChecks=450, occupancyQueries=1, occupantDecodes=7, occupancyChecks=2134, steps=584, cacheHits=7966, retainedEntries=1568]"
+checkpoint_a,SRD_BENCH,case=occupied16 mode=reference n=12 median_us=653615 p95_us=671538 max_us=671538 cpu_median_us=651562 allocated_median=1189898016 nodes=171 truncated=false grid_bytes=8349
+checkpoint_a,SRD_SERIALIZE,case=occupied16 mode=reference median_us=104 p95_us=149 max_us=149
+checkpoint_a,SRD_BENCH,case=occupied16 mode=current n=12 median_us=3814 p95_us=3985 max_us=3985 cpu_median_us=3820 allocated_median=3932008 nodes=171 truncated=false grid_bytes=8349
+checkpoint_a,SRD_SERIALIZE,case=occupied16 mode=current median_us=96 p95_us=139 max_us=139
+checkpoint_a,SRD_PROFILE,case=occupied16 steps=1368 block_reads=55953 collision_calls=13365 occupancy_queries=9737 occupant_decodes=37842 collision_us=12066 occupancy_us=636388 total_us=658738
+checkpoint_a,SRD_OPT_PROFILE,"case=occupied16 Metrics[blockReads=1061, collisionChecks=969, occupancyQueries=1, occupantDecodes=15, occupancyChecks=9989, steps=1368, cacheHits=17875, retainedEntries=3490]"
+checkpoint_a,SRD_BENCH,case=weighted29 mode=reference n=12 median_us=48372 p95_us=66739 max_us=66739 cpu_median_us=48167 allocated_median=82420640 nodes=53 truncated=false grid_bytes=2593
+checkpoint_a,SRD_SERIALIZE,case=weighted29 mode=reference median_us=42 p95_us=82 max_us=82
+checkpoint_a,SRD_BENCH,case=weighted29 mode=current n=12 median_us=1277 p95_us=1331 max_us=1331 cpu_median_us=1279 allocated_median=1260976 nodes=53 truncated=false grid_bytes=2593
+checkpoint_a,SRD_SERIALIZE,case=weighted29 mode=current median_us=32 p95_us=35 max_us=35
+checkpoint_a,SRD_PROFILE,case=weighted29 steps=424 block_reads=19202 collision_calls=4597 occupancy_queries=3348 occupant_decodes=2501 collision_us=4060 occupancy_us=41560 total_us=48345
+checkpoint_a,SRD_OPT_PROFILE,"case=weighted29 Metrics[blockReads=411, collisionChecks=348, occupancyQueries=1, occupantDecodes=3, occupancyChecks=717, steps=424, cacheHits=5757, retainedEntries=1222]"
+checkpoint_a,SRD_LIMIT,"nodes=4096 truncated=true metrics=Metrics[blockReads=17432, collisionChecks=21263, occupancyQueries=1, occupantDecodes=1, occupancyChecks=16905, steps=32768, cacheHits=476949, retainedEntries=71463]"
+checkpoint_a,SRD_LIMIT_BENCH,n=12 median_us=94217 p95_us=104525 max_us=104525 allocated_median=65629040 grid_bytes=203249
+checkpoint_a,SRD_MULTI,two_encounter_grids n=20 median_us=2995 p95_us=3088 max_us=3618
+checkpoint_a,SRD_HANDLER,grid_us=2181 response_json_bytes=4241
+checkpoint_a,SRD_HANDLER,grid_us=1756 response_json_bytes=4135
+checkpoint_a,SRD_BUDGET,feet=30 sample=0 sync_us=1507 work_us=2012 cpu_us=1984 allocated=1544288 slices=1 slice_median_us=1928 slice_p95_us=1928 slice_max_us=1928 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=1 sync_us=1506 work_us=2417 cpu_us=2421 allocated=1620576 slices=1 slice_median_us=2362 slice_p95_us=2362 slice_max_us=2362 scheduled_latency_ms=2
+checkpoint_a,SRD_BUDGET,feet=30 sample=2 sync_us=1598 work_us=1966 cpu_us=1970 allocated=1544288 slices=1 slice_median_us=1916 slice_p95_us=1916 slice_max_us=1916 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=3 sync_us=1593 work_us=1872 cpu_us=1875 allocated=1544288 slices=1 slice_median_us=1813 slice_p95_us=1813 slice_max_us=1813 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=4 sync_us=1482 work_us=1896 cpu_us=1899 allocated=1544288 slices=1 slice_median_us=1865 slice_p95_us=1865 slice_max_us=1865 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=5 sync_us=1503 work_us=1793 cpu_us=1795 allocated=1544288 slices=1 slice_median_us=1764 slice_p95_us=1764 slice_max_us=1764 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=6 sync_us=1503 work_us=1825 cpu_us=1827 allocated=1544288 slices=1 slice_median_us=1797 slice_p95_us=1797 slice_max_us=1797 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=7 sync_us=1499 work_us=1960 cpu_us=1964 allocated=1544288 slices=1 slice_median_us=1926 slice_p95_us=1926 slice_max_us=1926 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=8 sync_us=1481 work_us=1868 cpu_us=1871 allocated=1544288 slices=1 slice_median_us=1839 slice_p95_us=1839 slice_max_us=1839 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=9 sync_us=1493 work_us=1902 cpu_us=1905 allocated=1544288 slices=1 slice_median_us=1871 slice_p95_us=1871 slice_max_us=1871 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=10 sync_us=1471 work_us=1873 cpu_us=1875 allocated=1544288 slices=1 slice_median_us=1842 slice_p95_us=1842 slice_max_us=1842 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=30 sample=11 sync_us=1480 work_us=1775 cpu_us=1778 allocated=1544288 slices=1 slice_median_us=1749 slice_p95_us=1749 slice_max_us=1749 scheduled_latency_ms=1
+checkpoint_a,SRD_BUDGET,feet=60 sample=0 sync_us=3703 work_us=5698 cpu_us=5703 allocated=4177800 slices=1 slice_median_us=5639 slice_p95_us=5639 slice_max_us=5639 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=1 sync_us=3836 work_us=5474 cpu_us=5479 allocated=4163520 slices=1 slice_median_us=5414 slice_p95_us=5414 slice_max_us=5414 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=2 sync_us=3847 work_us=5882 cpu_us=5815 allocated=4183760 slices=1 slice_median_us=5817 slice_p95_us=5817 slice_max_us=5817 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=3 sync_us=3771 work_us=5527 cpu_us=5530 allocated=4184080 slices=1 slice_median_us=5460 slice_p95_us=5460 slice_max_us=5460 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=4 sync_us=3802 work_us=5336 cpu_us=5340 allocated=4161480 slices=1 slice_median_us=5274 slice_p95_us=5274 slice_max_us=5274 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=5 sync_us=3796 work_us=5773 cpu_us=5778 allocated=4181224 slices=1 slice_median_us=5708 slice_p95_us=5708 slice_max_us=5708 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=6 sync_us=3776 work_us=5434 cpu_us=5438 allocated=4162376 slices=1 slice_median_us=5369 slice_p95_us=5369 slice_max_us=5369 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=7 sync_us=3767 work_us=5689 cpu_us=5693 allocated=4184856 slices=1 slice_median_us=5624 slice_p95_us=5624 slice_max_us=5624 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=8 sync_us=3759 work_us=5470 cpu_us=5474 allocated=4156272 slices=1 slice_median_us=5400 slice_p95_us=5400 slice_max_us=5400 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=9 sync_us=4011 work_us=5368 cpu_us=5373 allocated=4156272 slices=1 slice_median_us=5294 slice_p95_us=5294 slice_max_us=5294 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=10 sync_us=3788 work_us=5310 cpu_us=5314 allocated=4148256 slices=1 slice_median_us=5246 slice_p95_us=5246 slice_max_us=5246 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=60 sample=11 sync_us=3845 work_us=5509 cpu_us=5513 allocated=4184840 slices=1 slice_median_us=5439 slice_p95_us=5439 slice_max_us=5439 scheduled_latency_ms=5
+checkpoint_a,SRD_BUDGET,feet=120 sample=0 sync_us=12095 work_us=19915 cpu_us=19921 allocated=14962816 slices=3 slice_median_us=8006 slice_p95_us=8007 slice_max_us=8007 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=1 sync_us=12218 work_us=20086 cpu_us=20092 allocated=14924120 slices=3 slice_median_us=8001 slice_p95_us=8005 slice_max_us=8005 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=2 sync_us=11953 work_us=19990 cpu_us=19997 allocated=14931360 slices=3 slice_median_us=8004 slice_p95_us=8008 slice_max_us=8008 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=3 sync_us=11907 work_us=20630 cpu_us=20636 allocated=15013960 slices=3 slice_median_us=8001 slice_p95_us=8005 slice_max_us=8005 scheduled_latency_ms=104
+checkpoint_a,SRD_BUDGET,feet=120 sample=4 sync_us=11793 work_us=19794 cpu_us=19799 allocated=14906040 slices=3 slice_median_us=8000 slice_p95_us=8009 slice_max_us=8009 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=5 sync_us=12571 work_us=20984 cpu_us=20991 allocated=15080296 slices=3 slice_median_us=8002 slice_p95_us=8006 slice_max_us=8006 scheduled_latency_ms=104
+checkpoint_a,SRD_BUDGET,feet=120 sample=6 sync_us=11962 work_us=19900 cpu_us=19907 allocated=14915712 slices=3 slice_median_us=8003 slice_p95_us=8003 slice_max_us=8003 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=7 sync_us=11856 work_us=20104 cpu_us=20112 allocated=14911624 slices=3 slice_median_us=8000 slice_p95_us=8010 slice_max_us=8010 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=8 sync_us=12184 work_us=19956 cpu_us=19933 allocated=14901160 slices=3 slice_median_us=8006 slice_p95_us=8013 slice_max_us=8013 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=9 sync_us=11793 work_us=20073 cpu_us=20080 allocated=14950000 slices=3 slice_median_us=8001 slice_p95_us=8004 slice_max_us=8004 scheduled_latency_ms=103
+checkpoint_a,SRD_BUDGET,feet=120 sample=10 sync_us=11840 work_us=20526 cpu_us=20533 allocated=15097488 slices=3 slice_median_us=8006 slice_p95_us=8006 slice_max_us=8006 scheduled_latency_ms=104
+checkpoint_a,SRD_BUDGET,feet=120 sample=11 sync_us=12438 work_us=20369 cpu_us=20375 allocated=15054792 slices=3 slice_median_us=8000 slice_p95_us=8009 slice_max_us=8009 scheduled_latency_ms=104
+checkpoint_a,SRD_BUDGET,feet=300 sample=0 sync_us=97414 work_us=129028 cpu_us=129030 allocated=92948616 slices=16 slice_median_us=8003 slice_p95_us=8070 slice_max_us=8070 scheduled_latency_ms=757
+checkpoint_a,SRD_BUDGET,feet=300 sample=1 sync_us=102348 work_us=133566 cpu_us=133471 allocated=93136040 slices=17 slice_median_us=8003 slice_p95_us=8011 slice_max_us=8011 scheduled_latency_ms=803
+checkpoint_a,SRD_BUDGET,feet=300 sample=2 sync_us=104508 work_us=127960 cpu_us=127944 allocated=92986520 slices=16 slice_median_us=8003 slice_p95_us=8011 slice_max_us=8011 scheduled_latency_ms=755
+checkpoint_a,SRD_BUDGET,feet=300 sample=3 sync_us=109233 work_us=129558 cpu_us=129517 allocated=92939992 slices=16 slice_median_us=8005 slice_p95_us=8104 slice_max_us=8104 scheduled_latency_ms=757
+checkpoint_a,SRD_BUDGET,feet=300 sample=4 sync_us=97102 work_us=129713 cpu_us=129698 allocated=92995392 slices=16 slice_median_us=8003 slice_p95_us=8055 slice_max_us=8055 scheduled_latency_ms=757
+checkpoint_a,SRD_BUDGET,feet=300 sample=5 sync_us=98890 work_us=125620 cpu_us=125606 allocated=92830848 slices=16 slice_median_us=8002 slice_p95_us=8008 slice_max_us=8008 scheduled_latency_ms=753
+checkpoint_a,SRD_BUDGET,feet=300 sample=6 sync_us=97148 work_us=127930 cpu_us=127938 allocated=92916256 slices=16 slice_median_us=8003 slice_p95_us=8020 slice_max_us=8020 scheduled_latency_ms=756
+checkpoint_a,SRD_BUDGET,feet=300 sample=7 sync_us=101079 work_us=132666 cpu_us=132587 allocated=93096264 slices=17 slice_median_us=8005 slice_p95_us=8067 slice_max_us=8067 scheduled_latency_ms=802
+checkpoint_a,SRD_BUDGET,feet=300 sample=8 sync_us=103595 work_us=127715 cpu_us=123332 allocated=92756768 slices=16 slice_median_us=8004 slice_p95_us=9764 slice_max_us=9764 scheduled_latency_ms=755
+checkpoint_a,SRD_BUDGET,feet=300 sample=9 sync_us=92825 work_us=124285 cpu_us=124295 allocated=92750216 slices=16 slice_median_us=8003 slice_p95_us=8011 slice_max_us=8011 scheduled_latency_ms=752
+checkpoint_a,SRD_BUDGET,feet=300 sample=10 sync_us=98141 work_us=124291 cpu_us=124268 allocated=92700520 slices=16 slice_median_us=8003 slice_p95_us=8006 slice_max_us=8006 scheduled_latency_ms=752
+checkpoint_a,SRD_BUDGET,feet=300 sample=11 sync_us=97799 work_us=124751 cpu_us=124733 allocated=92822472 slices=16 slice_median_us=8005 slice_p95_us=8012 slice_max_us=8012 scheduled_latency_ms=753

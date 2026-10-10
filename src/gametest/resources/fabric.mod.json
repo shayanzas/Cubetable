@@ -18,7 +18,8 @@
       "dev.tacticalcombat.combat.SrdTargetingGameTests",
       "dev.tacticalcombat.combat.SrdRangedGameTests",
       "dev.tacticalcombat.combat.SrdAcceptanceGameTests",
-      "dev.tacticalcombat.combat.SrdGridPerformanceGameTests"
+      "dev.tacticalcombat.combat.SrdGridPerformanceGameTests",
+      "dev.tacticalcombat.combat.SrdGridBudgetGameTests"
     ]
   },
   "depends": {

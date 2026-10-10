@@ -3,6 +3,7 @@
   "package": "dev.tacticalcombat.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "GridBlockChangeMixin",
     "MobAttackMixin",
     "CreeperExplosionMixin",
     "RangedWeaponMixin",

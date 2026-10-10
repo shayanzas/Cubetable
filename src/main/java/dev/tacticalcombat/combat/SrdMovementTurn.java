@@ -34,6 +34,21 @@ public final class SrdMovementTurn {
     private List<Cell> route=List.of();
     private CharacterRepository.Principal controller;
     private boolean closed;
+    private Preview completedPreview;
+    public void validatePreview(CharacterRepository.Principal principal) {
+        requireServerThread();String error=invalid();
+        if(error!=null || !permitted(principal) || moving()) throw new IllegalArgumentException(error==null?"Movement unavailable":error);
+        if(actor.getPos().squaredDistanceTo(terrain.position(anchor))>1e-6 || terrain.landing(anchor)!=Reason.OK)
+            throw new IllegalArgumentException("Invalid movement anchor");
+    }
+    public SrdTerrain.Pending pendingPreview(CharacterRepository.Principal principal) {
+        validatePreview(principal);completedPreview=null;return terrain.pending(anchor,remainingFeet());
+    }
+    public void completePreview(CharacterRepository.Principal principal,Preview preview) {
+        validatePreview(principal);
+        if(!preview.start().equals(anchor) || preview.remainingFeet()!=remainingFeet()) throw new IllegalArgumentException("Stale grid");
+        completedPreview=preview;
+    }
 
     public SrdMovementTurn(LivingEntity actor,Supplier<Frame> context) {
         this.actor=Objects.requireNonNull(actor); this.context=Objects.requireNonNull(context);
@@ -108,10 +123,16 @@ public final class SrdMovementTurn {
         if(!requests.accept(initial.encounter,requests.turn(),request.request)) return result(false,"Duplicate or excessive movement request");
         if(moving()) return result(false,"Cancel or complete the current route first");
         Preview preview;
-        try { preview=preview(principal); } catch(IllegalArgumentException rejected) { return result(false,rejected.getMessage()); }
+        try {
+            if(remainingFeet()>60) {
+                validatePreview(principal);preview=completedPreview;
+                if(preview==null || !preview.start().equals(anchor) || preview.remainingFeet()!=remainingFeet())
+                    return result(false,"Request and await a current grid before high-speed movement");
+            } else preview=preview(principal);
+        } catch(IllegalArgumentException rejected) { return result(false,rejected.getMessage()); }
         List<Cell> path=preview.pathTo(request.destination);
         if(path.isEmpty()) return result(false,request.destination.equals(anchor)?"Already at destination":preview.status(request.destination).name());
-        route=path; controller=principal; return result(true,"Route accepted; steps revalidate before execution");
+        route=path; completedPreview=null; controller=principal; return result(true,"Route accepted; steps revalidate before execution");
     }
     private Result result(boolean accepted,String message) { return new Result(accepted,message,spent,remainingFeet()); }
     public Result cancel(CharacterRepository.Principal principal) {

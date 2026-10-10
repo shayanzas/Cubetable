@@ -31,6 +31,12 @@ public final class SrdMovementTests {
             return new Step(next,next.equals(new Cell(1,0,1))?10:5,Reason.OK);
         };
         var weighted=SrdMovement.search(start,10,difficult);
+        for(int batch:new int[]{1,2,7,8,9,127}) {
+            var incremental=new SrdMovement.Search(start,10);int yields=0;
+            while(!incremental.advance(difficult,batch,Long.MAX_VALUE)) yields++;
+            check(incremental.result().equals(weighted),"yield boundaries preserve weighted Dijkstra results");
+            check(yields>0,"bounded search actually yields");
+        }
         check(weighted.reachable().get(new Cell(1,0,1)).costFeet()==10,"difficult terrain costs ten feet");
         check(weighted.reachable().get(new Cell(2,0,1)).costFeet()==10,"Dijkstra chooses cheaper diagonal detour");
         check(!weighted.pathTo(new Cell(2,0,1)).contains(new Cell(1,0,1)),"route actually avoids expensive square");

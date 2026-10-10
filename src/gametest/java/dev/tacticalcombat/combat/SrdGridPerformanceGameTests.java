@@ -73,7 +73,7 @@ public class SrdGridPerformanceGameTests implements FabricGameTest {
         return first;
     }
     static SrdMovement.Preview search(LivingEntity actor,SrdCharacter stats,int feet,boolean reference) {
-        if(reference) {var t=new ReferenceSrdTerrain(actor,stats);return SrdMovement.search(t.currentCell(),feet,t);}
+        if(reference) {var t=new ReferenceSrdTerrain(actor,stats);return ReferenceSrdSearch.search(t.currentCell(),feet,t);}
         var t=new SrdTerrain(actor,stats);return t.search(t.currentCell(),feet);
     }
     static int bytes(SrdMovement.Preview p) {

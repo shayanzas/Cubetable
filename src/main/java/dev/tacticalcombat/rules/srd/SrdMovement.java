@@ -54,28 +54,62 @@ public final class SrdMovement {
         }
     }
     public static Preview search(Cell start,int remainingFeet,Terrain terrain) {
-        if(remainingFeet<0 || remainingFeet>300) throw new IllegalArgumentException("Invalid movement allowance");
-        var nodes=new LinkedHashMap<Cell,Node>(); var boundaries=new ArrayList<Boundary>();
-        var queue=new PriorityQueue<Node>(Comparator.comparingInt(Node::costFeet)
+        Search search=new Search(start,remainingFeet);
+        while(!search.advance(terrain,Integer.MAX_VALUE,Long.MAX_VALUE)) {}
+        return search.result();
+    }
+    /** Resumable Dijkstra. Only pure search state is retained; callers own terrain validity and scheduling. */
+    public static final class Search {
+        private final Cell start;
+        private final int remainingFeet;
+        private final Map<Cell,Node> nodes=new LinkedHashMap<>();
+        private final List<Boundary> boundaries=new ArrayList<>();
+        private final PriorityQueue<Node> queue=new PriorityQueue<>(Comparator.comparingInt(Node::costFeet)
                 .thenComparingInt(n->n.cell.x).thenComparingInt(n->n.cell.z).thenComparingDouble(n->n.cell.y));
+        private Node current;
+        private int neighbor;
+        private boolean truncated,done;
+        public Search(Cell start,int remainingFeet) {
+        if(remainingFeet<0 || remainingFeet>300) throw new IllegalArgumentException("Invalid movement allowance");
+        this.start=Objects.requireNonNull(start);this.remainingFeet=remainingFeet;
         Node first=new Node(start,0,null); nodes.put(start,first); queue.add(first);
-        boolean truncated=false;
-        while(!queue.isEmpty()) {
-            Node current=queue.remove(); if(nodes.get(current.cell)!=current) continue;
-            for(int dx=-1;dx<=1;dx++) for(int dz=-1;dz<=1;dz++) {
+        }
+        /** Cooperative deadline: one terrain edge is indivisible. No live world access is implied by this class. */
+        public boolean advance(Terrain terrain,int maxEdges,long deadlineNanos) {
+            if(maxEdges<1) throw new IllegalArgumentException("Positive edge budget required");
+            int edges=0;
+            while(!done && edges<maxEdges && System.nanoTime()<deadlineNanos) {
+                if(current==null) {
+                    if(queue.isEmpty()) {done=true;break;}
+                    current=queue.remove();neighbor=0;
+                    if(nodes.get(current.cell)!=current) {current=null;continue;}
+                }
+                int dx=neighbor/3-1,dz=neighbor%3-1;
+                neighbor++;
+                if(neighbor==9) { // Keep the current node for this final edge, then resume with the next node.
+                    Node processing=current;current=null;
+                    process(terrain,processing,dx,dz);edges++;continue;
+                }
                 if(dx==0 && dz==0) continue;
+                process(terrain,current,dx,dz);edges++;
+            }
+            return done;
+        }
+        private void process(Terrain terrain,Node current,int dx,int dz) {
                 Step edge=terrain.step(current.cell,dx,dz);
-                if(edge.reason!=Reason.OK) { boundaries.add(new Boundary(current.cell,dx,dz,edge.reason)); continue; }
+                if(edge.reason!=Reason.OK) { boundaries.add(new Boundary(current.cell,dx,dz,edge.reason)); return; }
                 if(edge.to.x-current.cell.x!=dx || edge.to.z-current.cell.z!=dz || Math.abs(edge.to.y-current.cell.y)>1.00001)
                     throw new IllegalArgumentException("Terrain returned a non-neighbor");
                 int cost=current.costFeet+edge.feet;
-                if(cost>remainingFeet) { boundaries.add(new Boundary(current.cell,dx,dz,Reason.OUT_OF_BUDGET)); continue; }
+                if(cost>remainingFeet) { boundaries.add(new Boundary(current.cell,dx,dz,Reason.OUT_OF_BUDGET)); return; }
                 Node previous=nodes.get(edge.to);
-                if(previous!=null && previous.costFeet<=cost) continue;
-                if(previous==null && nodes.size()>=MAX_NODES) { truncated=true; continue; }
+                if(previous!=null && previous.costFeet<=cost) return;
+                if(previous==null && nodes.size()>=MAX_NODES) { truncated=true; return; }
                 Node next=new Node(edge.to,cost,current.cell); nodes.put(edge.to,next); queue.add(next);
-            }
         }
-        return new Preview(start,remainingFeet,nodes,boundaries,truncated);
+        public Preview result() {
+            if(!done) throw new IllegalStateException("Search still pending");
+            return new Preview(start,remainingFeet,nodes,boundaries,truncated);
+        }
     }
 }

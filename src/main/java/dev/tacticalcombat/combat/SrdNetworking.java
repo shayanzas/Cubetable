@@ -25,6 +25,7 @@ public final class SrdNetworking {
             if(ServerPlayNetworking.canSend(ctx.player(),SrdStatePayload.ID)) ServerPlayNetworking.send(ctx.player(),handle(ctx.player(),request));
         });
         ServerTickEvents.END_SERVER_TICK.register(server->{
+            SrdGridJobs.tick(SrdNetworking::send);
             for(var player:server.getPlayerManager().getPlayerList()) {
                 UUID watching=WATCHING.get(player.getUuid()); if(watching==null) continue;
                 var encounter=find(watching);
@@ -37,8 +38,8 @@ public final class SrdNetworking {
                 catch(IllegalArgumentException denied) { WATCHING.remove(player.getUuid()); SENT.remove(player.getUuid()); send(player,new SrdStatePayload(watching,Long.MAX_VALUE,"ENDED","Encounter permission no longer available","{}")); }
             }
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ LIMIT.forget(handler.player.getUuid()); GRID_LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{LIMIT.clear();GRID_LIMIT.clear();WATCHING.clear();SENT.clear();});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ SrdGridJobs.cancel(handler.player.getUuid()); LIMIT.forget(handler.player.getUuid()); GRID_LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{SrdGridJobs.clear();LIMIT.clear();GRID_LIMIT.clear();WATCHING.clear();SENT.clear();});
     }
     private static void send(ServerPlayerEntity p,SrdStatePayload payload) { if(ServerPlayNetworking.canSend(p,SrdStatePayload.ID)) ServerPlayNetworking.send(p,payload); }
     static SrdEncounter find(UUID id) { return CombatManager.encounters().stream().filter(e->e.id().equals(id) && e instanceof SrdEncounter).map(e->(SrdEncounter)e).findFirst().orElse(null); }
@@ -72,18 +73,18 @@ public final class SrdNetworking {
                 }
                 case "grid" -> {
                     if(!GRID_LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime())) throw new IllegalArgumentException("Grid rate limit: wait a second before refreshing");
-                    var grid=encounter.grid(p); var cells=new JsonArray();
-                    for(var n:grid.reachable().values()) {
-                        var cell=new JsonArray(); cell.add(n.cell().x()); cell.add(n.cell().z()); cell.add(n.cell().y()); cell.add(n.costFeet());
-                        if(n.parent()!=null) { cell.add(n.parent().x()); cell.add(n.parent().z()); cell.add(n.parent().y()); } cells.add(cell);
+                    if(encounter.budgetedGrid()) {
+                        SrdGridJobs.submit(player,encounter,request.request());code="GRID_PENDING";message="Grid pending; calculating within server tick budget";
+                        extra.addProperty("gridRequest",request.request().toString());
+                    } else {
+                        SrdGridJobs.cancel(player.getUuid());extra=SrdGridJobs.grid(encounter.grid(p));code="GRID";
                     }
-                    extra.add("grid",cells); extra.addProperty("truncated",grid.truncated()); code="GRID";
                 }
                 case "move" -> {
                     var result=encounter.move(p,request.request(),new SrdMovement.Cell(integer(args,"x"),integer(args,"z"),args.get("y").getAsDouble()));
                     message=result.message(); if(!result.accepted()) code="REJECTED";
                 }
-                case "cancel" -> encounter.cancelMove(p);
+                case "cancel" -> {SrdGridJobs.cancel(player.getUuid());encounter.cancelMove(p);}
                 case "preview" -> {
                     var intent=encounter.preview(p,UUID.fromString(args.get("target").getAsString()),SrdEquipment.Weapon.valueOf(args.get("weapon").getAsString()),
                             args.has("mode")?SrdRules.AttackMode.valueOf(args.get("mode").getAsString()):SrdRules.AttackMode.MELEE,
