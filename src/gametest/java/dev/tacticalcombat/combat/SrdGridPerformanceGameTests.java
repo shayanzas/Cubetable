@@ -83,6 +83,108 @@ public class SrdGridPerformanceGameTests implements FabricGameTest {
         }
         return cells.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void cachesExpireBeforeTerrainOccupancyAndCostChanges(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx)) {
+            var actor=f.actor(2,2,true);var stats=CharacterService.srdStats(actor,f.campaign).stats();var terrain=new SrdTerrain(actor,stats);
+            var start=terrain.currentCell();var next=new SrdMovement.Cell(start.x()+1,start.z(),start.y());
+            check(terrain.search(start,30).reachable().get(next).costFeet()==5,"initial cached search");
+            // Same server tick, same adapter, no invalidation event needed: each search owns its cache.
+            ctx.getWorld().setBlockState(f.origin.add(3,1,2),Blocks.STONE.getDefaultState());ctx.getWorld().setBlockState(f.origin.add(3,2,2),Blocks.STONE.getDefaultState());
+            check(!terrain.search(start,30).reachable().containsKey(next),"new wall not hidden by prior cache");
+            ctx.getWorld().setBlockState(f.origin.add(3,1,2),Blocks.AIR.getDefaultState());ctx.getWorld().setBlockState(f.origin.add(3,2,2),Blocks.AIR.getDefaultState());
+            var blocker=f.actor(3,2,true);
+            check(!terrain.search(start,30).reachable().containsKey(next),"new living occupant blocks next search");
+            blocker.setPosition(blocker.getPos().add(5,0,0));
+            check(terrain.search(start,30).reachable().containsKey(next),"moved occupant frees old square");
+            ctx.getWorld().setBlockState(f.origin.add(3,0,2),Blocks.HONEY_BLOCK.getDefaultState());
+            check(terrain.search(start,30).equals(search(actor,stats,30,true)),"changed weighted partial surface agrees with reference");
+            ctx.getWorld().setBlockState(f.origin.add(3,0,2),Blocks.AIR.getDefaultState());
+            check(!terrain.search(start,30).reachable().containsKey(next),"removed support never reused");
+        }
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void searchEnforcesThreadChunksBorderAndOccupancyBound(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx)) {
+            var actor=f.actor(2,2,true);var stats=CharacterService.srdStats(actor,f.campaign).stats();var terrain=new SrdTerrain(actor,stats);var start=terrain.currentCell();
+            var failure=new java.util.concurrent.atomic.AtomicReference<Throwable>();
+            Thread worker=new Thread(()->{try {terrain.search(start,30);}catch(Throwable denied){failure.set(denied);}});
+            worker.start();worker.join();check(failure.get() instanceof IllegalStateException,"off-thread search refused before live access");
+            var remote=new SrdMovement.Cell(1000000,1000000,start.y());
+            check(!ctx.getWorld().isChunkLoaded(62500,62500),"remote chunk initially absent");
+            check(terrain.search(remote,20).equals(SrdMovement.search(remote,20,new ReferenceSrdTerrain(actor,stats))) && !ctx.getWorld().isChunkLoaded(62500,62500),"bounded entity capture and search do not load chunks");
+            var border=ctx.getWorld().getWorldBorder();double x=border.getCenterX(),z=border.getCenterZ(),size=border.getSize();
+            try {
+                border.setCenter(actor.getX(),actor.getZ());border.setSize(2);
+                check(terrain.search(start,30).equals(search(actor,stats,30,true)),"border checks preserved through cache");
+                check(terrain.search(start,30).reachable().size()==1,"no border crossing");
+            } finally {border.setCenter(x,z);border.setSize(size);}
+            for(int i=0;i<257;i++) f.actor(7,7,false);
+            rejects(()->terrain.search(start,30),"occupancy capture has a fail-closed hard cap");
+        }
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE,tickLimit=1200)
+    public void searchLimitPreservesReferenceRoutesAndBoundedCache(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx,ctx.getAbsolutePos(new net.minecraft.util.math.BlockPos(512,65,512)))) {
+            var actor=prepare(f,new Scenario("limit300",80,300,2,"MEDIUM","flat"));
+            actor.setPosition(f.origin.getX()+40.5,f.origin.getY()+1,f.origin.getZ()+40.5);
+            var stats=CharacterService.srdStats(actor,f.campaign).stats();var terrain=new SrdTerrain(actor,stats);
+            var current=terrain.measuredSearch(terrain.currentCell(),300);var old=search(actor,stats,300,true);
+            check(current.preview().equals(old) && old.truncated() && old.reachable().size()==4096,"exact search-limit routes and truncation preserved");
+            check(current.metrics().occupancyQueries()==1 && current.metrics().retainedEntries()<=4*32768,"request caches and occupancy bounded");
+            dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_LIMIT nodes={} truncated={} metrics={}",old.reachable().size(),old.truncated(),current.metrics());
+            if(Boolean.getBoolean("cubetable.srd.benchmark")) {
+                for(int i=0;i<3;i++) terrain.search(terrain.currentCell(),300);
+                long[] wall=new long[12],allocated=new long[12];
+                for(int i=0;i<12;i++) {
+                    long a=allocation(),at=System.nanoTime();var p=terrain.search(terrain.currentCell(),300);
+                    wall[i]=System.nanoTime()-at;allocated[i]=allocation()-a;check(p.equals(old),"repeated truncated result stable");
+                }
+                Arrays.sort(wall);Arrays.sort(allocated);
+                dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_LIMIT_BENCH n=12 median_us={} p95_us={} max_us={} allocated_median={} grid_bytes={}",wall[6]/1000,wall[11]/1000,wall[11]/1000,allocated[6],bytes(old));
+            }
+        }
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void simultaneousEncountersKeepIndependentPreviewsAndNoWorkQueue(TestContext ctx) throws Exception {
+        var p=ctx.createMockCreativeServerPlayerInWorld();var q=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            int i=0;var encounters=new ArrayList<SrdEncounter>();
+            for(var pc:List.of(p,q)) {
+                SrdLiveGameTests.capability(pc);f.repo.invite(f.dm,f.campaign,++i,pc.getUuid(),false);
+                UUID id=f.repo.submit(CharacterService.principal(pc),f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());
+                f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,pc.getUuid(),pc.getUuid());CharacterService.select(pc,f.campaign);
+                pc.setPosition(f.origin.getX()+1.5,f.origin.getY()+1,f.origin.getZ()+i*3+.5);
+                var npc=f.actor(4,i*3,true);encounters.add(SrdLiveGameTests.begin(f,new SrdLiveGameTests.Dice(20,1),pc,npc));
+            }
+            long[] elapsed=new long[20];
+            for(int sample=-3;sample<20;sample++) {
+                long at=System.nanoTime();
+                for(var e:encounters) {
+                    var grid=e.grid(f.dm);var actor=e.current();var stats=CharacterService.srdStats(actor,f.campaign).stats();
+                    check(grid.start().equals(new SrdTerrain(actor,stats).currentCell()) && grid.remainingFeet()==30,"independent active actors/budgets");
+                }
+                if(sample>=0) elapsed[sample]=System.nanoTime()-at;
+            }
+            Arrays.sort(elapsed);dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_MULTI two_encounter_grids n=20 median_us={} p95_us={} max_us={}",elapsed[10]/1000,elapsed[18]/1000,elapsed[19]/1000);
+            for(int playerIndex=0;playerIndex<2;playerIndex++) {
+                var pc=List.of(p,q).get(playerIndex);var e=encounters.get(playerIndex);
+                var request=SrdLiveGameTests.request(e,"grid",new JsonObject());long at=System.nanoTime();var response=SrdNetworking.handle(pc,request);
+                check(response.code().equals("GRID"),"real grid handler with authenticated mock player");
+                dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_HANDLER grid_us={} response_json_bytes={}",(System.nanoTime()-at)/1000,response.json().getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+                check(SrdNetworking.handle(pc,request).code().equals("REJECTED"),"duplicate computation suppressed by request identity");
+                check(SrdNetworking.handle(pc,SrdLiveGameTests.request(e,"grid",new JsonObject())).code().equals("GRID"),"second grid admitted independently per player");
+                for(int flood=0;flood<40;flood++) check(SrdNetworking.handle(pc,SrdLiveGameTests.request(e,"grid",new JsonObject())).code().equals("REJECTED"),"excessive requests rejected synchronously without pending jobs");
+                check(!e.actionUsed() && e.grid(f.dm).remainingFeet()==30,"grid traffic never spends resources");
+            }
+        } finally {
+            for(var pc:List.of(p,q)) {CharacterService.forget(pc.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(pc);}
+        }
+        ctx.complete();
+    }
     @GameTest(templateName=EMPTY_STRUCTURE,tickLimit=1200)
     public void deterministicReferenceAgreementAndOptionalBenchmark(TestContext ctx) throws Exception {
         boolean benchmark=Boolean.getBoolean("cubetable.srd.benchmark");
@@ -92,18 +194,20 @@ public class SrdGridPerformanceGameTests implements FabricGameTest {
             check(old.equals(current),"Complete reachable costs, parents, boundaries and truncation agree: "+c.name);
             if(!benchmark) continue;
             for(int i=0;i<3;i++) {search(actor,stats,c.feet,true);search(actor,stats,c.feet,false);}
-            int samples=12;long[][] wall=new long[2][samples],allocated=new long[2][samples],thread=new long[2][samples];
+            int samples=12;long[][] wall=new long[2][samples],allocated=new long[2][samples],thread=new long[2][samples],serialization=new long[2][samples];
             for(int i=0;i<samples;i++) for(int order=0;order<2;order++) {
                 int mode=(i+order)%2;long a=allocation(),t=cpu(),at=System.nanoTime();
                 var p=search(actor,stats,c.feet,mode==0);
                 wall[mode][i]=System.nanoTime()-at;thread[mode][i]=cpu()-t;allocated[mode][i]=allocation()-a;
+                long encodingAt=System.nanoTime();bytes(p);serialization[mode][i]=System.nanoTime()-encodingAt;
                 check(p.equals(old),"Warm measured search agrees: "+c.name);
             }
             var reference=new ReferenceSrdTerrain(actor,stats,true);long at=System.nanoTime();SrdMovement.search(reference.currentCell(),c.feet,reference);long profiled=System.nanoTime()-at;
             for(int mode=0;mode<2;mode++) {
-                Arrays.sort(wall[mode]);Arrays.sort(allocated[mode]);Arrays.sort(thread[mode]);
+                Arrays.sort(wall[mode]);Arrays.sort(allocated[mode]);Arrays.sort(thread[mode]);Arrays.sort(serialization[mode]);
                 dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_BENCH case={} mode={} n={} median_us={} p95_us={} max_us={} cpu_median_us={} allocated_median={} nodes={} truncated={} grid_bytes={}",
                     c.name,mode==0?"reference":"current",samples,wall[mode][6]/1000,wall[mode][11]/1000,wall[mode][11]/1000,thread[mode][6]/1000,allocated[mode][6],old.reachable().size(),old.truncated(),bytes(old));
+                dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_SERIALIZE case={} mode={} median_us={} p95_us={} max_us={}",c.name,mode==0?"reference":"current",serialization[mode][6]/1000,serialization[mode][11]/1000,serialization[mode][11]/1000);
             }
             dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_PROFILE case={} steps={} block_reads={} collision_calls={} occupancy_queries={} occupant_decodes={} collision_us={} occupancy_us={} total_us={}",
                 c.name,reference.steps,reference.blocks,reference.collisions,reference.occupancyQueries,reference.decodes,reference.collisionNanos/1000,reference.occupancyNanos/1000,profiled/1000);
