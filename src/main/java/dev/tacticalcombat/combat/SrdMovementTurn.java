@@ -95,7 +95,7 @@ public final class SrdMovementTurn {
         String error=invalid(); if(error!=null || !permitted(principal)) throw new IllegalArgumentException(error==null?"Movement permission denied":error);
         if(actor.getPos().squaredDistanceTo(terrain.position(anchor))>1e-6 || terrain.landing(anchor)!=Reason.OK)
             throw new IllegalArgumentException("Invalid movement anchor");
-        return SrdMovement.search(anchor,remainingFeet(),terrain);
+        return terrain.search(anchor,remainingFeet());
     }
     public Result request(CharacterRepository.Principal principal,Request request) {
         requireServerThread();

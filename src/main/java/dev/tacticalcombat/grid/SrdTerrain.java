@@ -9,6 +9,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.*;
+import java.util.*;
 
 /** Conservative, fail-closed walking geometry. Separate from the unchanged Tactical Grid. */
 public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovement.Terrain {
@@ -16,9 +17,72 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     private final LivingEntity actor;
     private final ServerWorld world;
     private final int footprint;
+    private final SearchCache cache;
     public SrdTerrain(LivingEntity actor,SrdCharacter stats) {
         if(!(actor.getWorld() instanceof ServerWorld server)) throw new IllegalArgumentException("Server terrain required");
-        this.actor=actor; world=server; footprint=footprint(stats.size());
+        this.actor=actor; world=server; footprint=footprint(stats.size()); cache=null;
+    }
+    private SrdTerrain(SrdTerrain source,SearchCache cache) {
+        actor=source.actor;world=source.world;footprint=source.footprint;this.cache=cache;
+    }
+    public record Metrics(long blockReads,long collisionChecks,long occupancyQueries,long occupantDecodes,
+                          long occupancyChecks,long steps,long cacheHits,int retainedEntries) {}
+    public record SearchResult(Preview preview,Metrics metrics) {}
+    private record Edge(Cell from,int dx,int dz) {}
+    private record Occupant(Box physical,Box logical) {}
+    /** All caches live only on this synchronous call's stack. Execution keeps using the uncached adapter. */
+    public Preview search(Cell start,int feet) { return measuredSearch(start,feet).preview(); }
+    public SearchResult measuredSearch(Cell start,int feet) {
+        if(!world.getServer().isOnThread()) throw new IllegalStateException("SRD search requires server thread");
+        if(feet<0 || feet>300) throw new IllegalArgumentException("Invalid movement allowance");
+        var scope=new SearchCache();
+        // Include the extra neighbor explored at the budget boundary, ascent sweeps and the old query's 4-block margin.
+        Box area=body(start).expand(feet/5+6);
+        var nearby=new ArrayList<LivingEntity>();
+        world.collectEntitiesByType(net.minecraft.util.TypeFilter.instanceOf(LivingEntity.class),area,
+                e->e!=actor && e.isAlive() && !e.isSpectator(),nearby,257);
+        scope.occupancyQueries++;
+        if(nearby.size()>256) throw new IllegalArgumentException("SRD grid occupancy limit exceeded (256 nearby creatures)");
+        for(var other:nearby) scope.occupants.add(new Occupant(other.getBoundingBox(),occupied(other,scope)));
+        var preview=dev.tacticalcombat.rules.srd.SrdMovement.search(start,feet,new SrdTerrain(this,scope));
+        return new SearchResult(preview,new Metrics(scope.blockReads,scope.collisionChecks,scope.occupancyQueries,
+                scope.occupantDecodes,scope.occupancyChecks,scope.steps,scope.cacheHits,
+                scope.blocks.size()+scope.clear.size()+scope.landings.size()+scope.edges.size()));
+    }
+    private static final class SearchCache {
+        // Stop retaining new entries at the cap; a miss still performs every check. No correctness-changing eviction.
+        static final int LIMIT=32768;
+        final Map<BlockPos,net.minecraft.block.BlockState> blocks=new HashMap<>();
+        final Map<Box,Reason> clear=new HashMap<>();
+        final Map<Cell,Reason> landings=new HashMap<>();
+        final Map<Edge,Step> edges=new HashMap<>();
+        final List<Occupant> occupants=new ArrayList<>();
+        long blockReads,collisionChecks,occupancyQueries,occupantDecodes,occupancyChecks,steps,cacheHits;
+        <K,V> V memo(Map<K,V> map,K key,java.util.function.Supplier<V> compute) {
+            V saved=map.get(key);if(saved!=null){cacheHits++;return saved;}
+            V value=compute.get();if(map.size()<LIMIT) map.put(key,value);return value;
+        }
+    }
+    private net.minecraft.block.BlockState block(BlockPos p) {
+        if(cache==null) return world.getBlockState(p);
+        return cache.memo(cache.blocks,p.toImmutable(),()->{cache.blockReads++;return world.getBlockState(p);});
+    }
+    private boolean collision(Box box) {
+        if(cache!=null) cache.collisionChecks++;
+        return world.getBlockCollisions(actor,box).iterator().hasNext();
+    }
+    private Box occupied(LivingEntity other,SearchCache scope) {
+        double width=other.getBoundingBox().getLengthX(),depth=other.getBoundingBox().getLengthZ();
+        var record=CharacterService.bound(other);
+        if(record!=null && record.profile().equals(RulesProfiles.SRD)) {
+            try {
+                if(scope!=null) scope.occupantDecodes++;
+                int logical=footprint(CharacterService.srdStats(other,record.campaign()).stats().size());
+                width=Math.max(width,logical);depth=Math.max(depth,logical);
+            } catch(IllegalArgumentException invalid) {width=Math.max(width,4);depth=Math.max(depth,4);}
+        }
+        return new Box(other.getX()-width/2,other.getY(),other.getZ()-depth/2,
+                other.getX()+width/2,other.getBoundingBox().maxY,other.getZ()+depth/2).contract(EPS);
     }
     public static int footprint(SrdCharacter.Size size) {
         return switch(size) { case TINY,SMALL,MEDIUM->1; case LARGE->2; case HUGE->3; case GARGANTUAN->4; };
@@ -41,30 +105,34 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
         return Reason.OK;
     }
     private Reason clear(Box box) {
+        return cache==null?clearLive(box):cache.memo(cache.clear,box,()->clearLive(box));
+    }
+    private Reason clearLive(Box box) {
         Reason bound=bounds(box); if(bound!=Reason.OK) return bound;
         // Read blocks only AFTER all intersected chunks are known loaded.
         for(BlockPos p:BlockPos.iterate(BlockPos.ofFloored(box.minX,box.minY-.02,box.minZ),BlockPos.ofFloored(box.maxX,box.maxY,box.maxZ))) {
-            var state=world.getBlockState(p);
+            var state=block(p);
             if(!state.getFluidState().isEmpty() || Grid.isHazard(state)) return Reason.UNSUPPORTED_ENVIRONMENT;
         }
-        if(world.getBlockCollisions(actor,box).iterator().hasNext()) return Reason.CLEARANCE;
+        if(collision(box)) return Reason.CLEARANCE;
         // Search expanded for controlled spaces whose physical hitbox is outside the swept area.
-        for(LivingEntity other:world.getEntitiesByClass(LivingEntity.class,box.expand(4),e->e!=actor && e.isAlive() && !e.isSpectator())) {
-            double width=other.getBoundingBox().getLengthX(), depth=other.getBoundingBox().getLengthZ();
-            var record=CharacterService.bound(other);
-            if(record!=null && record.profile().equals(RulesProfiles.SRD)) {
-                try {
-                    int logical=footprint(CharacterService.srdStats(other,record.campaign()).stats().size());
-                    width=Math.max(width,logical); depth=Math.max(depth,logical);
-                } catch(IllegalArgumentException invalid) { width=Math.max(width,4); depth=Math.max(depth,4); }
+        if(cache!=null) {
+            Box query=box.expand(4);
+            for(var occupant:cache.occupants) {
+                cache.occupancyChecks++;
+                if(query.intersects(occupant.physical) && box.intersects(occupant.logical)) return Reason.OCCUPIED;
             }
-            Box occupied=new Box(other.getX()-width/2,other.getY(),other.getZ()-depth/2,
-                    other.getX()+width/2,other.getBoundingBox().maxY,other.getZ()+depth/2).contract(EPS);
-            if(box.intersects(occupied)) return Reason.OCCUPIED;
+            return Reason.OK;
+        }
+        for(LivingEntity other:world.getEntitiesByClass(LivingEntity.class,box.expand(4),e->e!=actor && e.isAlive() && !e.isSpectator())) {
+            if(box.intersects(occupied(other,null))) return Reason.OCCUPIED;
         }
         return Reason.OK;
     }
     public Reason landing(Cell cell) {
+        return cache==null?landingLive(cell):cache.memo(cache.landings,cell,()->landingLive(cell));
+    }
+    private Reason landingLive(Cell cell) {
         Box box=body(cell); Reason result=clear(box); if(result!=Reason.OK) return result;
         // Every intersected footprint column needs support at this height. Large uneven landings fail safely.
         for(int x=MathHelper.floor(box.minX);x<=MathHelper.floor(box.maxX);x++)
@@ -73,21 +141,24 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
                 double minZ=Math.max(box.minZ,z+.01),maxZ=Math.min(box.maxZ,z+.99);
                 Box support=new Box(minX,cell.y()-.03,minZ,maxX,cell.y()-EPS,maxZ);
                 if(bounds(support)!=Reason.OK) return bounds(support);
-                if(!world.getBlockCollisions(actor,support).iterator().hasNext()) return Reason.NO_SUPPORT;
+                if(!collision(support)) return Reason.NO_SUPPORT;
                 BlockPos floor=BlockPos.ofFloored(x,cell.y()-.01,z);
-                var state=world.getBlockState(floor);
+                var state=block(floor);
                 if(state.isIn(BlockTags.FENCES) || state.isIn(BlockTags.WALLS)) return Reason.BLOCKED;
             }
         return Reason.OK;
     }
     private Step cardinalOrDiagonal(Cell from,int dx,int dz) {
+        return cache==null?edgeLive(from,dx,dz):cache.memo(cache.edges,new Edge(from,dx,dz),()->edgeLive(from,dx,dz));
+    }
+    private Step edgeLive(Cell from,int dx,int dz) {
         Cell guess=new Cell(from.x()+dx,from.z()+dz,from.y());
         Reason bound=bounds(body(guess).expand(0,1,0)); if(bound!=Reason.OK) return Step.denied(guess,bound);
         Reason failure=Reason.NO_SUPPORT;
         // Candidate floor surfaces include partial blocks. Prefer the closest height, then the lower surface.
         var heights=new java.util.TreeSet<Double>(java.util.Comparator.<Double>comparingDouble(y->Math.abs(y-from.y())).thenComparingDouble(y->y));
         for(int y=MathHelper.floor(from.y())-2;y<=MathHelper.floor(from.y())+1;y++) {
-            BlockPos p=new BlockPos(guess.x(),y,guess.z()); var shape=world.getBlockState(p).getCollisionShape(world,p);
+            BlockPos p=new BlockPos(guess.x(),y,guess.z()); var shape=block(p).getCollisionShape(world,p);
             for(Box part:shape.getBoundingBoxes()) {
                 double top=y+part.maxY;
                 if(Math.abs(top-from.y())<=1+EPS) heights.add(top);
@@ -106,7 +177,7 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     private boolean difficult(Cell cell) {
         Box b=body(cell);
         for(BlockPos p:BlockPos.iterate(BlockPos.ofFloored(b.minX,cell.y()-.04,b.minZ),BlockPos.ofFloored(b.maxX,cell.y(),b.maxZ))) {
-            var state=world.getBlockState(p);
+            var state=block(p);
             if(state.isOf(Blocks.SOUL_SAND) || state.isOf(Blocks.HONEY_BLOCK)) return true;
         }
         return false;
@@ -121,6 +192,7 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
         return Reason.OK;
     }
     @Override public Step step(Cell from,int dx,int dz) {
+        if(cache!=null) cache.steps++;
         if(dx < -1 || dx > 1 || dz < -1 || dz > 1 || dx==0 && dz==0) throw new IllegalArgumentException("Not an SRD neighbor");
         Reason source=landing(from); if(source!=Reason.OK) return Step.denied(from,source);
         Step result=cardinalOrDiagonal(from,dx,dz); if(result.reason()!=Reason.OK) return result;

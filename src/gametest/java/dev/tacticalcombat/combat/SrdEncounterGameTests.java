@@ -27,11 +27,14 @@ public class SrdEncounterGameTests implements FabricGameTest {
         final List<LivingEntity> entities=new ArrayList<>();
         final List<Encounter> encounters=new ArrayList<>();
         Fixture(TestContext ctx) throws Exception {
+            this(ctx,ctx.getAbsolutePos(new BlockPos(0,1,0)));
+        }
+        Fixture(TestContext ctx,BlockPos origin) throws Exception {
             this.ctx=ctx; dir=Files.createTempDirectory("cubetable-srd-encounter-");
             field=CharacterService.class.getDeclaredField("repository"); field.setAccessible(true); old=field.get(null);
             repo=new CharacterRepository(dir.resolve("state.json")); field.set(null,repo);
             dm=new CharacterRepository.Principal(UUID.randomUUID(),true); campaign=repo.createCampaign(dm,"Controlled SRD");
-            origin=ctx.getAbsolutePos(new BlockPos(0,1,0));
+            this.origin=origin;
             for(int x=0;x<12;x++) for(int z=0;z<9;z++) {
                 ctx.getWorld().setBlockState(origin.add(x,0,z),Blocks.STONE.getDefaultState());
                 for(int y=1;y<5;y++) ctx.getWorld().setBlockState(origin.add(x,y,z),Blocks.AIR.getDefaultState());

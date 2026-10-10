@@ -89,6 +89,7 @@ loom {
             name 'Combat authority GameTests'
             source sourceSets.gametest
             vmArg '-Dfabric-api.gametest'
+            if (project.hasProperty('srdBenchmark')) vmArg '-Dcubetable.srd.benchmark=true'
             vmArg "-Dfabric-api.gametest.report-file=${layout.buildDirectory.get()}/gametest-results.xml"
             runDir 'build/gametest'
         }
