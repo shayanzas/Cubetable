@@ -90,6 +90,7 @@ public final class SrdNetworking {
                     preview.addProperty("damage",plan.dice()+"d"+plan.sides()+" + "+plan.flatDamage());
                     preview.addProperty("type",plan.weapon().damageType.name()); preview.addProperty("minimum",plan.minimumDamage()); preview.addProperty("maximum",plan.maximumDamage());
                     preview.addProperty("reach",plan.reachFeet()); preview.addProperty("cost","One action, spent even on a miss");
+                    preview.addProperty("cover",intent.geometry().cover().name());
                     extra.add("preview",preview); code="PREVIEW";
                 }
                 case "confirm" -> {

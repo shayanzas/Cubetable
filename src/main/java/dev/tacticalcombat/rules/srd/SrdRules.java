@@ -78,7 +78,8 @@ public final class SrdRules {
     /** Caller provides server-owned RNG and already-validated target AC. Misses do not roll damage. */
     public static AttackResult attack(SrdCharacter character,Weapon weapon,AttackMode mode,Ability ability,
             boolean twoHands,int armorClass,boolean advantage,boolean disadvantage,Dice dice) {
-        range(armorClass,0,100,"target AC");
+        // Approved base AC is at most 100; world targeting may add the SRD's +5 cover bonus.
+        range(armorClass,0,105,"target AC including cover");
         AttackPlan p=plan(character,weapon,mode,ability,twoHands);
         D20 roll=d20(dice,p.attackModifier,rollMode(advantage,disadvantage || p.disadvantage));
         boolean critical=roll.chosen==20;

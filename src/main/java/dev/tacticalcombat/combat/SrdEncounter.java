@@ -40,7 +40,7 @@ public final class SrdEncounter implements Encounter {
     private final SrdRules.Dice dice;
     record Intent(UUID id,UUID requester,long turn,UUID actor,UUID target,SrdEquipment.Weapon weapon,
                   SrdCharacter.Ability ability,boolean twoHands,CharacterRepository.SrdSnapshot attacker,
-                  CharacterRepository.SrdSnapshot defender,Vec3d from,Vec3d to,SrdRules.AttackPlan plan) {}
+                  CharacterRepository.SrdSnapshot defender,Vec3d from,Vec3d to,SrdRules.AttackPlan plan,SrdTargeting.Target geometry) {}
     enum TransactionState { PREPARED, SAVE_FAILED, COMMITTED }
     static final class Transaction {
         final Intent intent; final SrdRules.AttackResult roll; final SrdHealth health;
@@ -186,21 +186,21 @@ public final class SrdEncounter implements Encounter {
     void cancelMove(CharacterRepository.Principal p) {
         thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required"); movement.cancel(p); revision++;
     }
-    private void legalTarget(LivingEntity attacker,LivingEntity target,SrdRules.AttackPlan plan) {
+    private SrdTargeting.Target legalTarget(LivingEntity attacker,LivingEntity target,SrdRules.AttackPlan plan) {
         require(attacker!=target && fresh(attacker).stats().hp()>0 && fresh(target).stats().hp()>0,"Actor or target cannot act at zero HP");
         require(!attacker.isInvisible() && !target.isInvisible(),"Unseen combat is outside this controlled Stage C scope");
         var a=fresh(attacker).stats(); var b=fresh(target).stats();
-        double dx=Math.max(0,Math.abs(attacker.getX()-target.getX())-(SrdTerrain.footprint(a.size())+SrdTerrain.footprint(b.size()))/2d+1);
-        double dz=Math.max(0,Math.abs(attacker.getZ()-target.getZ())-(SrdTerrain.footprint(a.size())+SrdTerrain.footprint(b.size()))/2d+1);
-        require(5*Math.max(Math.max(dx,dz),Math.abs(attacker.getY()-target.getY()))<=plan.reachFeet()+1e-6,"Target beyond logical melee reach");
-        require(CombatGeometry.clearAttack(attacker,target),"Blocked attack; cover adjudication is not automated yet");
+        var geometry=SrdTargeting.inspect(attacker,a,target,b);
+        require(geometry.feet()<=plan.reachFeet()+1e-6,"Target beyond logical melee reach");
+        require(geometry.cover()!=SrdTargeting.Cover.TOTAL,"Target has total cover");
+        return geometry;
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdCharacter.Ability ability,boolean twoHands) {
         thread(); require(state==State.ACTIVE && controls(p,current()) && !actionUsed && !movement.moving(),"No eligible active action");
         var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
         var plan=SrdRules.plan(a.stats(),weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
-        legalTarget(attacker,target,plan);
-        intent=new Intent(UUID.randomUUID(),p.id(),turn(),attacker.getUuid(),targetId,weapon,ability,twoHands,a,b,attacker.getPos(),target.getPos(),plan);
+        var geometry=legalTarget(attacker,target,plan);
+        intent=new Intent(UUID.randomUUID(),p.id(),turn(),attacker.getUuid(),targetId,weapon,ability,twoHands,a,b,attacker.getPos(),target.getPos(),plan,geometry);
         revision++; return intent;
     }
     Transaction confirm(CharacterRepository.Principal p,UUID intentId) {
@@ -210,11 +210,11 @@ public final class SrdEncounter implements Encounter {
         var attacker=actor(selected.actor); var target=actor(selected.target);
         require(selected.attacker.equals(fresh(attacker)) && selected.defender.equals(fresh(target))
                 && selected.from.equals(attacker.getPos()) && selected.to.equals(target.getPos()),"Attack preview changed; preview again");
-        legalTarget(attacker,target,selected.plan);
+        require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target cover changed; preview again");
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
         actionUsed=true; intent=null;
         var roll=SrdRules.attack(selected.attacker.stats(),selected.weapon,SrdRules.AttackMode.MELEE,selected.ability,selected.twoHands,
-                selected.defender.stats().armorClass(),false,false,dice);
+                selected.defender.stats().armorClass()+selected.geometry.cover().ac,false,false,dice);
         var health=SrdHealth.of(selected.defender.stats()).damage(List.of(roll.damage()),selected.defender.stats());
         transaction=new Transaction(selected,roll,health); persistTransaction(); return transaction;
     }

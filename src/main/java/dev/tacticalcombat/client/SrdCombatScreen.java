@@ -87,7 +87,7 @@ public final class SrdCombatScreen extends Screen {
             g.drawText(textRenderer,p.get("weapon").getAsString(),x,72,0xFFFFFFFF,false);
             g.drawText(textRenderer,p.get("attack").getAsString()+"; "+p.get("reach")+" ft reach",x,86,0xFFFFFFFF,false);
             g.drawText(textRenderer,p.get("damage").getAsString()+" "+p.get("type").getAsString()+" ("+p.get("minimum")+"–"+p.get("maximum")+")",x,100,0xFFFFFFFF,false);
-            g.drawText(textRenderer,"One action; miss spends it.",x,114,0xFFFFFFFF,false);
+            g.drawText(textRenderer,"Cover: "+p.get("cover").getAsString()+"; costs one action",x,114,0xFFFFFFFF,false);
         }
         if(page==1 && ClientSrdCombat.grid!=null) drawGrid(g,mx,my);
         super.render(g,mx,my,delta);
