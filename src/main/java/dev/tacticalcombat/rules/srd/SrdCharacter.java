@@ -8,7 +8,8 @@ public record SrdCharacter(Map<Ability,Integer> abilities, int level, int initia
         int hp, int maximumHp, int temporaryHp, int speedFeet, Size size, int reachFeet,
         Armor armor, boolean shield, Set<ArmorKind> armorProficiencies, boolean shieldProficient,
         int acBonus, Set<Weapon> weapons, Set<Weapon> weaponProficiencies, int attackBonus, int damageBonus,
-        Set<DamageType> resistances, Set<DamageType> immunities, Set<DamageType> vulnerabilities) {
+        Set<DamageType> resistances, Set<DamageType> immunities, Set<DamageType> vulnerabilities,
+        int arrows,int bolts,int daggers) {
     public enum Ability { STR, DEX, CON, INT, WIS, CHA }
     public enum Size { TINY, SMALL, MEDIUM, LARGE, HUGE, GARGANTUAN }
     public SrdCharacter {
@@ -24,6 +25,7 @@ public record SrdCharacter(Map<Ability,Integer> abilities, int level, int initia
         armorProficiencies=Set.copyOf(armorProficiencies); weapons=Set.copyOf(weapons);
         weaponProficiencies=Set.copyOf(weaponProficiencies);
         resistances=Set.copyOf(resistances); immunities=Set.copyOf(immunities); vulnerabilities=Set.copyOf(vulnerabilities);
+        range(arrows,0,1024,"arrows"); range(bolts,0,1024,"bolts"); range(daggers,0,1024,"daggers");
         range(armor.ac(Math.floorDiv(abilities.get(Ability.DEX)-10,2))+(shield?2:0)+acBonus,0,100,"derived AC");
     }
     public int modifier(Ability ability) { return SrdRules.abilityModifier(abilities.get(ability)); }

@@ -55,6 +55,7 @@ public final class SrdRules {
         Objects.requireNonNull(weapon); Objects.requireNonNull(mode); Objects.requireNonNull(ability);
         require(c.hp()>0,"Zero-HP SRD actors cannot attack in the early test rules");
         require(weapon==Weapon.UNARMED || c.weapons().contains(weapon),"Weapon is not in approved SRD equipment");
+        require(weapon!=Weapon.DAGGER || c.daggers()>0,"No virtual dagger remains; retrieve or replenish through approved editing");
         require(switch(mode) {
             case MELEE -> !weapon.ranged;
             case RANGED -> weapon.ranged;

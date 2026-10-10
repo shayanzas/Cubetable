@@ -25,7 +25,7 @@ public final class SrdCommands {
     }
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var root=CommandManager.literal("srd");
-        root.then(CommandManager.literal("test").then(CommandManager.argument("actors",StringArgumentType.greedyString()).executes(c->run(c,p->{
+        root.then(CommandManager.literal("test-public-ffa").then(CommandManager.argument("actors",StringArgumentType.greedyString()).executes(c->run(c,p->{
             if(!ServerPlayNetworking.canSend(p,SrdStatePayload.ID)) throw new IllegalArgumentException("Updated SRD v1 client required");
             UUID campaign=CharacterService.selected(p);
             if(!CharacterService.repository().manages(CharacterService.principal(p),campaign)) throw new IllegalArgumentException("Campaign manager required");
@@ -41,7 +41,7 @@ public final class SrdCommands {
             try { encounter.begin(); SrdNetworking.watch(p,encounter); for(var actor:actors) if(actor instanceof ServerPlayerEntity player) SrdNetworking.watch(player,encounter); }
             catch(RuntimeException failure) { CombatManager.endCombat(encounter); throw failure; }
             dev.tacticalcombat.TacticalCombatMod.LOGGER.info("DM {} started controlled SRD encounter {} in campaign {}",p.getUuid(),encounter.id(),campaign);
-            return "Controlled melee test "+encounter.id()+". Open /srdcombat. No reactions, environmental conversion or death saves. DM controls NPCs.";
+            return "Controlled public-position free-for-all "+encounter.id()+". Open /srdcombat. All participants are hostile; locations public even if invisible. No reactions/environment/death saves. DM controls NPCs.";
         }))));
         root.then(CommandManager.literal("watch").then(CommandManager.argument("encounter",StringArgumentType.word()).executes(c->run(c,p->{SrdNetworking.watch(p,encounter(c));return "Open /srdcombat";}))));
         root.then(CommandManager.literal("end").then(CommandManager.argument("encounter",StringArgumentType.word()).executes(c->run(c,p->{encounter(c).stop(CharacterService.principal(p));return "Encounter ended; persistent D&D resources retained";}))));

@@ -12,7 +12,7 @@ import static dev.tacticalcombat.combat.SrdEncounterGameTests.*;
 import static dev.tacticalcombat.combat.SrdLiveGameTests.*;
 
 public class SrdTargetingGameTests implements FabricGameTest {
-    private static void bind(Fixture f,LivingEntity entity,JsonObject sheet) throws Exception {
+    static void bind(Fixture f,LivingEntity entity,JsonObject sheet) throws Exception {
         var id=f.repo.submit(f.dm,f.campaign,RulesProfiles.SRD,sheet.toString()); f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,entity.getUuid(),null);
     }
     private static JsonObject fighter() {

@@ -20,6 +20,7 @@ public final class SrdAuthoring {
         for(Ability a:Ability.values()) fields.add(new Field("abilities."+a.name().toLowerCase(Locale.ROOT),a.name()+" score",List.of(),false));
         for(String key:List.of("level","initiative_bonus","hp_max","hp","temporary_hp","speed_feet","reach_feet","ac_bonus","attack_bonus","damage_bonus"))
             fields.add(new Field(key,key.replace('_',' '),List.of(),false));
+        for(String key:List.of("arrows","bolts","daggers")) fields.add(new Field(key,"Virtual "+key+" remaining",List.of(),false));
         fields.add(new Field("size","Creature size",names(Size.values()),false));
         fields.add(new Field("armor","Armor",names(Armor.values()),false));
         fields.add(new Field("shield","Shield equipped",List.of("false","true"),false));
@@ -55,6 +56,10 @@ public final class SrdAuthoring {
         if(field.key.equals("name")) return sheet.has("text") && sheet.getAsJsonObject("text").has("name")?sheet.getAsJsonObject("text").get("name").getAsString():"";
         JsonObject data=data(sheet); String key=field.key;
         JsonElement result=key.startsWith("abilities.")?data.getAsJsonObject("abilities").get(key.substring(10)):data.get(key);
+        if(result==null && Set.of("arrows","bolts","daggers").contains(key)) {
+            var stats=SrdCharacterCodec.parseSheet(sheet.toString());
+            return Integer.toString(key.equals("arrows")?stats.arrows():key.equals("bolts")?stats.bolts():stats.daggers());
+        }
         if(result==null) return "";
         if(field.multiple) {
             var values=new ArrayList<String>(); for(JsonElement e:result.getAsJsonArray()) values.add(e.getAsString()); return String.join(",",values);

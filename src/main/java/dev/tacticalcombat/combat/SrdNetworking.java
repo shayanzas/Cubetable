@@ -83,14 +83,18 @@ public final class SrdNetworking {
                 case "cancel" -> encounter.cancelMove(p);
                 case "preview" -> {
                     var intent=encounter.preview(p,UUID.fromString(args.get("target").getAsString()),SrdEquipment.Weapon.valueOf(args.get("weapon").getAsString()),
+                            args.has("mode")?SrdRules.AttackMode.valueOf(args.get("mode").getAsString()):SrdRules.AttackMode.MELEE,
                             SrdCharacter.Ability.valueOf(args.get("ability").getAsString()),args.get("twoHands").getAsBoolean());
                     var plan=intent.plan(); var preview=new JsonObject(); preview.addProperty("id",intent.id().toString());
                     preview.addProperty("weapon",plan.weapon().name()); preview.addProperty("modifier",plan.attackModifier());
-                    preview.addProperty("attack",(plan.disadvantage()?"2d20 keep lowest":"1d20")+" + "+plan.attackModifier());
-                    preview.addProperty("damage",plan.dice()+"d"+plan.sides()+" + "+plan.flatDamage());
+                    var mode=SrdRules.rollMode(intent.geometry().advantage(),intent.geometry().disadvantage()||plan.disadvantage());
+                    preview.addProperty("attack",(mode==SrdRules.RollMode.NORMAL?"1d20":mode==SrdRules.RollMode.ADVANTAGE?"2d20 keep highest":"2d20 keep lowest")+" + "+plan.attackModifier());
+                    preview.addProperty("damage",plan.dice()==0?Integer.toString(plan.flatDamage()):plan.dice()+"d"+plan.sides()+" + "+plan.flatDamage());
                     preview.addProperty("type",plan.weapon().damageType.name()); preview.addProperty("minimum",plan.minimumDamage()); preview.addProperty("maximum",plan.maximumDamage());
                     preview.addProperty("reach",plan.reachFeet()); preview.addProperty("cost","One action, spent even on a miss");
                     preview.addProperty("cover",intent.geometry().cover().name());
+                    preview.addProperty("range",plan.mode()==SrdRules.AttackMode.MELEE?plan.reachFeet()+" ft reach":plan.normalRangeFeet()+"/"+plan.longRangeFeet()+" ft range");
+                    preview.addProperty("stock",plan.mode()==SrdRules.AttackMode.MELEE?"No ammunition":plan.mode()==SrdRules.AttackMode.THROWN?"Spends one dagger":"Spends one arrow/bolt; loading limited to this one attack/action");
                     extra.add("preview",preview); code="PREVIEW";
                 }
                 case "confirm" -> {
@@ -100,7 +104,16 @@ public final class SrdNetworking {
                         roll.addProperty("chosen",result.roll.roll().chosen()); roll.addProperty("total",result.roll.roll().total());
                         var faces=new JsonArray(); result.roll.roll().faces().forEach(faces::add); roll.add("faces",faces);
                         var damage=new JsonArray(); result.roll.damageFaces().forEach(damage::add); roll.add("damageFaces",damage);
+                        var mode=SrdRules.rollMode(result.intent.geometry().advantage(),result.intent.geometry().disadvantage()||result.intent.plan().disadvantage());
+                        roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);
                         extra.add("result",roll); code="RESULT";
+                        // Dice are private to the acting player and authorized watching managers.
+                        for(var viewer:player.getServer().getPlayerManager().getPlayerList()) if(viewer!=player
+                                && encounter.id().equals(WATCHING.get(viewer.getUuid()))
+                                && (viewer.getUuid().equals(result.intent.actor()) || CharacterService.repository().manages(CharacterService.principal(viewer),encounter.campaign()))) {
+                            send(viewer,state(encounter,CharacterService.principal(viewer),"RESULT",encounter.reason(),extra));
+                            SENT.put(viewer.getUuid(),encounter.revision());
+                        }
                     } else code="SAVE_FAILED";
                     message=encounter.reason();
                 }

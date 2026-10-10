@@ -9,19 +9,26 @@ public final class SrdGridRenderer {
     private SrdGridRenderer() {}
     public static void render(WorldRenderContext ctx) {
         var grid=ClientSrdCombat.grid; var matrices=ctx.matrixStack();
-        if(grid==null || matrices==null || grid.reachable().isEmpty()) return;
+        var client=net.minecraft.client.MinecraftClient.getInstance();
+        var focus=client.world==null?null:client.world.getEntityById(ClientSrdCombat.focusEntity);
+        if(matrices==null || (grid==null || grid.reachable().isEmpty()) && focus==null) return;
         var camera=ctx.camera().getPos(); matrices.push(); matrices.translate(-camera.x,-camera.y,-camera.z);
         RenderSystem.enableBlend(); RenderSystem.defaultBlendFunc(); RenderSystem.disableCull(); RenderSystem.depthMask(false);
         RenderSystem.enableDepthTest(); RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         var buffer=Tessellator.getInstance().begin(VertexFormat.DrawMode.QUADS,VertexFormats.POSITION_COLOR);
         var matrix=matrices.peek().getPositionMatrix();
-        for(var cell:grid.reachable().keySet()) {
+        if(grid!=null) for(var cell:grid.reachable().keySet()) {
             float x=cell.x(),z=cell.z(),y=(float)cell.y()+.035f;
             int color=cell.equals(grid.start())?0x88FFFFFF:0x66376EF5;
             buffer.vertex(matrix,x+.03f,y,z+.03f).color(color);
             buffer.vertex(matrix,x+.97f,y,z+.03f).color(color);
             buffer.vertex(matrix,x+.97f,y,z+.97f).color(color);
             buffer.vertex(matrix,x+.03f,y,z+.97f).color(color);
+        }
+        if(focus!=null) {
+            float x=(float)focus.getX(),z=(float)focus.getZ(),y=(float)focus.getY()+.04f;
+            buffer.vertex(matrix,x-.48f,y,z-.48f).color(0xAAFF5544);buffer.vertex(matrix,x+.48f,y,z-.48f).color(0xAAFF5544);
+            buffer.vertex(matrix,x+.48f,y,z+.48f).color(0xAAFF5544);buffer.vertex(matrix,x-.48f,y,z+.48f).color(0xAAFF5544);
         }
         BufferRenderer.drawWithGlobalProgram(buffer.end());
         RenderSystem.depthMask(true); RenderSystem.enableCull(); RenderSystem.disableBlend(); matrices.pop();

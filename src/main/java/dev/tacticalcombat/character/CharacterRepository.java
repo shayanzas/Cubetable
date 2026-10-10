@@ -218,6 +218,36 @@ public final class CharacterRepository {
     private void replace(Character c) throws IOException {
         var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings));
     }
+    /** Single atomic store replacement for one accepted weapon action: attacker stock AND target HP.
+     * No gameplay endpoint may supply health/stock directly; the encounter retains both expected snapshots.
+     */
+    public List<SrdSnapshot> commitSrdAction(SrdSnapshot attacker,SrdSnapshot target,dev.tacticalcombat.rules.srd.SrdHealth health,
+            dev.tacticalcombat.rules.srd.SrdEquipment.Weapon weapon,dev.tacticalcombat.rules.srd.SrdRules.AttackMode mode) throws IOException {
+        require(!attacker.actor.equals(target.actor) && attacker.campaign.equals(target.campaign),"Invalid action participants");
+        require(srdSnapshot(attacker.actor,attacker.campaign).equals(attacker) && srdSnapshot(target.actor,target.campaign).equals(target),"Stale SRD action snapshot");
+        require(health.maximum()==target.stats.maximumHp(),"Runtime effects cannot change maximum HP");
+        String stock=null; int remaining=0;
+        if(mode==dev.tacticalcombat.rules.srd.SrdRules.AttackMode.THROWN) {
+            require(weapon==dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.DAGGER,"Unsupported thrown stock"); stock="daggers"; remaining=attacker.stats.daggers()-1;
+        } else if(mode==dev.tacticalcombat.rules.srd.SrdRules.AttackMode.RANGED) {
+            require(weapon.ranged,"Invalid ranged weapon");
+            stock=weapon==dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.LIGHT_CROSSBOW?"bolts":"arrows";
+            remaining=(stock.equals("bolts")?attacker.stats.bolts():attacker.stats.arrows())-1;
+        }
+        require(stock==null || remaining>=0,"No approved ammunition remains");
+        var records=new HashMap<>(state.characters);
+        for(var expected:List.of(attacker,target)) {
+            var c=character(expected.character); var sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
+            var data=dev.tacticalcombat.rules.srd.SrdAuthoring.data(sheet);
+            if(expected==target) { data.addProperty("hp",health.current()); data.addProperty("temporary_hp",health.temporary()); }
+            else if(stock!=null) data.addProperty(stock,remaining);
+            dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
+            require(c.runtimeRevision<Long.MAX_VALUE,"Runtime revision exhausted");
+            records.put(c.id,new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
+        }
+        commit(new State(state.campaigns,records,state.bindings));
+        return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
+    }
     private void commit(State next) throws IOException { String json=encode(next); file.write(json,CharacterRepository::decode); state=next; }
     public static void validateStats(Map<String,Double> stats) {
         require(stats.size()<=64,"Too many stats");

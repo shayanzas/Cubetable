@@ -17,8 +17,10 @@ public final class ClientSrdCombat {
     static String message="No SRD encounter selected";
     static final SrdMovementPreview movement=new SrdMovementPreview();
     static SrdMovement.Preview grid;
+    static int focusEntity=-1;
+    private static final LinkedHashSet<String> presented=new LinkedHashSet<>();
     private ClientSrdCombat() {}
-    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; movement.clear(); }
+    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear(); }
     public static void receive(SrdStatePayload payload) {
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)) clear(); message=payload.message(); return;
@@ -30,13 +32,20 @@ public final class ClientSrdCombat {
             var data=JsonParser.parseString(payload.json()).getAsJsonObject();
             if(data.getAsJsonArray("actors").size()>16) throw new IllegalArgumentException("Too many SRD actors");
             boolean changed=!payload.encounter().equals(encounter) || payload.revision()!=revision;
+            if(!payload.encounter().equals(encounter)) presented.clear();
             if(changed) { preview=null; grid=null; movement.clear(); }
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong(); message=payload.message();
             if(data.has("preview")) preview=data.getAsJsonObject("preview");
             if(data.has("result")) {
                 var result=data.getAsJsonObject("result"); message="Authoritative attack: "+result.get("total")+(result.get("critical").getAsBoolean()?" critical hit":result.get("hit").getAsBoolean()?" hit":" miss");
                 var player=MinecraftClient.getInstance().player;
-                if(player!=null) player.sendMessage(net.minecraft.text.Text.literal(message+"; d20 faces "+result.get("faces")+"; damage dice "+result.get("damageFaces")),false);
+                if(presented.add(result.get("action").getAsString())) {
+                    if(presented.size()>32) presented.remove(presented.iterator().next());
+                    if(player!=null) player.sendMessage(net.minecraft.text.Text.literal(message+"; d20 faces "+result.get("faces")+"; damage dice "+result.get("damageFaces")),false);
+                    var faces=result.getAsJsonArray("faces");
+                    if(faces.size()>=1 && faces.size()<=2) DiceAnimation.enqueue(new DiceRollPayload("SRD server","Accepted attack",dev.tacticalcombat.dice.DiceType.D20,
+                            result.get("total").getAsInt()-result.get("chosen").getAsInt(),result.get("keep").getAsInt(),faces.asList().stream().mapToInt(JsonElement::getAsInt).toArray()));
+                }
             }
             if(data.has("grid")) {
                 var cells=data.getAsJsonArray("grid"); if(cells.size()>SrdMovement.MAX_NODES) throw new IllegalArgumentException("Grid too large");

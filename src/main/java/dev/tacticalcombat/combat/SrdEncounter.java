@@ -123,7 +123,8 @@ public final class SrdEncounter implements Encounter {
         require(actor.getPos().squaredDistanceTo(anchors.get(actor.getUuid()))<1e-6,"Actor displaced; wait for server reconciliation");
         require(!actor.hasVehicle() && !actor.hasPassengers() && !actor.isSwimming() && !actor.isFallFlying(),"Unsupported movement mode");
         if(actor instanceof ServerPlayerEntity player) require(!player.getAbilities().flying
-                && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID),"Updated SRD client and supported walking mode required");
+                && world.getServer().getPlayerManager().getPlayer(player.getUuid())==player
+                && net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID),"Connected SRD client and supported walking mode required");
         var snapshot=CharacterService.srdStats(actor,campaign);
         require(snapshot.equals(snapshots.get(actor.getUuid())),"Character changed; adjudication required");
         return snapshot;
@@ -159,7 +160,7 @@ public final class SrdEncounter implements Encounter {
     private void establishOrder() { order=groups.stream().flatMap(Collection::stream).toList(); turnIndex=0; beginTurn(); }
     private void beginTurn() {
         requests.nextTurn(); actionUsed=false; intent=null; transaction=null;
-        state=State.ACTIVE; reason="Controlled test encounter: melee only; no reactions or death saves";
+        state=State.ACTIVE; reason="Controlled public-position free-for-all; no reactions or death saves";
         try { movement=new SrdMovementTurn(current(),this::frame); }
         catch(IllegalArgumentException denied) { state=State.PAUSED; reason=denied.getMessage(); movement=null; }
         revision++;
@@ -188,17 +189,28 @@ public final class SrdEncounter implements Encounter {
     }
     private SrdTargeting.Target legalTarget(LivingEntity attacker,LivingEntity target,SrdRules.AttackPlan plan) {
         require(attacker!=target && fresh(attacker).stats().hp()>0 && fresh(target).stats().hp()>0,"Actor or target cannot act at zero HP");
-        require(!attacker.isInvisible() && !target.isInvisible(),"Unseen combat is outside this controlled Stage C scope");
         var a=fresh(attacker).stats(); var b=fresh(target).stats();
         var geometry=SrdTargeting.inspect(attacker,a,target,b);
-        require(geometry.feet()<=plan.reachFeet()+1e-6,"Target beyond logical melee reach");
+        boolean ranged=plan.mode()!=SrdRules.AttackMode.MELEE;
+        require(geometry.feet()<=(ranged?plan.longRangeFeet():plan.reachFeet())+1e-6,"Target beyond supported reach/range");
         require(geometry.cover()!=SrdTargeting.Cover.TOTAL,"Target has total cover");
-        return geometry;
+        boolean close=false;
+        // This explicit test encounter is free-for-all: all other admitted actors are hostile.
+        if(ranged && !attacker.isInvisible()) for(var other:actors) if(other!=attacker) {
+            var stats=fresh(other).stats();
+            if(stats.hp()>0 && SrdTargeting.feet(attacker,a,other,stats)<=5
+                    && SrdTargeting.inspect(other,stats,attacker,a).cover()!=SrdTargeting.Cover.TOTAL) { close=true; break; }
+        }
+        if(plan.mode()==SrdRules.AttackMode.RANGED) require((plan.weapon()==SrdEquipment.Weapon.LIGHT_CROSSBOW?a.bolts():a.arrows())>0,"No approved virtual ammunition remains");
+        return new SrdTargeting.Target(geometry.feet(),geometry.cover(),geometry.advantage(),geometry.disadvantage() || ranged && (close || geometry.feet()>plan.normalRangeFeet()));
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdCharacter.Ability ability,boolean twoHands) {
+        return preview(p,targetId,weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
+    }
+    Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands) {
         thread(); require(state==State.ACTIVE && controls(p,current()) && !actionUsed && !movement.moving(),"No eligible active action");
         var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
-        var plan=SrdRules.plan(a.stats(),weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
+        var plan=SrdRules.plan(a.stats(),weapon,mode,ability,twoHands);
         var geometry=legalTarget(attacker,target,plan);
         intent=new Intent(UUID.randomUUID(),p.id(),turn(),attacker.getUuid(),targetId,weapon,ability,twoHands,a,b,attacker.getPos(),target.getPos(),plan,geometry);
         revision++; return intent;
@@ -213,15 +225,16 @@ public final class SrdEncounter implements Encounter {
         require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target cover changed; preview again");
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
         actionUsed=true; intent=null;
-        var roll=SrdRules.attack(selected.attacker.stats(),selected.weapon,SrdRules.AttackMode.MELEE,selected.ability,selected.twoHands,
-                selected.defender.stats().armorClass()+selected.geometry.cover().ac,false,false,dice);
+        var roll=SrdRules.attack(selected.attacker.stats(),selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,
+                selected.defender.stats().armorClass()+selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage(),dice);
         var health=SrdHealth.of(selected.defender.stats()).damage(List.of(roll.damage()),selected.defender.stats());
         transaction=new Transaction(selected,roll,health); persistTransaction(); return transaction;
     }
     private void persistTransaction() {
         try {
-            var saved=CharacterService.repository().commitSrdHealth(transaction.intent.defender,transaction.health);
-            snapshots.put(saved.actor(),saved); transaction.state=TransactionState.COMMITTED;
+            var saved=CharacterService.repository().commitSrdAction(transaction.intent.attacker,transaction.intent.defender,transaction.health,transaction.intent.weapon,transaction.intent.plan.mode());
+            for(var snapshot:saved) snapshots.put(snapshot.actor(),snapshot);
+            movement.reconcileResources(saved.getFirst()); transaction.state=TransactionState.COMMITTED;
             if(transaction.health.zeroHp()) { state=State.PAUSED; reason="Zero D&D HP: encounter paused for DM healing or termination; no death saves"; }
             else { state=State.ACTIVE; reason=transaction.roll.hit()?"Attack committed":"Miss committed; action spent"; }
         } catch(java.io.IOException failure) {
@@ -258,6 +271,10 @@ public final class SrdEncounter implements Encounter {
         for(var actor:actors) {
             if(!actor.isAlive() || actor.isRemoved() || actor.getWorld()!=world || world.getEntity(actor.getUuid())!=actor) {
                 reason="Actor unavailable; controlled encounter ended"; return true;
+            }
+            if(actor instanceof ServerPlayerEntity player && (world.getServer().getPlayerManager().getPlayer(player.getUuid())!=player
+                    || !net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID))) {
+                reason="Client disconnected or lost SRD capability; controlled encounter ended"; return true;
             }
             try {
                 if(!snapshots.get(actor.getUuid()).equals(CharacterService.srdStats(actor,campaign))) {
@@ -311,7 +328,8 @@ public final class SrdEncounter implements Encounter {
             entry.addProperty("controlled",controls(p,actor));
             if(controls(p,actor)) {
                 entry.addProperty("hp",stats.hp()); entry.addProperty("maximumHp",stats.maximumHp()); entry.addProperty("temporaryHp",stats.temporaryHp());
-                var weapons=new JsonArray(); weapons.add("UNARMED"); stats.weapons().stream().filter(w->!w.ranged).forEach(w->weapons.add(w.name())); entry.add("weapons",weapons);
+                entry.addProperty("arrows",stats.arrows());entry.addProperty("bolts",stats.bolts());entry.addProperty("daggers",stats.daggers());
+                var weapons=new JsonArray(); weapons.add("UNARMED"); stats.weapons().forEach(w->weapons.add(w.name())); entry.add("weapons",weapons);
             }
             entries.add(entry);
         }

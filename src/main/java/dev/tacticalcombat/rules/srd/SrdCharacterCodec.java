@@ -13,6 +13,7 @@ public final class SrdCharacterCodec {
     private static final Set<String> FIELDS=Set.of("version","abilities","level","initiative_bonus","hp","hp_max",
             "temporary_hp","speed_feet","size","reach_feet","armor","shield","armor_proficiencies","shield_proficient",
             "ac_bonus","weapons","weapon_proficiencies","attack_bonus","damage_bonus","resistances","immunities","vulnerabilities");
+    private static final Set<String> RESOURCES=Set.of("arrows","bolts","daggers");
     /** Structural validation only, NOT approval or permission. Use the repository adapter for combat inputs. */
     public static SrdCharacter parseSheet(String sheet) {
         CharacterRepository.validateSheet(sheet);
@@ -22,7 +23,8 @@ public final class SrdCharacterCodec {
         JsonArray entries=root.getAsJsonObject("collections").getAsJsonArray("srd_combat");
         require(entries.size()==1 && entries.get(0).isJsonObject(),"srd_combat must contain exactly one versioned object");
         JsonObject o=entries.get(0).getAsJsonObject();
-        require(o.keySet().equals(FIELDS),"Missing or unsupported srd_combat fields; derived values and formulas are not accepted");
+        require(o.keySet().containsAll(FIELDS) && o.keySet().stream().allMatch(key->FIELDS.contains(key)||RESOURCES.contains(key)),
+                "Missing or unsupported srd_combat fields; derived values and formulas are not accepted");
         require(number(o,"version")==VERSION,"Unsupported srd_combat version");
         require(o.get("abilities").isJsonObject(),"SRD abilities must be an object");
         JsonObject scores=o.getAsJsonObject("abilities");
@@ -34,7 +36,9 @@ public final class SrdCharacterCodec {
                 value(Armor.class,o.get("armor")),bool(o,"shield"),values(ArmorKind.class,o,"armor_proficiencies"),bool(o,"shield_proficient"),
                 number(o,"ac_bonus"),values(Weapon.class,o,"weapons"),values(Weapon.class,o,"weapon_proficiencies"),
                 number(o,"attack_bonus"),number(o,"damage_bonus"),values(DamageType.class,o,"resistances"),
-                values(DamageType.class,o,"immunities"),values(DamageType.class,o,"vulnerabilities"));
+                values(DamageType.class,o,"immunities"),values(DamageType.class,o,"vulnerabilities"),
+                o.has("arrows")?number(o,"arrows"):0,o.has("bolts")?number(o,"bolts"):0,
+                o.has("daggers")?number(o,"daggers"):values(Weapon.class,o,"weapons").contains(Weapon.DAGGER)?1:0);
     }
     private static int number(JsonObject o,String key) {
         JsonElement value=o.get(key);

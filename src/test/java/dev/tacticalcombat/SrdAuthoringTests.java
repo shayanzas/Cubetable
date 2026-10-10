@@ -29,6 +29,11 @@ public final class SrdAuthoringTests {
         check(SrdCharacterCodec.parseSheet(edited.toString()).armorClass()==18,"typed armor/shield choices feed validated AC");
         check(SrdAuthoring.value(edited,field("weapons")).equals("dagger,longsword"),"multi-choice form serializes without hand JSON");
         check(template.equals(original),"form edits do not mutate original sheet");
+        check(stats.arrows()==0 && stats.bolts()==0 && stats.daggers()==0,"legacy neutral sheet grants no implicit ammunition");
+        var quiver=SrdAuthoring.change(edited,field("arrows"),"7");
+        check(SrdCharacterCodec.parseSheet(quiver.toString()).arrows()==7 && SrdCharacterCodec.parseSheet(edited.toString()).daggers()==1,"typed virtual stock and one existing approved dagger remain distinct");
+        rejects(()->SrdCharacterCodec.parseSheet(SrdAuthoring.change(template,field("bolts"),"-1").toString()),"negative stock cannot mint ammunition");
+        rejects(()->SrdCharacterCodec.parseSheet(SrdAuthoring.change(template,field("arrows"),"1025").toString()),"virtual stock upper bound");
         rejects(()->SrdAuthoring.change(template,field("hp"),"d20+1"),"form formulas rejected");
         rejects(()->SrdAuthoring.change(template,field("hp"),"1.5"),"fractional HP rejected");
         rejects(()->SrdAuthoring.change(template,field("armor"),"diamond"),"unknown equipment rejected");

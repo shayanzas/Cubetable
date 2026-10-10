@@ -25,7 +25,7 @@ public final class SrdMovementTurn {
     private final net.minecraft.world.World initialWorld;
     private final Supplier<Frame> context;
     private final Frame initial;
-    private final CharacterRepository.SrdSnapshot snapshot;
+    private CharacterRepository.SrdSnapshot snapshot;
     private final SrdTerrain terrain;
     private final TurnRequests requests;
     private final int budget;
@@ -55,6 +55,15 @@ public final class SrdMovementTurn {
     public int remainingFeet() { return budget-spent; }
     public boolean moving() { return !route.isEmpty(); }
     public boolean closed() { return closed; }
+    /** Called only after the owning encounter atomically commits this actor's resource changes. Never resets spent feet. */
+    void reconcileResources(CharacterRepository.SrdSnapshot latest) {
+        requireServerThread();
+        if(!latest.equals(CharacterService.srdStats(actor,initial.campaign)) || !latest.actor().equals(snapshot.actor())
+                || !latest.character().equals(snapshot.character()) || latest.revision()!=snapshot.revision()
+                || latest.stats().walkingSpeedFeet()!=snapshot.stats().walkingSpeedFeet() || latest.stats().size()!=snapshot.stats().size())
+            throw new IllegalArgumentException("Cannot reconcile a changed movement build");
+        snapshot=latest;
+    }
     private void requireServerThread() {
         if(actor.getServer()==null || !actor.getServer().isOnThread())
             throw new IllegalStateException("SRD movement must run on the authoritative server thread");

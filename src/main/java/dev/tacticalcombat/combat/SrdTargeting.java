@@ -11,7 +11,7 @@ import net.minecraft.world.RaycastContext;
 /** Server geometry mapping, not a claim that the SRD defines voxel sampling. */
 public final class SrdTargeting {
     public enum Cover { NONE(0), HALF(2), THREE_QUARTERS(5), TOTAL(0); public final int ac; Cover(int ac) {this.ac=ac;} }
-    public record Target(double feet,Cover cover) {}
+    public record Target(double feet,Cover cover,boolean advantage,boolean disadvantage) {}
     private SrdTargeting() {}
     public static double feet(LivingEntity a,SrdCharacter ca,LivingEntity b,SrdCharacter cb) {
         double widths=(SrdTerrain.footprint(ca.size())+SrdTerrain.footprint(cb.size()))/2d;
@@ -46,6 +46,7 @@ public final class SrdTargeting {
             else if(occupants.stream().anyMatch(e->e.getBoundingBox().raycast(a.getEyePos(),end).isPresent())) creatures++;
         }
         Cover cover=blocked==16?Cover.TOTAL:blocked>=12?Cover.THREE_QUARTERS:blocked>=8 || creatures>=8?Cover.HALF:Cover.NONE;
-        return new Target(distance,cover);
+        // Controlled encounters disclose participant locations; invisibility changes sight, not that disclosure.
+        return new Target(distance,cover,a.isInvisible(),b.isInvisible());
     }
 }

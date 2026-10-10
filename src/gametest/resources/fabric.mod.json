@@ -15,7 +15,8 @@
       "dev.tacticalcombat.combat.SrdCharacterLifecycleGameTests",
       "dev.tacticalcombat.combat.SrdEncounterGameTests",
       "dev.tacticalcombat.combat.SrdLiveGameTests",
-      "dev.tacticalcombat.combat.SrdTargetingGameTests"
+      "dev.tacticalcombat.combat.SrdTargetingGameTests",
+      "dev.tacticalcombat.combat.SrdRangedGameTests"
     ]
   },
   "depends": {
