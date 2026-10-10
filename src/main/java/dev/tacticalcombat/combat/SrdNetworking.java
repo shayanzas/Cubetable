@@ -13,6 +13,8 @@ import java.util.*;
 /** Authenticated server-thread gateway. Discovery is explicit; snapshots are individually permission-filtered. */
 public final class SrdNetworking {
     private static final RateLimit LIMIT=new RateLimit(12,20);
+    // Reachable-grid searches are substantially more expensive than small state replies.
+    private static final RateLimit GRID_LIMIT=new RateLimit(2,20);
     private static final Map<UUID,UUID> WATCHING=new HashMap<>();
     private static final Map<UUID,Long> SENT=new HashMap<>();
     private SrdNetworking() {}
@@ -35,8 +37,8 @@ public final class SrdNetworking {
                 catch(IllegalArgumentException denied) { WATCHING.remove(player.getUuid()); SENT.remove(player.getUuid()); send(player,new SrdStatePayload(watching,Long.MAX_VALUE,"ENDED","Encounter permission no longer available","{}")); }
             }
         });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{LIMIT.clear();WATCHING.clear();SENT.clear();});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ LIMIT.forget(handler.player.getUuid()); GRID_LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{LIMIT.clear();GRID_LIMIT.clear();WATCHING.clear();SENT.clear();});
     }
     private static void send(ServerPlayerEntity p,SrdStatePayload payload) { if(ServerPlayNetworking.canSend(p,SrdStatePayload.ID)) ServerPlayNetworking.send(p,payload); }
     static SrdEncounter find(UUID id) { return CombatManager.encounters().stream().filter(e->e.id().equals(id) && e instanceof SrdEncounter).map(e->(SrdEncounter)e).findFirst().orElse(null); }
@@ -69,6 +71,7 @@ public final class SrdNetworking {
                     var ids=new ArrayList<UUID>(); choices.forEach(e->ids.add(UUID.fromString(e.getAsString()))); encounter.tie(p,ids);
                 }
                 case "grid" -> {
+                    if(!GRID_LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime())) throw new IllegalArgumentException("Grid rate limit: wait a second before refreshing");
                     var grid=encounter.grid(p); var cells=new JsonArray();
                     for(var n:grid.reachable().values()) {
                         var cell=new JsonArray(); cell.add(n.cell().x()); cell.add(n.cell().z()); cell.add(n.cell().y()); cell.add(n.costFeet());

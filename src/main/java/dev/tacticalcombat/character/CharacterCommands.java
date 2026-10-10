@@ -75,7 +75,7 @@ public final class CharacterCommands {
             .then(CommandManager.literal("rules").then(CommandManager.argument("profile",StringArgumentType.word()).executes(c->run(c,()->{
                 UUID campaign=CharacterService.selected(player(c)); var current=repo().campaign(campaign);
                 String profile=StringArgumentType.getString(c,"profile"); repo().profile(who(c),campaign,current.revision(),profile);
-                return "Campaign default: "+profile+(RulesProfiles.get(profile).worldCombat()?"":" (world combat disabled; SRD automation is not implemented)");
+                return "Campaign default: "+profile+(RulesProfiles.get(profile).worldCombat()?"":" (automatic world combat disabled; controlled SRD tests use /tbc srd test-public-ffa)");
             })))));
         root.then(CommandManager.literal("character")
             .then(CommandManager.literal("list").executes(c->run(c,()->{

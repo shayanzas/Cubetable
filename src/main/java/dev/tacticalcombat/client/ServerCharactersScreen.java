@@ -200,7 +200,7 @@ public final class ServerCharactersScreen extends Screen {
                 }
             }
             if(height>260) line(g,state.has("srd")?"SRD: "+state.getAsJsonObject("srd").get("reason").getAsString():"Profile: "+state.get("profile").getAsString()+" / owner lock: "+state.getAsJsonObject("policy").get("ownerLocked"),73,0xFFCCCCCC);
-            if(height>280 && state.has("srd")) line(g,state.getAsJsonObject("srd").get("worldCombatEnabled").getAsBoolean()?"SRD encounter engine enabled":"SRD encounter engine disabled — character readiness is not encounter readiness",85,0xFFFFCC66);
+            if(height>280 && state.has("srd")) line(g,state.getAsJsonObject("srd").get("worldCombatEnabled").getAsBoolean()?"SRD world combat enabled":"SRD automatic world combat disabled; controlled tests require DM admission",85,0xFFFFCC66);
             line(g,"Field (< / > to browse) / working draft value",height-139,0xFFBBBBBB);
         } else line(g,(campaign==null?"No campaign selected": "Selected campaign: "+campaign.get("name").getAsString())+" / page "+(page+1),24,0xFFCCCCCC);
         int messageY=view.equals("detail")?height-164:height-98;
