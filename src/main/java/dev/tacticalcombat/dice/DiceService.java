@@ -35,8 +35,8 @@ public final class DiceService {
 		DiceRollPayload payload = new DiceRollPayload(player.getGameProfile().getName(), label, type, modifier, keep, results);
 		for (ServerPlayerEntity p : player.getServer().getPlayerManager().getPlayerList()) {
 			if (p.getWorld() == player.getWorld()
-                    && (p == player || (dev.tacticalcombat.combat.CombatManager.get(player) != null
-                        ? dev.tacticalcombat.combat.CombatManager.get(p) == dev.tacticalcombat.combat.CombatManager.get(player)
+                    && (p == player || (dev.tacticalcombat.combat.CombatManager.encounter(player) != null
+                        ? dev.tacticalcombat.combat.CombatManager.encounter(p) == dev.tacticalcombat.combat.CombatManager.encounter(player)
                         : p.squaredDistanceTo(player) <= 64 * 64))
                     && ServerPlayNetworking.canSend(p, DiceRollPayload.ID)) ServerPlayNetworking.send(p, payload);
         }

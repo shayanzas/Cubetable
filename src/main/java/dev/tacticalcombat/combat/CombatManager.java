@@ -23,24 +23,31 @@ import java.util.Set;
 
 /** Keeps track of every running {@link Combat}, starts new ones and exposes the rule checks used by the event hooks. */
 public final class CombatManager {
-	private static final List<Combat> COMBATS = new ArrayList<>();
-	private static final dev.tacticalcombat.core.EncounterIndex<Combat> OWNERS = new dev.tacticalcombat.core.EncounterIndex<>();
+	private static final List<Encounter> COMBATS = new ArrayList<>();
+	private static final dev.tacticalcombat.core.EncounterIndex<Encounter> OWNERS = new dev.tacticalcombat.core.EncounterIndex<>();
 
 	private CombatManager() {}
 
 	// ---------------------------------------------------------------- lookup
 
+	/** Tactical-only action adapter lookup. Never use this to test absence of encounter ownership. */
 	public static Combat get(Entity entity) {
-        return OWNERS.get(entity.getUuid());
+        return encounter(entity) instanceof Combat tactical ? tactical : null;
 	}
 
-    static boolean claim(Entity actor, Combat encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
-    static void release(Entity actor, Combat encounter) { OWNERS.release(actor.getUuid(), encounter); }
+    public static Encounter encounter(Entity entity) { return entity == null ? null : OWNERS.get(entity.getUuid()); }
+    public static boolean blocksVanilla(Entity entity) {
+        Encounter owner=encounter(entity);
+        return owner!=null && !(owner instanceof Combat);
+    }
+    static boolean claim(Entity actor, Encounter encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
+    static void release(Entity actor, Encounter encounter) { OWNERS.release(actor.getUuid(), encounter); }
+    static void schedule(Encounter encounter) { if(!COMBATS.contains(encounter)) COMBATS.add(encounter); }
 
 	public static boolean isInCombat(java.util.UUID actor) { return OWNERS.get(actor) != null; }
 
 	public static boolean isInCombat(Entity entity) {
-		return get(entity) != null;
+		return encounter(entity) != null;
 	}
 
 	public static boolean isEligibleEnemy(MobEntity m) {
@@ -58,9 +65,9 @@ public final class CombatManager {
 	public static void tick(MinecraftServer server) {
         if(server.getTicks()%20==0) dev.tacticalcombat.character.CharacterService.capture(server);
 		CombatActions.tick(server.getOverworld().getTime());
-		Iterator<Combat> it = COMBATS.iterator();
+		Iterator<Encounter> it = COMBATS.iterator();
 		while (it.hasNext()) {
-			Combat combat = it.next();
+			Encounter combat = it.next();
 			if (combat.tick()) {
 				combat.end();
 				it.remove();
@@ -139,13 +146,13 @@ public final class CombatManager {
 		return combat;
 	}
 
-	public static void endCombat(Combat combat) {
+	public static void endCombat(Encounter combat) {
 		combat.end();
 		COMBATS.remove(combat);
 	}
 
 	public static void clear() {
-		for (Combat c : COMBATS) c.end();
+		for (Encounter c : COMBATS) c.end();
 		COMBATS.clear();
         OWNERS.clear();
         CombatActions.clear();
@@ -161,8 +168,7 @@ public final class CombatManager {
 
 	/** World interactions require explicit action adapters while enrolled in combat. */
 	public static boolean canActNow(PlayerEntity player) {
-		Combat combat = get(player);
-		return combat == null; // world interactions during combat need explicit accepted-action adapters
+		return !isInCombat(player); // world interactions during combat need explicit accepted-action adapters
 	}
 
 	public static void notifyNotYourTurn(PlayerEntity player) {

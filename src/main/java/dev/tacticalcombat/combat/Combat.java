@@ -40,7 +40,7 @@ import java.util.Set;
  * by square (the server computes the reachable squares and slides the combatant along the chosen path); mobs
  * that can not use the grid (flying, swimming) still walk freely but are limited to a movement budget.
  */
-public final class Combat {
+public final class Combat implements Encounter {
 	/** Teleports that must not touch the client's camera / look direction. */
 	private static final Set<PositionFlag> KEEP_LOOK = EnumSet.of(PositionFlag.X_ROT, PositionFlag.Y_ROT);
 

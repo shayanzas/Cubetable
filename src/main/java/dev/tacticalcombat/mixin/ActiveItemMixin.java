@@ -20,6 +20,7 @@ public abstract class ActiveItemMixin {
         if (actor.getWorld().isClient) { original.call(); return; }
         if (actor instanceof ServerPlayerEntity) CombatInteractions.finish(actor, () -> original.call());
         else {
+            if (CombatManager.blocksVanilla(actor)) { actor.clearActiveItem(); return; }
             var combat = CombatManager.get(actor);
             if (combat == null || combat.isTurnOf(actor)) original.call();
             else actor.clearActiveItem();

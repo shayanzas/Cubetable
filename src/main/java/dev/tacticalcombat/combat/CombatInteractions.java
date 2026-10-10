@@ -25,6 +25,7 @@ public final class CombatInteractions {
     private CombatInteractions() {}
 
     public static boolean equipmentAllowed(LivingEntity actor) {
+        if (CombatManager.blocksVanilla(actor)) return false;
         Combat combat = CombatManager.get(actor);
         return combat == null || combat.isTurnOf(actor) && !combat.get(actor).moving() && !actor.isUsingItem();
     }
@@ -33,6 +34,7 @@ public final class CombatInteractions {
         return ActionResult.FAIL;
     }
     public static ActionResult item(ServerPlayerEntity player, ItemStack stack, Supplier<ActionResult> original) {
+        if (CombatManager.blocksVanilla(player)) return denied(player);
         Combat combat = CombatManager.get(player);
         if (combat == null) return original.get();
         if (!Registries.ITEM.getId(stack.getItem()).getNamespace().equals("minecraft")) return denied(player);
@@ -55,6 +57,7 @@ public final class CombatInteractions {
         return result[0];
     }
     public static void finish(LivingEntity actor, Runnable original) {
+        if (CombatManager.blocksVanilla(actor)) { cancel(actor); return; }
         Combat combat = CombatManager.get(actor);
         if (combat == null) { original.run(); return; }
         Use use = USES.remove(actor.getUuid());
@@ -71,6 +74,7 @@ public final class CombatInteractions {
     public static void clear() { USES.clear(); }
 
     public static ActionResult block(ServerPlayerEntity player, ItemStack stack, BlockHitResult hit, Supplier<ActionResult> original) {
+        if (CombatManager.blocksVanilla(player)) return denied(player);
         if (CombatManager.get(player) == null) return original.get();
         Block block = player.getWorld().getBlockState(hit.getBlockPos()).getBlock();
         if (!stack.isEmpty() || !Registries.BLOCK.getId(block).getNamespace().equals("minecraft")) return denied(player);
@@ -82,6 +86,7 @@ public final class CombatInteractions {
         return denied(player);
     }
     public static ActionResult entity(ServerPlayerEntity player, Entity target, Supplier<ActionResult> original) {
+        if (CombatManager.blocksVanilla(player) || CombatManager.blocksVanilla(target)) return denied(player);
         Combat combat = CombatManager.get(player), other = CombatManager.get(target);
         if (combat == null && other == null) return original.get();
         if (other != null && other != combat) return denied(player);

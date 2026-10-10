@@ -16,6 +16,7 @@ public abstract class BlazeVolleyMixin {
     @Unique private java.util.UUID tacticalcombat$encounter;
     @WrapMethod(method="tick")
     private void tacticalcombat$volley(Operation<Void> original) {
+        if (CombatManager.blocksVanilla(blaze)) { tacticalcombat$permit=null; return; }
         Combat combat=CombatManager.get(blaze);
         if (combat==null) { tacticalcombat$permit=null; original.call(); return; }
         if (!combat.isTurnOf(blaze)) return;

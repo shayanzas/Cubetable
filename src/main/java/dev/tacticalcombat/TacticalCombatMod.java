@@ -197,7 +197,7 @@ public class TacticalCombatMod implements ModInitializer {
 							}
 							Combat combat = CombatManager.get(player);
                             // Server command is a fresh current-turn intent and also recovers a saturated request budget.
-                            if (combat.isTurnOf(player)) combat.endTurn();
+                            if (combat != null && combat.isTurnOf(player)) combat.endTurn();
 							return 1;
 						})));
 	}

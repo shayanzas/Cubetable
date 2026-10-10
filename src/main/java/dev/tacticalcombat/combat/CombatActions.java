@@ -21,6 +21,7 @@ public final class CombatActions {
     private CombatActions() {}
 
     public static boolean melee(LivingEntity actor, Entity target, Supplier<Boolean> effect) {
+        if (CombatManager.blocksVanilla(actor) || CombatManager.blocksVanilla(target)) return false;
         Combat combat = CombatManager.get(actor);
         if (combat == null) return CombatManager.get(target) == null && effect.get();
         if (beamComponent && resolving != null && resolving.actor.equals(actor.getUuid())) {
@@ -32,6 +33,7 @@ public final class CombatActions {
     }
 
     public static boolean resolve(LivingEntity actor, Supplier<Boolean> effect) {
+        if (CombatManager.blocksVanilla(actor)) return false;
         Combat combat = CombatManager.get(actor);
         if (combat == null) return effect.get();
         if (resolving != null) return false; // no recursive additional action from a damage callback
@@ -51,11 +53,13 @@ public final class CombatActions {
 
     /** One vanilla firing operation, including multishot, shares its accepted action. */
     public static boolean volley(LivingEntity actor, Supplier<Boolean> effect) {
+        if (CombatManager.blocksVanilla(actor)) return false;
         if (resolving != null && resolving.actor.equals(actor.getUuid())) return effect.get();
         return resolve(actor, effect);
     }
 
     public static boolean beam(LivingEntity actor, LivingEntity target, Supplier<Boolean> effect) {
+        if (CombatManager.blocksVanilla(actor) || CombatManager.blocksVanilla(target)) return false;
         Combat combat = CombatManager.get(actor);
         if (target == null) return false;
         if (combat == null) return CombatManager.get(target) == null && effect.get();
@@ -70,6 +74,7 @@ public final class CombatActions {
     /** Called on entity load, after the projectile owner is set and before its first tick. */
     public static void projectileLoaded(Entity entity, long now) {
         if (!(entity instanceof ProjectileEntity projectile) || !(projectile.getOwner() instanceof LivingEntity actor)) return;
+        if (CombatManager.blocksVanilla(actor)) { entity.discard(); return; }
         Combat combat = CombatManager.get(actor);
         if (combat == null) return;
         // A flight that was already authorized must not spend a second action on chunk reload.
@@ -88,6 +93,7 @@ public final class CombatActions {
 
     /** Splash effects need the same boundary checks as damage, including instant healing and conditions. */
     public static boolean canProjectileAffect(ProjectileEntity projectile, LivingEntity victim) {
+        if (CombatManager.blocksVanilla(victim) || CombatManager.blocksVanilla(projectile.getOwner())) return false;
         Flight flight = FLIGHTS.get(projectile.getUuid());
         Combat victimCombat = CombatManager.get(victim);
         if (flight != null) return victimCombat != null && victimCombat.id().equals(flight.permit.encounter);
@@ -113,10 +119,13 @@ public final class CombatActions {
             if (!IMPACTS.add(projectile.getUuid())) return;
             inScope(flight.permit, flight.effect, () -> { original.run(); return true; });
         } else if (!projectile.getCommandTags().contains("tacticalcombat:accepted_projectile")
-                && (projectile.getOwner() == null || CombatManager.get(projectile.getOwner()) == null)) original.run();
+                && (projectile.getOwner() == null || !CombatManager.isInCombat(projectile.getOwner()))) original.run();
     }
 
     public static boolean allowDamage(LivingEntity victim, DamageSource source) {
+        // SRD HP never flows through vanilla damage, including environment, retaliation and old flights.
+        if (CombatManager.blocksVanilla(victim) || CombatManager.blocksVanilla(source.getAttacker())
+                || CombatManager.blocksVanilla(source.getSource())) return false;
         Combat victimCombat = CombatManager.get(victim);
         Entity attacker = source.getAttacker();
         Combat attackerCombat = attacker == null ? null : CombatManager.get(attacker);

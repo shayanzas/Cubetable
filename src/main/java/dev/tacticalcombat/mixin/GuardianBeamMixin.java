@@ -15,6 +15,7 @@ public abstract class GuardianBeamMixin {
     @Shadow private int beamTicks;
     @WrapMethod(method = "tick")
     private void tacticalcombat$beam(Operation<Void> original) {
+        if (CombatManager.blocksVanilla(guardian)) return;
         var combat = CombatManager.get(guardian);
         if (combat != null && (!combat.isTurnOf(guardian) || combat.get(guardian).actionUsed)) return;
         if (guardian.getTarget() == null) return;
