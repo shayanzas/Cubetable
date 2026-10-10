@@ -1,5 +1,7 @@
 # Phase 3 status — Stage C authoring and resource prerequisites
 
+> Historical prerequisite checkpoint. Continued implementation and current verification are recorded in [Phase 3 live SRD checkpoint](phase3-live-checkpoint.md). The “not implemented” statements below describe this earlier commit, not the current branch.
+
 Report date: October 9, 2026 (America/New_York).
 
 **Readiness: Phase 3 partially implemented; additional development required.** This is a tested partial Stage C checkpoint, not a playable SRD encounter release. Stage C's live encounter verification gate has not passed, so Stage D integration was not started. Stage E regression checks were run for the changes actually made, not claimed as end-to-end SRD combat acceptance.
