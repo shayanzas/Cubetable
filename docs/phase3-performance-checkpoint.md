@@ -292,3 +292,68 @@ A candidate byte-array write change coincided with worse large-store results (53
 The required final benchmark gate passed **917 assertions and 85 GameTests**, zero failed/skipped tests. Added checks cover independent refresh JSON, multibyte text round-trip, byte-count file bounds, large-store durable ammunition and full restart equality. Existing interruption, corrupt/missing primary, backup recovery, both-invalid, schema and failed-write tests remain passing.
 
 Recommend a separately designed transactional storage/receipt architecture before treating near-cap stores as latency-safe. That requires preserving backup/recovery, migrations, accepted-action atomicity and eventually Phase 7 encounter receipts. This performance pass does not introduce delayed writes, partial validation, crash-time encounter restoration or resource rollback shortcuts. Server shutdown releases the repository and its bounded typed-input cache; cached inputs retain no world/entity references. Real heap/GC stability over prolonged multiplayer sessions remains Not Verified.
+
+## Stabilization checkpoint D: client presentation and final assessment
+
+Dates in the checkpoint B/C headings use the execution host's October 11 UTC date (October 10 evening in America/New_York). The original published Phase 3 branch remains `21e13a4eb78ae50bb94c4ef2215ce0fc7d46bec3`: [GitHub acceptance candidate](https://github.com/shayanzas/Cubetable/tree/dev/phase3-srd-combat). A fresh `git ls-remote` confirmed that SHA and found no remote performance branch. Optimization work remains local on `dev/phase3-grid-performance`.
+
+`SrdMovementPreview` now computes the immutable local map window once per received grid and retains at most 64 selected-path descriptions/highlight sets. Applying another preview or clearing the encounter releases them. The screen consumes these cached results without changing map bounds, depth, styles or movement authority. Request correlation keeps one expected grid identity: obsolete grid replies cannot replace a newer selection. Authoritative state still applies under the existing revision checks. Synchronous, pending and cancelled replies carry additive request identities; legacy v1 replies without them retain legacy behavior. Switching watched encounters cancels pending work for the previous selection.
+
+The headless presentation benchmark compares the previous filter/sort/path-list logic with the cached logic against the same 4,096-node preview, checking equal highlighted results. Three warm-ups precede 20 samples of 100 frames each. In the first successful D run, old logic measured **7.991 / 8.968 / 8.972 ms** (median/p95/max per 100 frames), versus **0.613 / 0.736 / 0.886 ms** cached; allocation fell from **946,400 to 3,200 bytes** per sample. This is a 92.3% reduction in this measured CPU operation, **not a GPU or FPS result**. World overlay quads, camera/fading, dice animations and other renderer behavior remain unchanged. No graphical client is available here.
+
+### System-wide result and scope
+
+| System | Measured before → after | Interpretation |
+|---|---|---|
+| Extreme movement-grid work | 300-foot synchronous 98.516 ms median → incremental total 127.945 ms, distributed across ticks | Lower individual blocking work, more total work/allocation and delayed completion; see A and final paced results. Not a total-search speedup. |
+| Attack preview, 16 actors | 126 → 27 µs median | 78.6% lower measured CPU time in B's paired fixture. |
+| Idle encounter, 16 actors | 479 → 25 µs median | 94.8% lower, with authorization preserved. |
+| Eight independent encounter ticks | 2,088 → 75 µs median | 96.4% lower combined measured work. |
+| Tactical unchanged state sends | 11 → 2 captured payloads | 81.8% fewer in the finite startup/heartbeat fixture; changed state still sends. |
+| Character refresh, 16 actors | 72 → 29 µs median | 59.7% lower in C's paired fixture; independent mutable response trees retained. |
+| Durable store action, 1,024 records | 47.962 → 47.280 ms median | No material storage improvement; 72.235 ms observed maximum in C. |
+| Client map CPU logic | 7.991 → 0.613 ms per 100 frames | Bounded immutable presentation reuse; real rendering Not Verified. |
+
+These rows refer to the specific paired runs documented above, not a single uniform end-to-end workload. Raw later runs are also retained; filesystem/GC scheduling makes durable writes particularly variable. The benchmark's tight synchronous loops intentionally occupy the server thread: their “Can't keep up” messages are not measurements of ordinary gameplay tick stalls.
+
+### Requirement classification and remaining risks
+
+- **Implemented:** bounded server-thread high-speed search scheduling; deterministic weighted-search equivalence; terrain/occupancy/turn/permission invalidation; request supersession and bounded capacity; typed immutable character-input reuse; Tactical/SRD redundant-delivery reduction; bounded client map/path reuse; local implementation commits and regression/performance fixtures. Existing dependencies and game-mode identities are unchanged.
+- **Partially Implemented:** whole-server tick-budget acceptance. Above-60-foot jobs have cooperative budgets, not hard preemption; a slow world query, final serialization or GC can overrun. Simultaneous ordinary <=60-foot requests still run synchronously under per-player rate limits. Near-limit durable character stores can exceed a 50 ms tick. Large searches allocate substantial short-lived memory despite bounded retained caches.
+- **Not Verified:** actual GPU/frame-time behavior, remote socket RTT, real two-client gameplay, prolonged heap retention and all earlier Phase 1–3 graphical acceptance gates. Embedded players and server callback tests do not close those gates.
+- **Deferred:** storage-engine redesign, full persistent encounter recovery (Phase 7), worker-thread world snapshots and Phase 4 mechanics. No unsafe world access was moved off-thread. Unusual modded collision changes without block mutations remain incompletely characterized; execution always revalidates live terrain.
+
+F15 is **Partially Implemented**: measured redundant traffic and repeated combat parsing were reduced, but full multi-client/load acceptance and remaining tick-budget risks remain open. F14's prior gameplay scope/status is unchanged by these optimizations. This work does not claim complete SRD automation or alter Tactical movement, manual packs, character approval or durable action authority.
+
+The branch is suitable for **controlled two-client testing**, with high-speed latency and large-store limits explicitly included. Broader deployment and merge consideration should wait for that acceptance and a decision on large-store transaction costs/aggregate ordinary-request load. A Phase 3 stabilization follow-up remains appropriate for those risks. Phase 4 planning can follow user acceptance; no Phase 4 implementation is included. Use the appended performance acceptance section in `phase3-multiplayer-checklist.md` and retain the original candidate's independent test record.
+
+### Final server-callback measurement and verification
+
+A separate GameTest batch now submits two 300-foot grid requests through the real handler and lets the registered server tick callback drain both jobs. It uses four persistent NPCs, two embedded authorized controllers and an 80×80 flat arena. The entire search capture area is loaded/forced before measurement and released afterward. Three warm-up pairs precede 12 measured pairs. The scheduler timer includes job validation, search work, final grid/state construction and the send invocation; packet timestamps measure handler-to-send elapsed time. The GameTest server advances ticks faster than a normal 20-TPS server, so these elapsed times **are not normal-server completion latency or socket RTT**.
+
+| Final measured quantity | Median | p95 | Maximum |
+|---|---:|---:|---:|
+| Ticks until both jobs finish, across 12 pairs | 31 | 33 | 33 |
+| First controller handler-to-send ms | 272.095 | 288.190 | 288.190 |
+| Second controller handler-to-send ms | 277.332 | 295.671 | 295.671 |
+| Per-pair median scheduler work ms, distribution across pairs | 8.0035 | 8.004 | 8.004 |
+| Per-pair maximum scheduler work ms, distribution across pairs | 11.543 | 22.285 | 22.285 |
+
+The median of per-pair scheduler p95 values was 8.068 ms; the largest such p95 was 11.079 ms. These are explicitly distributions of per-pair summaries, not pooled tick percentiles. No scheduler invocation above 50 ms occurred in the measured pairs; the 22.285 ms maximum demonstrates that the cooperative 8 ms deadline is not a hard ceiling. Faster completion in accelerated GameTests must not be compared directly with A's modeled 20-TPS latency. All pairs completed, released pending jobs and preserved independent reply identities.
+
+The final repeated client-logic comparison measured 7.417 / 8.394 / 8.475 ms for old logic versus 0.636 / 0.727 / 0.742 ms cached, per 100 frames (20 samples after warm-up). Allocation remained 946,400 versus 3,200 bytes. The final 1,024-record durable action measured 46.366 / 57.652 / 58.872 ms; the earlier 72.235 ms maximum and large allocation remain relevant, not discarded as outliers.
+
+Final command: `/workspace/cubetable-setup/gradle.sh build runGametest -PsrdBenchmark` — **BUILD SUCCESSFUL**, compilation succeeded, **927 assertions**, **87 required Minecraft GameTests**, **0 failed / 0 skipped**. Assertion groups: foundation 320, repository 39, synchronization 59, persistence interruption 8, SRD core 319, movement 91, authoring/resources 80, resource fault 11. All prior tests remain enabled. The original published checkpoint's 897/72 counts and initial performance branch's 897/77 counts are historical baselines, not the final count.
+
+Intermediate validation failures are not hidden: the newly introduced paced fixture first lost remote NPCs to vanilla despawning, then correctly cancelled when its surrounding chunks unloaded. The fixture now uses persistent actors and holds the full capture area loaded; production validation was not relaxed. An overlapping diagnostic test process also held `session.lock`; it was terminated before the final isolated run. The earlier speculative byte-encoding storage optimization was rejected/reverted as documented in C. No known gameplay regression was observed in the passing automated suite; this is not a claim about untested graphical clients.
+
+Raw baseline, A–D and repeated final measurements are retained in `phase3-stabilization-results.csv`; the original `phase3-performance-results.csv` is unchanged. JAR: `build/libs/tactical-combat-0.1.0.jar`, SHA-256 `b58b3c4bfdf8f9effa002ebec0741b5c7fcc4fae48b1413a7bb6782debdb12bd`. Java 21, Minecraft 1.21.1, Gradle 8.10.2, Loom 1.8.13, Fabric Loader 0.16.9 and Fabric API 0.116.1+1.21.1 are unchanged.
+
+Local implementation commits, in dependency order:
+
+1. `fe56546` — high-speed server-thread workload budgeting and correctness tests.
+2. `0d73697` — combat input reuse and redundant state delivery reduction.
+3. `27a9754` — character refresh allocation and storage-limit measurements.
+4. `b2eaf21` — client map reuse, reply correlation and actual concurrent server-callback verification.
+
+The following documentation commit contains this final report, raw evidence and the multiplayer checklist. Source changes are identified by these commits (`git show --stat <commit>` lists the complete files); source areas are search/terrain/chunk-change mixin and movement authority (A), character repository/combat/network delivery and packet probes (B), character synchronization/persistence tests (C), client preview/screen/request tracking, network job correlation and benchmark tests (D). No dependencies, manual packs or vanilla Tactical movement algorithms were changed. The final checkpoint is committed locally with a clean worktree; **the performance branch was not pushed**, and the published Phase 3 branch remains unchanged.
