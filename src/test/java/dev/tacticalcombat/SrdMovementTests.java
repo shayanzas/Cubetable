@@ -67,11 +67,25 @@ public final class SrdMovementTests {
         rejects(()->ui.apply("manual_tabletop",six),"manual data cannot enter SRD presentation");
         ui.apply("srd_5_1",six);
         var selected=ui.select(new Cell(4,4,1));
+        check(ui.select(new Cell(4,4,1))==selected,"unchanged presentation reuses immutable selection");
+        check(ui.pathCells(new Cell(4,4,1)).equals(Set.copyOf(selected.path())),"cached highlight matches exact route cells");
+        check(ui.localWindow().equals(six.reachable().keySet().stream().filter(c->Math.abs(c.x()-start.x())<=10 && Math.abs(c.z()-start.z())<=6)
+                .sorted(Comparator.comparingDouble(Cell::y)).toList()),"cached local window retains original filtering and depth order");
+        for(int i=0;i<200;i++) ui.select(new Cell(i+50,50,1));
+        check(ui.retainedSelections()==64,"hover/selection retention stays bounded");
         check(selected.costFeet().orElseThrow()==20 && selected.remainingFeet()==10 && selected.path().size()==4,"preview reports feet, route and remaining allowance");
         check(ui.select(new Cell(7,0,1)).boundaryReasons().contains(Reason.OUT_OF_BUDGET),"unreachable preview distinguishes budget");
         ui.apply("srd_5_1",closed);
+        check(ui.retainedSelections()==0 && ui.localWindow().size()==1,"new preview discards every old selection and window");
         check(ui.select(new Cell(1,0,1)).boundaryReasons().contains(Reason.BLOCKED),"preview distinguishes blocked approaches");
         ui.clear(); check(ui.select(start).costFeet().isEmpty(),"clear cannot retain a previous encounter cost");
+        check(ui.retainedSelections()==0 && ui.localWindow().isEmpty(),"clear releases presentation caches");
+        var correlation=new dev.tacticalcombat.client.SrdGridRequests();UUID encounter=UUID.randomUUID(),oldRequest=UUID.randomUUID(),newRequest=UUID.randomUUID();
+        correlation.expect(encounter,oldRequest);correlation.expect(encounter,newRequest);
+        check(!correlation.accepts(encounter,oldRequest.toString()) && correlation.accepts(encounter,newRequest.toString()),"late grid/cancellation cannot replace a newer requested preview");
+        check(!correlation.accepts(UUID.randomUUID(),newRequest.toString()),"request identity includes encounter");
+        check(correlation.accepts(encounter,null),"legacy v1 reply without additive identity remains supported");
+        correlation.clear();check(!correlation.accepts(encounter,newRequest.toString()),"cleared connection forgets pending identity");
         var neighbor=new Cell(1,0,1);
         rejects(()->new Preview(start,30,Map.of(start,new Node(start,0,null),neighbor,new Node(neighbor,5,neighbor)),List.of(),false),"cyclic preview cannot hang path rendering");
         rejects(()->new Preview(start,30,Map.of(),List.of(),false),"preview requires origin");

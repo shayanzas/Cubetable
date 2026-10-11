@@ -63,9 +63,13 @@ public final class SrdNetworking {
         }
     }
     static SrdEncounter find(UUID id) { return CombatManager.encounters().stream().filter(e->e.id().equals(id) && e instanceof SrdEncounter).map(e->(SrdEncounter)e).findFirst().orElse(null); }
+    private static void selectWatch(ServerPlayerEntity p,UUID encounter) {
+        UUID old=WATCHING.put(p.getUuid(),encounter);
+        if(old!=null && !old.equals(encounter)) SrdGridJobs.cancel(p.getUuid());
+    }
     static void watch(ServerPlayerEntity p,SrdEncounter encounter) {
         var payload=state(encounter,CharacterService.principal(p),"STATE",encounter.reason(),null);
-        WATCHING.put(p.getUuid(),encounter.id()); send(p,payload);
+        selectWatch(p,encounter.id()); send(p,payload);
     }
     static SrdStatePayload state(SrdEncounter encounter,CharacterRepository.Principal p,String code,String message,JsonObject extra) {
         JsonObject data=encounter.snapshot(p); if(extra!=null) extra.entrySet().forEach(e->data.add(e.getKey(),e.getValue()));
@@ -83,7 +87,7 @@ public final class SrdNetworking {
             SrdEncounter encounter=find(request.encounter()); if(encounter==null) throw new IllegalArgumentException("Encounter unavailable");
             var p=CharacterService.principal(player); encounter.authorizeViewer(p); // Authorize without constructing a discarded snapshot.
             revision=encounter.revision();
-            if(request.operation().equals("state")) { WATCHING.put(player.getUuid(),encounter.id()); return state(encounter,p,"STATE",encounter.reason(),null); }
+            if(request.operation().equals("state")) { selectWatch(player,encounter.id()); return state(encounter,p,"STATE",encounter.reason(),null); }
             if(!encounter.admit(p,request)) throw new IllegalArgumentException("Stale, duplicate, excessive or unauthorized request");
             var extra=new JsonObject(); String message="Request accepted",code="OK";
             switch(request.operation()) {
@@ -93,11 +97,12 @@ public final class SrdNetworking {
                 }
                 case "grid" -> {
                     if(!GRID_LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime())) throw new IllegalArgumentException("Grid rate limit: wait a second before refreshing");
+                    selectWatch(player,encounter.id());
                     if(encounter.budgetedGrid()) {
                         SrdGridJobs.submit(player,encounter,request.request());code="GRID_PENDING";message="Grid pending; calculating within server tick budget";
                         extra.addProperty("gridRequest",request.request().toString());
                     } else {
-                        SrdGridJobs.cancel(player.getUuid());extra=SrdGridJobs.grid(encounter.grid(p));code="GRID";
+                        SrdGridJobs.cancel(player.getUuid());extra=SrdGridJobs.grid(encounter.grid(p));extra.addProperty("gridRequest",request.request().toString());code="GRID";
                     }
                 }
                 case "move" -> {
@@ -146,7 +151,7 @@ public final class SrdNetworking {
                 case "end" -> { encounter.stop(p); return new SrdStatePayload(encounter.id(),Long.MAX_VALUE,"ENDED","Encounter ended","{}"); }
                 default -> throw new IllegalArgumentException("Unsupported SRD operation");
             }
-            WATCHING.put(player.getUuid(),encounter.id()); return state(encounter,p,code,message,extra);
+            selectWatch(player,encounter.id()); return state(encounter,p,code,message,extra);
         } catch(java.io.IOException storage) { return new SrdStatePayload(request.encounter(),revision,"STORAGE_ERROR","Healing was not committed; refresh and retry","{}"); }
         catch(RuntimeException denied) {
             String text=denied.getMessage()==null?"Invalid SRD request":denied.getMessage();

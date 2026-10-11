@@ -17,14 +17,12 @@ public final class ClientSrdCombat {
     static String message="No SRD encounter selected";
     static final SrdMovementPreview movement=new SrdMovementPreview();
     static SrdMovement.Preview grid;
+    private static final SrdGridRequests gridRequests=new SrdGridRequests();
     static int focusEntity=-1;
     private static final LinkedHashSet<String> presented=new LinkedHashSet<>();
     private ClientSrdCombat() {}
-    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear(); }
+    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear(); }
     public static void receive(SrdStatePayload payload) {
-        if(payload.code().equals("GRID_CANCELLED")) {
-            if(payload.encounter().equals(encounter)) {grid=null;movement.clear();message=payload.message();}return;
-        }
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)) clear(); message=payload.message(); return;
         }
@@ -33,12 +31,14 @@ public final class ClientSrdCombat {
         try {
             CharacterRepository.checkDepth(payload.json(),12);
             var data=JsonParser.parseString(payload.json()).getAsJsonObject();
+            boolean currentGrid=gridRequests.accepts(payload.encounter(),data.has("gridRequest")?data.get("gridRequest").getAsString():null);
             if(data.getAsJsonArray("actors").size()>16) throw new IllegalArgumentException("Too many SRD actors");
             boolean changed=!payload.encounter().equals(encounter) || payload.revision()!=revision;
             if(!payload.encounter().equals(encounter)) presented.clear();
             if(changed) { preview=null; grid=null; movement.clear(); }
-            encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong(); message=payload.message();
-            if(payload.code().equals("GRID_PENDING")) {grid=null;movement.clear();}
+            encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong();
+            if(currentGrid) message=payload.message();
+            if(currentGrid && (payload.code().equals("GRID_PENDING") || payload.code().equals("GRID_CANCELLED"))) {grid=null;movement.clear();}
             if(data.has("preview")) preview=data.getAsJsonObject("preview");
             if(data.has("result")) {
                 var result=data.getAsJsonObject("result"); message="Authoritative attack: "+result.get("total")+(result.get("critical").getAsBoolean()?" critical hit":result.get("hit").getAsBoolean()?" hit":" miss");
@@ -51,7 +51,7 @@ public final class ClientSrdCombat {
                             result.get("total").getAsInt()-result.get("chosen").getAsInt(),result.get("keep").getAsInt(),faces.asList().stream().mapToInt(JsonElement::getAsInt).toArray()));
                 }
             }
-            if(data.has("grid")) {
+            if(data.has("grid") && currentGrid) {
                 var cells=data.getAsJsonArray("grid"); if(cells.size()>SrdMovement.MAX_NODES) throw new IllegalArgumentException("Grid too large");
                 var nodes=new HashMap<SrdMovement.Cell,SrdMovement.Node>(); SrdMovement.Cell start=null;
                 for(var value:cells) {
@@ -67,7 +67,9 @@ public final class ClientSrdCombat {
     }
     static void send(String operation,JsonObject args) {
         if(encounter==null || !ClientPlayNetworking.canSend(SrdRequestPayload.ID)) { message="Updated SRD server required"; return; }
-        ClientPlayNetworking.send(new SrdRequestPayload(encounter,turn,UUID.randomUUID(),operation,args.toString()));
+        UUID request=UUID.randomUUID();
+        if(operation.equals("grid")) {gridRequests.expect(encounter,request);grid=null;movement.clear();message="Requesting grid…";}
+        ClientPlayNetworking.send(new SrdRequestPayload(encounter,turn,request,operation,args.toString()));
     }
     static void send(String operation) { send(operation,new JsonObject()); }
     static JsonArray actors() { return state.has("actors")?state.getAsJsonArray("actors"):new JsonArray(); }

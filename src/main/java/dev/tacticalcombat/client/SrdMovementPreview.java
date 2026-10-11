@@ -13,14 +13,32 @@ public final class SrdMovementPreview {
         public Selection { path=List.copyOf(path); boundaryReasons=List.copyOf(boundaryReasons); }
     }
     private Preview preview;
+    private List<Cell> window=List.of();
+    private record CachedSelection(Selection selection,Set<Cell> pathCells) {}
+    private static final CachedSelection EMPTY=new CachedSelection(new Selection(Reason.INVALID_START,List.of(),OptionalInt.empty(),0,List.of()),Set.of());
+    private final LinkedHashMap<Cell,CachedSelection> selections=new LinkedHashMap<>(64,.75f,true);
     public void apply(String profile,Preview serverPreview) {
         if(!RulesProfiles.SRD.equals(profile)) throw new IllegalArgumentException("SRD preview cannot consume another ruleset");
         preview=Objects.requireNonNull(serverPreview);
+        selections.clear();var start=preview.start();
+        window=preview.reachable().keySet().stream().filter(c->Math.abs(c.x()-start.x())<=10 && Math.abs(c.z()-start.z())<=6)
+                .sorted(Comparator.comparingDouble(Cell::y)).toList();
     }
-    public void clear() { preview=null; }
+    public void clear() { preview=null;window=List.of();selections.clear(); }
+    public List<Cell> localWindow() {return window;}
+    public int retainedSelections() {return selections.size();}
     public Selection select(Cell destination) {
-        if(preview==null || destination==null)
-            return new Selection(Reason.INVALID_START,List.of(),OptionalInt.empty(),0,List.of());
+        return choice(destination).selection;
+    }
+    public Set<Cell> pathCells(Cell destination) {return choice(destination).pathCells;}
+    private CachedSelection choice(Cell destination) {
+        if(preview==null || destination==null) return EMPTY;
+        var cached=selections.get(destination);if(cached!=null) return cached;
+        var selected=describe(destination);var result=new CachedSelection(selected,Set.copyOf(selected.path()));
+        if(selections.size()>=64) selections.remove(selections.keySet().iterator().next());
+        selections.put(destination,result);return result;
+    }
+    private Selection describe(Cell destination) {
         Node node=preview.reachable().get(destination);
         if(node!=null) return new Selection(Reason.OK,preview.pathTo(destination),OptionalInt.of(node.costFeet()),
                 preview.remainingFeet()-node.costFeet(),List.of());

@@ -15,6 +15,7 @@ final class SrdGridJobs {
     static final long BUDGET_NANOS=8_000_000L;
     private record Job(ServerPlayerEntity player,SrdEncounter encounter,UUID request,long revision,long expires,SrdTerrain.Pending search) {}
     private static final LinkedHashMap<UUID,Job> JOBS=new LinkedHashMap<>();
+    static long lastWorkNanos;
     static int size() {return JOBS.size();}
     static void cancel(UUID player) {var old=JOBS.remove(player);if(old!=null) old.search.close();}
     static void clear() {for(var job:JOBS.values()) job.search.close();JOBS.clear();}
@@ -33,7 +34,8 @@ final class SrdGridJobs {
         extra.add("grid",cells);extra.addProperty("truncated",grid.truncated());return extra;
     }
     static void tick(BiConsumer<ServerPlayerEntity,SrdStatePayload> send) {
-        long deadline=System.nanoTime()+BUDGET_NANOS;
+        long began=System.nanoTime(),deadline=began+BUDGET_NANOS;
+        try {
         while(!JOBS.isEmpty() && System.nanoTime()<deadline) {
             var first=JOBS.entrySet().iterator();var job=first.next().getValue();first.remove();
             try {
@@ -50,12 +52,14 @@ final class SrdGridJobs {
             } catch(RuntimeException cancelled) {
                 job.search.close();
                 try {
+                    var identity=new JsonObject();identity.addProperty("gridRequest",job.request.toString());
                     send.accept(job.player,SrdNetworking.state(job.encounter,CharacterService.principal(job.player),"GRID_CANCELLED",
-                            "Grid cancelled: world, authority or encounter changed; refresh",null));
+                            "Grid cancelled: world, authority or encounter changed; refresh",identity));
                 } catch(IllegalArgumentException denied) {
                     send.accept(job.player,new SrdStatePayload(job.encounter.id(),Long.MAX_VALUE,"ENDED","Encounter permission no longer available","{}"));
                 }
             }
         }
+        } finally {lastWorkNanos=System.nanoTime()-began;}
     }
 }

@@ -115,8 +115,8 @@ public final class SrdCombatScreen extends Screen {
     }
     private void drawGrid(DrawContext g,int mx,int my) {
         var grid=ClientSrdCombat.grid; var start=grid.start(); int size=10,cx=width/2,cy=(height+120)/2;
-        cells=grid.reachable().keySet().stream().filter(c->Math.abs(c.x()-start.x())<=10 && Math.abs(c.z()-start.z())<=6).sorted(Comparator.comparingDouble(SrdMovement.Cell::y)).toList(); hover=null;
-        var path=selected==null?List.<SrdMovement.Cell>of():ClientSrdCombat.movement.select(selected).path();
+        cells=ClientSrdCombat.movement.localWindow();hover=null;
+        var path=ClientSrdCombat.movement.pathCells(selected);
         for(var cell:cells) {
             int px=cx+(cell.x()-start.x())*size,py=cy+(cell.z()-start.z())*size;
             if(py<120 || py+size>height-70) continue;

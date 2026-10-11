@@ -12,6 +12,30 @@ import static dev.tacticalcombat.combat.SrdGridPerformanceGameTests.*;
 
 /** Warm repeated measurements; timers exclude fixture setup and assertions. No simulated network latency claims. */
 public class SrdSystemPerformanceGameTests implements FabricGameTest {
+    private static volatile long presentationSink;
+    static long referencePresentation(SrdMovement.Preview grid,SrdMovement.Cell selected) {
+        var start=grid.start();
+        var cells=grid.reachable().keySet().stream().filter(c->Math.abs(c.x()-start.x())<=10 && Math.abs(c.z()-start.z())<=6)
+                .sorted(Comparator.comparingDouble(SrdMovement.Cell::y)).toList();
+        var node=grid.reachable().get(selected);
+        var choice=new dev.tacticalcombat.client.SrdMovementPreview.Selection(SrdMovement.Reason.OK,grid.pathTo(selected),OptionalInt.of(node.costFeet()),grid.remainingFeet()-node.costFeet(),List.of());
+        long sum=0;for(var cell:cells) sum+=choice.path().contains(cell)?cell.hashCode():1;return sum;
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void clientGridPresentationLogic(TestContext ctx) throws Exception {
+        var start=new SrdMovement.Cell(0,0,1);
+        var grid=SrdMovement.search(start,300,(from,dx,dz)->new SrdMovement.Step(new SrdMovement.Cell(from.x()+dx,from.z()+dz,1),5,SrdMovement.Reason.OK));
+        var selected=new SrdMovement.Cell(6,4,1);
+        check(grid.reachable().size()==4096 && grid.truncated(),"large presentation fixture retains search bounds");
+        measure("client_reference_100_frames",4096,()->0,()->{long sum=0;for(int i=0;i<100;i++) sum+=referencePresentation(grid,selected);presentationSink=sum;return 0;});
+        var ui=new dev.tacticalcombat.client.SrdMovementPreview();ui.apply(dev.tacticalcombat.rules.RulesProfiles.SRD,grid);
+        measure("client_cached_100_frames",4096,()->0,()->{
+            long sum=0;for(int i=0;i<100;i++) {var path=ui.pathCells(selected);for(var cell:ui.localWindow()) sum+=path.contains(cell)?cell.hashCode():1;}
+            presentationSink=sum;return 0;
+        });
+        check(presentationSink==100*referencePresentation(grid,selected),"cached local-map highlights exactly match the old render preparation");
+        ctx.complete();
+    }
     @GameTest(templateName=EMPTY_STRUCTURE)
     public void tacticalSnapshotTraffic(TestContext ctx) throws Exception {
         var player=ctx.createMockCreativeServerPlayerInWorld();Combat fight=null;
