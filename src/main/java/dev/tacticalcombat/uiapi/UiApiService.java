@@ -11,9 +11,9 @@ import static dev.tacticalcombat.uiapi.SheetSections.require;
 public final class UiApiService {
     public enum Operation {
         CAPABILITIES, ACTIVE, PRESENTATION_POLICY, LIBRARY_LIST, LIBRARY_CREATE, LIBRARY_GET, LIBRARY_UPDATE, LIBRARY_VALIDATE, LIBRARY_FINALIZE, LIBRARY_DUPLICATE, LIBRARY_SUBMIT,
-        CAMPAIGN_LIST, CAMPAIGN_CREATE, CAMPAIGN_GET, CAMPAIGN_SELECT, CAMPAIGN_INVITE, CAMPAIGN_REMOVE, CAMPAIGN_POLICY, CAMPAIGN_PROFILE,
+        CAMPAIGN_LIST, CAMPAIGN_CREATE, CAMPAIGN_GET, CAMPAIGN_SELECT, CAMPAIGN_INVITE, CAMPAIGN_REMOVE, CAMPAIGN_REVOKE_DM, CAMPAIGN_POLICY, CAMPAIGN_PROFILE,
         ROSTER, CHARACTER_GET, CHARACTER_SECTION, CHARACTER_EDIT, CHARACTER_APPROVE, CHARACTER_REVOKE,
-        ASSIGNMENT_LIST, ASSIGNMENT_OFFER, ASSIGNMENT_ANSWER, ASSIGNMENT_CLEAR, CHARACTER_SELECT, BIND, UNBIND, ELIGIBLE_PLAYERS,
+        ASSIGNMENT_LIST, ASSIGNMENT_OFFER, ASSIGNMENT_ANSWER, ASSIGNMENT_CLEAR, CHARACTER_SELECT, BIND, UNBIND, ELIGIBLE_PLAYERS, ELIGIBLE_ENTITIES,
         MANUAL_UPDATE, SPELL_CATALOG, EVENTS, PARTY, INITIATIVE, REST_REQUEST, REST_REVIEW, REST_LIST
     }
     public record Reply(String code,String message,JsonObject data) {}
@@ -30,7 +30,7 @@ public final class UiApiService {
             require(a.toString().length()<=49152,"Request too large");CharacterRepository.checkDepth(a.toString(),24);
             JsonObject out=new JsonObject();
             switch(op) {
-                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("sectionsVersion",1);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);}
+                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("sectionsVersion",1);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
                 case LIBRARY_LIST -> {fields(a,"page");var rows=new JsonArray();for(var d:library.list(p,integer(a,"page"))) rows.add(draft(d,false));out.add("characters",rows);out.addProperty("pageSize",8);}
                 case LIBRARY_CREATE -> {
                     fields(a,"profile mode sheet");String profile=string(a,"profile");String sheet=a.get("sheet").isJsonNull()?SrdAuthoring.template().toString():string(a,"sheet");
@@ -60,11 +60,12 @@ public final class UiApiService {
                     }
                     out=character(p,existing);
                 }
-                case CAMPAIGN_LIST -> {fields(a,"page");out=new CharacterSyncService(repo).handle(p,null,"campaigns",a).data();}
+                case CAMPAIGN_LIST -> {fields(a,"page");require(integer(a,"page")<=8,"Invalid page");out=new CharacterSyncService(repo).handle(p,null,"campaigns",a).data();}
                 case CAMPAIGN_CREATE -> {fields(a,"name");out=campaign(p,repo.createCampaign(p,string(a,"name")));}
                 case CAMPAIGN_GET -> {fields(a,"campaign");out=campaign(p,id(a,"campaign"));}
                 case CAMPAIGN_INVITE -> {fields(a,"campaign revision player dm");repo.invite(p,id(a,"campaign"),revision(a),id(a,"player"),bool(a,"dm"));out=campaign(p,id(a,"campaign"));}
                 case CAMPAIGN_REMOVE -> {fields(a,"campaign revision player");repo.removeMember(p,id(a,"campaign"),revision(a),id(a,"player"));out=campaign(p,id(a,"campaign"));}
+                case CAMPAIGN_REVOKE_DM -> {fields(a,"campaign revision player");repo.revokeDm(p,id(a,"campaign"),revision(a),id(a,"player"));out=campaign(p,id(a,"campaign"));}
                 case CAMPAIGN_POLICY -> {fields(a,"campaign revision policy");repo.policy(p,id(a,"campaign"),revision(a),ApprovalPolicy.parse(a.getAsJsonObject("policy")));out=campaign(p,id(a,"campaign"));}
                 case CAMPAIGN_PROFILE -> {fields(a,"campaign revision profile");repo.profile(p,id(a,"campaign"),revision(a),string(a,"profile"));out=campaign(p,id(a,"campaign"));}
                 case ROSTER -> {
@@ -111,7 +112,7 @@ public final class UiApiService {
         }
     }
     private JsonObject campaign(CharacterRepository.Principal p,UUID id) {require(repo.member(p,id),"Campaign permission denied");var c=repo.campaign(id);var out=new JsonObject();out.addProperty("id",id.toString());out.addProperty("name",c.name());out.addProperty("profile",c.profile());out.addProperty("revision",c.revision());out.addProperty("manager",repo.manages(p,id));out.add("policy",SheetSections.JSON.toJsonTree(c.policy()));if(repo.manages(p,id)) {out.add("members",SheetSections.JSON.toJsonTree(c.members()));out.add("dms",SheetSections.JSON.toJsonTree(c.dms()));}return out;}
-    private JsonObject character(CharacterRepository.Principal p,UUID id) {var out=new CharacterSyncService(repo).snapshot(p,id);out.addProperty("controller",repo.controller(id).toString());out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));return out;}
+    private JsonObject character(CharacterRepository.Principal p,UUID id) {var out=new CharacterSyncService(repo).snapshot(p,id);out.addProperty("combatAuthority",repo.character(id).profile().equals(RulesProfiles.SRD)?"collections.srd_combat":"server stats/profile");out.addProperty("extensionAuthority","ui_* sections are recorded/manual only");out.addProperty("controller",repo.controller(id).toString());out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));return out;}
     public static JsonObject draft(LibraryRepository.Draft d,boolean full) {var o=new JsonObject();o.addProperty("id",d.id().toString());o.addProperty("name",name(d.sheet()));o.addProperty("profile",d.profile());o.addProperty("mode",d.mode().name());o.addProperty("stage",d.stage().name());o.addProperty("revision",d.revision());if(full) o.add("sheet",JsonParser.parseString(d.sheet()));return o;}
     public static String name(String sheet) {var o=JsonParser.parseString(sheet).getAsJsonObject();String n=o.has("text") && o.getAsJsonObject("text").has("name")?o.getAsJsonObject("text").get("name").getAsString():"Unnamed character";return n.substring(0,Math.min(80,n.length()));}
     public static void fields(JsonObject a,String allowed) {require(a.keySet().equals(allowed.isEmpty()?Set.of():Set.of(allowed.split(" "))),"Missing or unknown request fields");}

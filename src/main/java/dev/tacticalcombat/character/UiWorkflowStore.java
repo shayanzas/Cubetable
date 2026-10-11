@@ -23,7 +23,9 @@ public final class UiWorkflowStore {
     private final AtomicJsonFile file;
     private record State(Map<UUID,Rest> rests,Map<UUID,Policy> policies) {State {rests=Map.copyOf(rests);policies=Map.copyOf(policies);}}
     private State state;
-    public UiWorkflowStore(Path path) throws IOException {file=new AtomicJsonFile(path);state=file.read(UiWorkflowStore::decode,new State(Map.of(),Map.of()));}
+    public UiWorkflowStore(Path path) throws IOException {this(new AtomicJsonFile(path));}
+    UiWorkflowStore(AtomicJsonFile storage) throws IOException {file=storage;state=file.read(UiWorkflowStore::decode,new State(Map.of(),Map.of()));}
+    public boolean recoveredFromBackup() {return file.recoveredFromBackup();}
     public Policy policy(UUID campaign) {return state.policies.getOrDefault(campaign,new Policy(campaign,0,HpVisibility.PRIVATE,16));}
     public void policy(CharacterRepository repo,CharacterRepository.Principal p,Policy next) throws IOException {
         require(repo.manages(p,next.campaign),"Only campaign DMs change presentation policy");require(policy(next.campaign).revision+1==next.revision,"Stale presentation policy revision");

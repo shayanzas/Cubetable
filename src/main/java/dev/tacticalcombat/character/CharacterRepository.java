@@ -184,13 +184,14 @@ public final class CharacterRepository {
     }
     public void approve(Principal p,UUID id,long revision) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs approve characters");
-        require(c.revision==revision,"Stale character revision");
+        require(c.revision==revision,"Stale character revision");require(binding(id)==null,"Unbind before approving; active approvals cannot be rewritten");
         replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,true,revision+1,c.runtimeRevision));
         event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.APPROVAL,"Character approved");
     }
     public void bind(Principal p,UUID id,long revision,UUID entity,UUID playerOwner) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs bind characters");
         require(c.revision==revision,"Stale character revision"); require(c.approved,"Character needs DM approval");
+        require(member(new Principal(c.owner,false),c.campaign),"Owner campaign membership required");
         require(member(new Principal(controller(id),false),c.campaign),"Controller campaign membership required");
         require(playerOwner==null || controller(id).equals(playerOwner),"Cannot bind another player's character to this player");
         require(!state.bindings.containsKey(entity) && !state.bindings.containsValue(id),"Entity or character already bound");

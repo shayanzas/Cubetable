@@ -15,6 +15,7 @@ public final class UiLifecycleTests {
         var dm=new CharacterRepository.Principal(UUID.randomUUID(),true);var owner=new CharacterRepository.Principal(UUID.randomUUID(),false);var substitute=new CharacterRepository.Principal(UUID.randomUUID(),false);var outsider=new CharacterRepository.Principal(UUID.randomUUID(),false);
         var campaign=repo.createCampaign(dm,"UI");repo.invite(dm,campaign,1,owner.id(),false);repo.invite(dm,campaign,2,substitute.id(),false);
         var api=new UiApiService(repo,library,(op,a)->{throw new IllegalArgumentException("World operation unavailable in pure test");});
+        check(!api.handle(owner,CAMPAIGN_LIST,args("page",99)).code().equals("OK"),"invalid pagination cannot return fake success");
         check(api.handle(owner,CAMPAIGN_CREATE,args("name","Forged")).code().equals("FORBIDDEN"),"ordinary user cannot create campaign");
         check(!api.handle(owner,CAMPAIGN_INVITE,args("campaign",campaign,"revision",3,"player",outsider.id(),"dm",true)).code().equals("OK"),"cannot forge co-DM authority");
         var d=library.create(owner,RulesProfiles.SRD,SheetSections.Mode.MANUAL,SrdAuthoring.template().toString());d=library.finalizeDraft(owner,d.id(),1);
@@ -36,6 +37,7 @@ public final class UiLifecycleTests {
         var trackers=SheetSections.JSON.toJsonTree(SheetSections.defaults().get("trackers")).getAsJsonObject();
         check(!api.handle(substitute,CHARACTER_EDIT,args("character",id,"revision",2,"runtimeRevision",0,"section","trackers","data",trackers)).code().equals("OK"),"controller cannot edit owner's sheet");
         repo.bind(dm,id,2,substitute.id(),substitute.id());
+        check(!api.handle(dm,CHARACTER_APPROVE,args("character",id,"revision",2)).code().equals("OK"),"bound approval revision cannot be rewritten");
         check(!api.handle(dm,ASSIGNMENT_CLEAR,args("character",id,"revision",2)).code().equals("OK"),"bound control changes locked");
         check(!api.handle(dm,CHARACTER_REVOKE,args("character",id,"revision",2)).code().equals("OK"),"bound approval cannot invalidate binding");
         check(new CharacterRepository(path).controller(id).equals(substitute.id()),"assignment/binding reload atomically");

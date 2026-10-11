@@ -801,6 +801,7 @@ public final class Combat implements Encounter {
 	// ---------------------------------------------------------------- networking
 
     public com.google.gson.JsonObject presentation(ServerPlayerEntity player) {
+        if(!player.getServer().isOnThread()) throw new IllegalArgumentException("Presentation requires server thread");
         if(!contains(player)) throw new IllegalArgumentException("Encounter permission denied");
         var out=new com.google.gson.JsonObject();var rows=new com.google.gson.JsonArray();
         out.addProperty("profile",rules.id());out.addProperty("turn",requests.turn());out.addProperty("round",round);

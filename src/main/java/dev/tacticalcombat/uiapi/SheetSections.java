@@ -79,7 +79,7 @@ public final class SheetSections {
         if(collections==null || !collections.has("ui_"+section)) return JSON.toJsonTree(defaults().get(section)).getAsJsonObject();
         var rows=collections.getAsJsonArray("ui_"+section);require(rows.size()==1,"Section requires one versioned record");
         var wrapper=rows.get(0).getAsJsonObject();require(wrapper.keySet().equals(Set.of("version","data")),"Invalid section wrapper");
-        require(wrapper.get("version").getAsInt()==1,"Unsupported sheet section version");
+        if(wrapper.get("version").getAsBigDecimal().intValueExact()!=1) throw new UnsupportedOperationException("Unsupported sheet section version; refusing rollback");
         return JSON.toJsonTree(parse(wrapper.get("data"),TYPES.get(section))).getAsJsonObject();
     }
     public static JsonObject update(JsonObject sheet,String section,JsonElement data) {
@@ -110,7 +110,7 @@ public final class SheetSections {
     public static void require(boolean ok,String message) {if(!ok) throw new IllegalArgumentException(message);}
     static void range(int n,int min,int max) {require(n>=min && n<=max,"Value outside bounds");}
     static void text(String s,int max) {require(s!=null && s.length()<=max,"Text missing or too long");}
-    static void key(String s) {require(s!=null && s.matches("[a-z0-9_]+:[a-z0-9_./-]{1,80}"),"Expected namespaced identifier");}
+    static void key(String s) {require(s!=null && s.matches("[a-z0-9_]{1,32}:[a-z0-9_./-]{1,80}"),"Expected namespaced identifier");}
     static <T> List<T> entries(List<T> a,int limit) {require(a!=null && a.size()<=limit,"Too many entries");return List.copyOf(a);}
     static List<String> strings(List<String> a,int limit) {var b=entries(a,limit);b.forEach(s->text(s,256));return b;}
     static void unique(List<String> ids) {require(new HashSet<>(ids).size()==ids.size(),"Duplicate entry identity");}

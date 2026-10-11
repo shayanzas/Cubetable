@@ -39,6 +39,9 @@ public final class UiLibraryTests {
         var oldCampaign=new CharacterRepository(dir.resolve("campaign.json"));var dm=new CharacterRepository.Principal(UUID.randomUUID(),true);var campaign=oldCampaign.createCampaign(dm,"Existing");
         var id=oldCampaign.submit(dm,campaign,RulesProfiles.SRD,ready.sheet());oldCampaign.approve(dm,id,1);var actor=UUID.randomUUID();oldCampaign.bind(dm,id,2,actor,null);
         check(new CharacterRepository(dir.resolve("campaign.json")).srdSnapshot(actor,campaign).character().equals(id),"legacy approved binding survives additive schema");
+        var future=JsonParser.parseString(Files.readString(path)).getAsJsonObject();var row=future.getAsJsonArray("drafts").get(0).getAsJsonObject();var futureSheet=JsonParser.parseString(row.get("sheet").getAsString()).getAsJsonObject();
+        var wrapper=new JsonObject();wrapper.addProperty("version",99);wrapper.add("data",new JsonObject());var rows=new JsonArray();rows.add(wrapper);futureSheet.getAsJsonObject("collections").add("ui_identity",rows);row.addProperty("sheet",futureSheet.toString());
+        var futurePath=dir.resolve("future.json");Files.writeString(futurePath,future.toString());Files.copy(path,dir.resolve("future.json.bak"));rejects(()->new LibraryRepository(futurePath),"future section refuses rollback even with old valid backup");
         System.out.println("UI library checks passed: "+count);
     }
 }

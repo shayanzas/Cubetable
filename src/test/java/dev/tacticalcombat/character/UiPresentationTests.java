@@ -37,6 +37,9 @@ public final class UiPresentationTests {
         var preferences=HudPreferences.defaults();var prefPath=dir.resolve("hud.json");preferences.save(prefPath);check(HudPreferences.load(prefPath).equals(preferences),"local HUD settings roundtrip");
         rejects(()->new HudPreferences.Panel(Double.NaN,0,1,true),"invalid layout bounds");
         check(HudPreferences.defaults().equals(preferences),"reset-to-default is deterministic");
+        var failed=new UiWorkflowStore(new AtomicJsonFile(dir.resolve("failed.json"),destination->{throw new java.io.IOException("injected failure");}));
+        rejects(()->failed.policy(repo,dm,new UiWorkflowStore.Policy(campaign,1,UiWorkflowStore.HpVisibility.EXACT,16)),"workflow write failure is surfaced");
+        check(failed.policy(campaign).revision()==0 && failed.policy(campaign).hp()==UiWorkflowStore.HpVisibility.PRIVATE,"failed policy write cannot publish sharing permission");
         System.out.println("UI presentation/workflow checks passed: "+count);
     }
 }

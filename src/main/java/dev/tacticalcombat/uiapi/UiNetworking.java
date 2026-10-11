@@ -23,9 +23,9 @@ public final class UiNetworking {
         ServerPlayNetworking.registerGlobalReceiver(UiRequestPayload.ID,(request,context)->{
             if(ServerPlayNetworking.canSend(context.player(),UiReplyPayload.ID)) ServerPlayNetworking.send(context.player(),handle(context.player(),request));
         });
-        ServerLifecycleEvents.SERVER_STARTED.register(server->{try {library=new LibraryRepository(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/library.json"));}
+        ServerLifecycleEvents.SERVER_STARTED.register(server->{try {library=new LibraryRepository(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/library.json"));if(library.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI library recovered from validated backup");}
             catch(Exception e) {library=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI library unavailable; existing combat storage preserved",e);}});
-        ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));}
+        ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{SESSIONS.forget(handler.player.getUuid());SELECTED.remove(handler.player.getUuid());});
         ServerLifecycleEvents.SERVER_STOPPING.register(server->{library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
@@ -80,9 +80,21 @@ public final class UiNetworking {
                 fields(a,"character revision entity");UUID entity=id(a,"entity");LivingEntity target=null;
                 for(var world:p.getServer().getWorlds()) if(world.getEntity(entity) instanceof LivingEntity living) {target=living;break;}
                 require(target!=null && target.isAlive() && !target.isRemoved(),"Eligible loaded living entity required");
+                var record=repo.visible(who,id(a,"character"));require(!record.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD) || target instanceof ServerPlayerEntity || target instanceof net.minecraft.entity.mob.MobEntity,"Unsupported SRD binding entity");
                 CharacterService.bind(p,id(a,"character"),revision(a),target);out.addProperty("bound",entity.toString());
             }
             case UNBIND -> {fields(a,"character revision");CharacterService.release(p,id(a,"character"),revision(a));out.addProperty("unbound",true);}
+            case ELIGIBLE_ENTITIES -> {
+                fields(a,"character");var c=repo.visible(who,id(a,"character"));require(repo.manages(who,c.campaign()),"Only campaign DMs inspect binding candidates");
+                var nearby=new ArrayList<LivingEntity>();p.getServerWorld().collectEntitiesByType(net.minecraft.util.TypeFilter.instanceOf(LivingEntity.class),p.getBoundingBox().expand(32),entity->entity.isAlive() && !entity.isSpectator(),nearby,65);
+                var rows=new JsonArray();for(var entity:nearby.stream().limit(64).toList()) {
+                    var row=new JsonObject();row.addProperty("id",entity.getUuidAsString());row.addProperty("name",entity.getName().getString().substring(0,Math.min(80,entity.getName().getString().length())));
+                    boolean occupied=CharacterService.bound(entity)!=null,combat=CombatManager.isInCombat(entity),controller=!(entity instanceof ServerPlayerEntity) || repo.controller(c.id()).equals(entity.getUuid());
+                    boolean type=!c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD) || entity instanceof ServerPlayerEntity || entity instanceof net.minecraft.entity.mob.MobEntity;
+                    row.addProperty("eligible",c.approved() && repo.binding(c.id())==null && !occupied && !combat && controller && type);
+                    row.addProperty("reason",!c.approved()?"Character needs approval":repo.binding(c.id())!=null?"Character already bound":occupied?"Entity already bound":combat?"Entity in combat":!controller?"Player must accept control first":!type?"Unsupported SRD entity":"Binding candidate; server will revalidate");rows.add(row);
+                }out.add("entities",rows);out.addProperty("truncated",nearby.size()>64);out.addProperty("radius",32);
+            }
             case ELIGIBLE_PLAYERS -> {
                 fields(a,"campaign");UUID campaign=id(a,"campaign");require(repo.manages(who,campaign),"Only campaign DMs inspect eligible players");var rows=new JsonArray();
                 for(var player:p.getServer().getPlayerManager().getPlayerList()) if(rows.size()<256) {var row=new JsonObject();row.addProperty("id",player.getUuidAsString());row.addProperty("name",player.getName().getString());row.addProperty("member",repo.member(new CharacterRepository.Principal(player.getUuid(),false),campaign));row.addProperty("inCombat",CombatManager.isInCombat(player));rows.add(row);}out.add("players",rows);

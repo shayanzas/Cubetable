@@ -37,7 +37,7 @@ public final class LibraryRepository {
     public Draft update(CharacterRepository.Principal p,UUID id,long revision,String section,JsonObject data) throws IOException {
         var d=expected(p,id,revision);var sheet=JsonParser.parseString(d.sheet).getAsJsonObject();
         if(section.equals("basics")) {
-            require(data.keySet().equals(Set.of("name")),"Basics accepts name only");String name=data.get("name").getAsString();require(name.length()<=80,"Name too long");
+            require(data.keySet().equals(Set.of("name")),"Basics accepts name only");require(data.get("name").isJsonPrimitive() && data.get("name").getAsJsonPrimitive().isString(),"Name must be text");String name=data.get("name").getAsString();require(name.length()<=80,"Name too long");
             if(!sheet.has("text")) sheet.add("text",new JsonObject());sheet.getAsJsonObject("text").addProperty("name",name);
         } else if(section.equals("combat")) {
             require(d.profile.equals(RulesProfiles.SRD),"Combat section requires SRD profile");
