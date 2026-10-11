@@ -114,7 +114,7 @@ public final class SrdEncounter implements Encounter {
     }
     private boolean controls(CharacterRepository.Principal p,LivingEntity actor) {
         return viewer(p) && (manager(p) || actor instanceof ServerPlayerEntity && actor.getUuid().equals(p.id())
-                && CharacterService.repository().character(snapshots.get(actor.getUuid()).character()).owner().equals(p.id()));
+                && CharacterService.repository().controller(snapshots.get(actor.getUuid()).character()).equals(p.id()));
     }
     private CharacterRepository.SrdSnapshot fresh(LivingEntity actor) {
         require(CombatManager.encounter(actor)==this && actor.isAlive() && !actor.isRemoved() && actor.getWorld()==world

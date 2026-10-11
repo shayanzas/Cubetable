@@ -101,7 +101,7 @@ public final class SrdMovementTurn {
     private boolean permitted(CharacterRepository.Principal principal) {
         var repo=CharacterService.repository(); var record=repo.character(snapshot.character());
         return repo.member(principal,initial.campaign) &&
-                (actor instanceof ServerPlayerEntity && actor.getUuid().equals(principal.id()) && record.owner().equals(principal.id())
+                (actor instanceof ServerPlayerEntity && actor.getUuid().equals(principal.id()) && CharacterService.repository().controller(record.id()).equals(principal.id())
                 || repo.manages(principal,initial.campaign));
     }
     /** principal must come from the authenticated server connection, never payload flags. */

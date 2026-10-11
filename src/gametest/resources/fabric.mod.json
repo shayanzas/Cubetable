@@ -20,7 +20,8 @@
       "dev.tacticalcombat.combat.SrdAcceptanceGameTests",
       "dev.tacticalcombat.combat.SrdGridPerformanceGameTests",
       "dev.tacticalcombat.combat.SrdGridBudgetGameTests",
-      "dev.tacticalcombat.combat.SrdSystemPerformanceGameTests"
+      "dev.tacticalcombat.combat.SrdSystemPerformanceGameTests",
+      "dev.tacticalcombat.combat.UiFoundationGameTests"
     ]
   },
   "depends": {

@@ -22,8 +22,14 @@ public final class CharacterRepository {
             this(id,campaign,owner,profile,profileVersion,sheet,stats,approved,revision,0);
         }
     }
-    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings) {
-        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings); }
+    public enum Decision { PENDING, ACCEPTED, DECLINED, CANCELLED }
+    public record ControlChange(UUID manager,UUID target,Decision decision) {}
+    public record Assignment(UUID character,UUID controller,UUID offered,Decision decision,long revision,List<ControlChange> history) {
+        public Assignment {history=List.copyOf(history);}
+    }
+    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments) {
+        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings);assignments=Map.copyOf(assignments); }
+        public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings) {this(campaigns,characters,bindings,Map.of());}
     }
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
     private final AtomicJsonFile file;
@@ -58,7 +64,7 @@ public final class CharacterRepository {
         require(state.campaigns.size()<64,"Campaign limit reached");
         UUID id=UUID.randomUUID(); var campaigns=new HashMap<>(state.campaigns);
         campaigns.put(id,new Campaign(id,name,p.id,Set.of(),Set.of(p.id),RulesProfiles.TACTICAL,1));
-        commit(new State(campaigns,state.characters,state.bindings)); return id;
+        commit(new State(campaigns,state.characters,state.bindings,state.assignments)); return id;
     }
     public void invite(Principal p,UUID id,long revision,UUID player,boolean dm) throws IOException {
         Campaign c=campaign(id); require(c.revision==revision,"Stale campaign revision");
@@ -86,7 +92,7 @@ public final class CharacterRepository {
     }
     private void updateCampaign(Campaign c) throws IOException {
         var campaigns=new HashMap<>(state.campaigns); campaigns.put(c.id,c);
-        commit(new State(campaigns,state.characters,state.bindings));
+        commit(new State(campaigns,state.characters,state.bindings,state.assignments));
     }
     public UUID submit(Principal p,UUID campaign,String profile,String sheet) throws IOException {
         require(member(p,campaign),"Join this campaign before submitting a character");
@@ -111,11 +117,11 @@ public final class CharacterRepository {
         }
         validateStats(stats);
         records.put(id,new Character(id,campaign,p.id,profile,1,sheet,stats,!campaignRecord.policy.requireNewApproval(),1));
-        commit(new State(state.campaigns,records,state.bindings)); return id;
+        commit(new State(state.campaigns,records,state.bindings,state.assignments)); return id;
     }
     public Character visible(Principal p,UUID id) {
         Character c=state.characters.get(id);
-        require(c!=null && member(p,c.campaign) && (c.owner.equals(p.id) || manages(p,c.campaign)),"Character permission denied"); return c;
+        require(c!=null && member(p,c.campaign) && (c.owner.equals(p.id) || manages(p,c.campaign) || controller(id).equals(p.id)),"Character permission denied"); return c;
     }
     public JsonObject effectiveSheet(Character c) {
         JsonObject sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
@@ -144,7 +150,7 @@ public final class CharacterRepository {
         edit(p,id,revision,runtimeRevision,changes,false);
     }
     private void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes,boolean explicitStatCommand) throws IOException {
-        Character c=visible(p,id); require(c.revision==revision,"Stale character revision; refresh and reconcile");
+        Character c=visible(p,id); require(c.owner.equals(p.id) || manages(p,c.campaign),"Only owner or campaign DM edits character data"); require(c.revision==revision,"Stale character revision; refresh and reconcile");
         require(binding(id)==null,"Unbind the character before editing its approved stats");
         if(changes.size()==0) return;
         if(!manages(p,c.campaign)) for(String field:changes.keySet())
@@ -184,14 +190,58 @@ public final class CharacterRepository {
     public void bind(Principal p,UUID id,long revision,UUID entity,UUID playerOwner) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs bind characters");
         require(c.revision==revision,"Stale character revision"); require(c.approved,"Character needs DM approval");
-        require(playerOwner==null || c.owner.equals(playerOwner),"Cannot bind another player's character to this player");
+        require(member(new Principal(controller(id),false),c.campaign),"Controller campaign membership required");
+        require(playerOwner==null || controller(id).equals(playerOwner),"Cannot bind another player's character to this player");
         require(!state.bindings.containsKey(entity) && !state.bindings.containsValue(id),"Entity or character already bound");
-        var bindings=new HashMap<>(state.bindings); bindings.put(entity,id); commit(new State(state.campaigns,state.characters,bindings));
+        var bindings=new HashMap<>(state.bindings); bindings.put(entity,id); commit(new State(state.campaigns,state.characters,bindings,state.assignments));
     }
     public void unbind(Principal p,UUID entity) throws IOException {
         UUID id=state.bindings.get(entity); require(id!=null,"Entity is not bound");
         require(manages(p,character(id).campaign),"Campaign permission denied");
-        var bindings=new HashMap<>(state.bindings); bindings.remove(entity); commit(new State(state.campaigns,state.characters,bindings));
+        var bindings=new HashMap<>(state.bindings); bindings.remove(entity); commit(new State(state.campaigns,state.characters,bindings,state.assignments));
+    }
+    /** Controller never changes ownership. All control changes require an unbound character. */
+    public UUID controller(UUID id) {var a=state.assignments.get(id);return a!=null && a.controller!=null?a.controller:character(id).owner;}
+    public Assignment assignment(UUID id) {return state.assignments.get(id);}
+    public void offerControl(Principal p,UUID id,long revision,long assignmentRevision,UUID target) throws IOException {
+        var c=character(id);require(manages(p,c.campaign),"Only campaign DMs assign characters");
+        require(c.revision==revision,"Stale character revision");require(binding(id)==null,"Unbind before changing control; live takeover unavailable");
+        require(member(new Principal(target,false),c.campaign),"Target campaign membership required");
+        var old=state.assignments.get(id);require((old==null?0:old.revision)==assignmentRevision,"Stale assignment revision");
+        require(assignmentRevision<Long.MAX_VALUE,"Assignment revision exhausted");
+        saveAssignment(new Assignment(id,old==null?c.owner:old.controller,target,Decision.PENDING,assignmentRevision+1,history(old,p.id,target,Decision.PENDING)));
+    }
+    public void answerControl(Principal p,UUID id,long revision,boolean accept) throws IOException {
+        var c=character(id);var old=state.assignments.get(id);
+        require(old!=null && old.decision==Decision.PENDING && p.id.equals(old.offered) && member(p,c.campaign),"Pending assignment recipient permission required");
+        require(old.revision==revision,"Stale assignment revision");require(binding(id)==null,"Unbind before changing control; live takeover unavailable");
+        require(revision<Long.MAX_VALUE,"Assignment revision exhausted");
+        if(accept) require(state.characters.values().stream().noneMatch(other->!other.id.equals(id) && controller(other.id).equals(p.id) && (state.assignments.containsKey(other.id) && state.assignments.get(other.id).decision==Decision.ACCEPTED || binding(other.id)!=null)),"Player is already controlling another character");
+        var decision=accept?Decision.ACCEPTED:Decision.DECLINED;
+        saveAssignment(new Assignment(id,accept?p.id:old.controller,null,decision,revision+1,history(old,p.id,p.id,decision)));
+    }
+    public void clearControl(Principal p,UUID id,long revision) throws IOException {
+        var c=character(id);require(manages(p,c.campaign),"Only campaign DMs restore control");
+        var old=state.assignments.get(id);require(old!=null && old.revision==revision,"Stale assignment revision");require(binding(id)==null,"Unbind before changing control; live takeover unavailable");
+        require(revision<Long.MAX_VALUE,"Assignment revision exhausted");
+        saveAssignment(new Assignment(id,c.owner,null,Decision.CANCELLED,revision+1,history(old,p.id,c.owner,Decision.CANCELLED)));
+    }
+    private List<ControlChange> history(Assignment old,UUID who,UUID target,Decision decision) {
+        var history=new ArrayList<ControlChange>(old==null?List.of():old.history);if(history.size()>=16) history.removeFirst();history.add(new ControlChange(who,target,decision));return history;
+    }
+    private void saveAssignment(Assignment a) throws IOException {
+        var assignments=new HashMap<>(state.assignments);assignments.put(a.character,a);commit(new State(state.campaigns,state.characters,state.bindings,assignments));
+    }
+    public void revokeApproval(Principal p,UUID id,long revision) throws IOException {
+        var c=character(id);require(manages(p,c.campaign),"Only campaign DMs revoke approval");require(c.revision==revision,"Stale character revision");require(binding(id)==null,"Unbind before revoking approval");
+        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,false,revision+1,c.runtimeRevision));
+    }
+    public void removeMember(Principal p,UUID campaign,long revision,UUID player) throws IOException {
+        var c=campaign(campaign);require(manages(p,campaign),"Campaign permission denied");require(c.revision==revision,"Stale campaign revision");
+        require(!c.owner.equals(player),"Cannot remove campaign owner");require(!c.dms.contains(player) || p.admin || c.owner.equals(p.id),"Only owner/admin removes co-DMs");
+        require(state.characters.values().stream().noneMatch(ch->ch.campaign.equals(campaign) && (ch.owner.equals(player) || controller(ch.id).equals(player)) && binding(ch.id)!=null),"Release member bindings before removal");
+        var members=new HashSet<>(c.members);members.remove(player);var dms=new HashSet<>(c.dms);dms.remove(player);
+        updateCampaign(new Campaign(c.id,c.name,c.owner,dms,members,c.profile,c.revision+1,c.policy));
     }
     /** Server-only capture of vanilla health. Client drafts cannot call this through the network. */
     public void captureHealth(Map<UUID,Double> health) throws IOException {
@@ -204,7 +254,7 @@ public final class CharacterRepository {
             var stats=new HashMap<>(c.stats); stats.put("hp",hp);
             records.put(id,new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,c.approved,c.revision,c.runtimeRevision+1)); changed=true;
         }
-        if(changed) commit(new State(state.campaigns,records,state.bindings));
+        if(changed) commit(new State(state.campaigns,records,state.bindings,state.assignments));
     }
     /** Trusted accepted-effect persistence seam. No packet/command exposes this API.
      * The caller must retain its action identity and expected snapshot across retries: this is CAS,
@@ -225,7 +275,7 @@ public final class CharacterRepository {
         return srdSnapshot(current.actor,current.campaign);
     }
     private void replace(Character c) throws IOException {
-        var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings));
+        var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings,state.assignments));
     }
     /** Single atomic store replacement for one accepted weapon action: attacker stock AND target HP.
      * No gameplay endpoint may supply health/stock directly; the encounter retains both expected snapshots.
@@ -254,7 +304,7 @@ public final class CharacterRepository {
             require(c.runtimeRevision<Long.MAX_VALUE,"Runtime revision exhausted");
             records.put(c.id,new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
         }
-        commit(new State(state.campaigns,records,state.bindings));
+        commit(new State(state.campaigns,records,state.bindings,state.assignments));
         return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
     }
     private void commit(State next) throws IOException {
@@ -303,15 +353,15 @@ public final class CharacterRepository {
     }
     private static void require(boolean value,String message) { if(!value) throw new IllegalArgumentException(message); }
     private static String encode(State s) {
-        JsonObject root=new JsonObject(); root.addProperty("schema",2);
+        JsonObject root=new JsonObject(); root.addProperty("schema",3);
         root.add("campaigns",GSON.toJsonTree(new ArrayList<>(s.campaigns.values()))); root.add("characters",GSON.toJsonTree(new ArrayList<>(s.characters.values())));
-        root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
+        root.add("assignments",GSON.toJsonTree(new ArrayList<>(s.assignments.values()))); root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
     }
     private static State decode(String json) {
         checkDepth(json,24);
         JsonObject root=JsonParser.parseString(json).getAsJsonObject();
         int schema=root.get("schema").getAsInt();
-        if(schema!=1 && schema!=2) throw new UnsupportedOperationException("Unsupported save schema");
+        if(schema!=1 && schema!=2 && schema!=3) throw new UnsupportedOperationException("Unsupported save schema");
         var campaigns=new HashMap<UUID,Campaign>(); var characters=new HashMap<UUID,Character>(); var bindings=new HashMap<UUID,UUID>();
         require(root.getAsJsonArray("campaigns").size()<=64 && root.getAsJsonArray("characters").size()<=1024,"Save limits exceeded");
         for(JsonElement e:root.getAsJsonArray("campaigns")) {
@@ -332,6 +382,17 @@ public final class CharacterRepository {
             UUID actor=UUID.fromString(e.getKey()),id=UUID.fromString(e.getValue().getAsString());
             require(characters.containsKey(id) && characters.get(id).approved && used.add(id),"Invalid or duplicate binding"); bindings.put(actor,id);
         }
-        return new State(campaigns,characters,bindings);
+        var assignments=new HashMap<UUID,Assignment>();
+        if(schema==3) {
+            require(root.getAsJsonArray("assignments").size()<=1024,"Assignment limit");
+            for(var row:root.getAsJsonArray("assignments")) {
+                var a=GSON.fromJson(row,Assignment.class);
+                require(characters.containsKey(a.character) && a.controller!=null && a.decision!=null && a.revision>0 && a.history.size()<=16,"Invalid assignment");
+                require((a.decision==Decision.PENDING)==(a.offered!=null),"Invalid pending assignment");
+                for(var change:a.history) require(change.manager!=null && change.target!=null && change.decision!=null,"Invalid control history");
+                require(assignments.put(a.character,a)==null,"Duplicate assignment");
+            }
+        }
+        return new State(campaigns,characters,bindings,assignments);
     }
 }

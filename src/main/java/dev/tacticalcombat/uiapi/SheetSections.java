@@ -89,7 +89,7 @@ public final class SheetSections {
         result.getAsJsonObject("collections").add("ui_"+section,rows);validate(result);return result;
     }
     public static void validate(JsonObject sheet) {CharacterRepository.validateSheet(sheet.toString());validateExtensions(sheet);}
-    public static void validateExtensions(JsonObject sheet) {for(String section:TYPES.keySet()) read(sheet,section);}
+    public static void validateExtensions(JsonObject sheet) {var c=sheet.getAsJsonObject("collections");if(c!=null) for(String section:TYPES.keySet()) if(c.has("ui_"+section)) read(sheet,section);}
     public static <T> T parse(JsonElement data,Class<T> type) {strict(data,type);return JSON.fromJson(data,type);}
     private static void strict(JsonElement value,Type type) {
         if(value==null || value.isJsonNull()) {require(!(type instanceof Class<?> c) || !c.isPrimitive(),"Required primitive field");return;} // Nullable optional record members; required constructors reject null.

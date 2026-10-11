@@ -61,6 +61,7 @@ public class TacticalCombatMod implements ModInitializer {
 				(payload, context) -> CombatManager.requestAttack(context.player(), payload.entityId(), payload.stamp()));
 
         dev.tacticalcombat.character.CharacterNetworking.register();
+        dev.tacticalcombat.uiapi.UiNetworking.register();
         dev.tacticalcombat.combat.SrdNetworking.register();
         PayloadTypeRegistry.playC2S().register(dev.tacticalcombat.net.SubmitCharacterPayload.ID,dev.tacticalcombat.net.SubmitCharacterPayload.CODEC);
         var submitLimit=new dev.tacticalcombat.core.RateLimit(2,100);
