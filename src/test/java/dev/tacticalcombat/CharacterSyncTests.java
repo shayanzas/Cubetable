@@ -34,6 +34,8 @@ public final class CharacterSyncTests {
             var created=api.handle(player,campaign,"create",create);
             check(created.code().equals("OK"),"create acknowledged");
             UUID id=UUID.fromString(created.data().get("id").getAsString());
+            var isolated=api.snapshot(player,id);isolated.getAsJsonObject("sheet").addProperty("injected",true);
+            check(!api.snapshot(player,id).getAsJsonObject("sheet").has("injected"),"refresh JSON remains independently mutable; cached inputs never expose a shared sheet");
             check(!repo.character(id).approved() && repo.character(id).owner().equals(player.id()),"client authority flags ignored");
             check(api.handle(other,campaign,"get",args(id)).code().equals("FORBIDDEN"),"member cannot inspect another owner's character");
             check(api.handle(other,campaign,"get",args(UUID.randomUUID())).data().size()==0,"unknown ID discloses no sheet");

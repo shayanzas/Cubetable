@@ -58,6 +58,37 @@ public class SrdSystemPerformanceGameTests implements FabricGameTest {
         ctx.complete();
     }
     @FunctionalInterface interface Operation {long run() throws Exception;}
+    @GameTest(templateName=EMPTY_STRUCTURE,tickLimit=1200)
+    public void persistentStoreScaling(TestContext ctx) throws Exception {
+        for(int count:new int[]{128,1024}) try(var f=new Fixture(ctx)) {
+            var sheet=SrdAuthoring.template();var data=SrdAuthoring.data(sheet);
+            data.getAsJsonArray("weapons").add("longbow");data.addProperty("arrows",1024);
+            UUID actor=UUID.randomUUID(),target=UUID.randomUUID();
+            UUID id=f.repo.submit(f.dm,f.campaign,dev.tacticalcombat.rules.RulesProfiles.SRD,sheet.toString());
+            f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,actor,null);
+            var path=f.dir.resolve("state.json");
+            var root=com.google.gson.JsonParser.parseString(java.nio.file.Files.readString(path)).getAsJsonObject();
+            var prototype=root.getAsJsonArray("characters").get(0).getAsJsonObject();
+            var records=new com.google.gson.JsonArray();var bindings=new JsonObject();
+            var members=root.getAsJsonArray("campaigns").get(0).getAsJsonObject().getAsJsonArray("members");
+            UUID owner=f.dm.id();
+            for(int i=0;i<count;i++) {
+                if(i>0 && i%32==0) {owner=UUID.randomUUID();members.add(owner.toString());}
+                var record=prototype.deepCopy();UUID character=UUID.randomUUID(),entity=i==0?actor:i==1?target:UUID.randomUUID();
+                record.addProperty("id",character.toString());record.addProperty("owner",owner.toString());records.add(record);bindings.addProperty(entity.toString(),character.toString());
+            }
+            root.add("characters",records);root.add("bindings",bindings);
+            // Fixture construction only; the production constructor validates the entire generated store.
+            java.nio.file.Files.writeString(path,root.toString());var repo=new CharacterRepository(path);
+            measure("store_action_records",count,()->0,()->{
+                var a=repo.srdSnapshot(actor,f.campaign);var b=repo.srdSnapshot(target,f.campaign);
+                var result=repo.commitSrdAction(a,b,SrdHealth.of(b.stats()),SrdEquipment.Weapon.LONGBOW,SrdRules.AttackMode.RANGED);
+                check(result.getFirst().stats().arrows()==a.stats().arrows()-1,"large-store atomic action spends ammunition exactly once");return java.nio.file.Files.size(path);
+            });
+            check(new CharacterRepository(path).state().equals(repo.state()),"large-store reload retains resources and identities");
+        }
+        ctx.complete();
+    }
     @GameTest(templateName=EMPTY_STRUCTURE)
     public void coDmPlayerLosesPrivateFieldsWithoutEncounterRevisionChange(TestContext ctx) throws Exception {
         var p=ctx.createMockCreativeServerPlayerInWorld();
@@ -80,6 +111,7 @@ public class SrdSystemPerformanceGameTests implements FabricGameTest {
     static void measure(String name,int actors,Operation setup,Operation operation) throws Exception {
         int samples=Boolean.getBoolean("cubetable.srd.benchmark")?20:1;
         long[] wall=new long[samples],thread=new long[samples],allocated=new long[samples];long bytes=0;
+        long gcCount=gcCount(),gcTime=gcTime();
         for(int i=-3;i<samples;i++) {
             setup.run();long a=allocation(),c=cpu(),at=System.nanoTime();long output=operation.run();
             long elapsed=System.nanoTime()-at,usedCpu=cpu()-c,usedBytes=allocation()-a;
@@ -90,7 +122,10 @@ public class SrdSystemPerformanceGameTests implements FabricGameTest {
         dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_SYSTEM operation={} actors={} n={} mean_us={} median_us={} p95_us={} max_us={} cpu_median_us={} allocated_median={} payload_bytes={}",
                 name,actors,samples,mean/1000,wall[samples/2]/1000,wall[(int)Math.ceil(samples*.95)-1]/1000,wall[samples-1]/1000,
                 thread[samples/2]/1000,allocated[samples/2],bytes);
+        dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD_GC operation={} actors={} collections={} collection_ms={}",name,actors,gcCount()-gcCount,gcTime()-gcTime);
     }
+    private static long gcCount() {return java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().stream().mapToLong(b->Math.max(0,b.getCollectionCount())).sum();}
+    private static long gcTime() {return java.lang.management.ManagementFactory.getGarbageCollectorMXBeans().stream().mapToLong(b->Math.max(0,b.getCollectionTime())).sum();}
     @GameTest(templateName=EMPTY_STRUCTURE,tickLimit=1200)
     public void combatStorageAndSerializationScaling(TestContext ctx) throws Exception {
         for(int count:new int[]{2,4,8,16}) try(var f=new Fixture(ctx)) {

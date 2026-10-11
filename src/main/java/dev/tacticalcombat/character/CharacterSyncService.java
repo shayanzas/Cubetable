@@ -79,25 +79,28 @@ public final class CharacterSyncService {
         }
     }
     private JsonObject summary(CharacterRepository.Principal who,CharacterRepository.Character c) {
+        return summary(who,c,repo.effectiveSheet(c));
+    }
+    private JsonObject summary(CharacterRepository.Principal who,CharacterRepository.Character c,JsonObject sheet) {
         var result=new JsonObject(); result.addProperty("id",c.id().toString()); result.addProperty("campaign",c.campaign().toString());
         result.addProperty("profile",c.profile()); result.addProperty("revision",c.revision()); result.addProperty("runtimeRevision",c.runtimeRevision());
         result.addProperty("approved",c.approved()); result.addProperty("manager",repo.manages(who,c.campaign()));
         result.addProperty("owner",c.owner().toString());
-        var sheet=repo.effectiveSheet(c); String name=c.id().toString();
+        String name=c.id().toString();
         if(sheet.has("text") && sheet.getAsJsonObject("text").has("name")) name=sheet.getAsJsonObject("text").get("name").getAsString();
         result.addProperty("name",name.substring(0,Math.min(80,name.length())));
         UUID actor=repo.binding(c.id()); if(actor!=null) result.addProperty("bound",actor.toString());
         return result;
     }
     public JsonObject snapshot(CharacterRepository.Principal who,UUID id) {
-        var c=repo.visible(who,id); var result=summary(who,c);
-        result.add("sheet",repo.effectiveSheet(c)); result.add("stats",GSON.toJsonTree(c.stats()));
+        var c=repo.visible(who,id);var sheet=repo.effectiveSheet(c);var result=summary(who,c,sheet);
+        result.add("sheet",sheet); result.add("stats",GSON.toJsonTree(c.stats()));
         result.add("policy",GSON.toJsonTree(repo.campaign(c.campaign()).policy()));
         if(c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD)) {
             var srd=new JsonObject(); srd.addProperty("authoringVersion",1);
             srd.addProperty("worldCombatEnabled",dev.tacticalcombat.rules.RulesProfiles.get(c.profile()).worldCombat());
             try {
-                var stats=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet());
+                var stats=repo.srdInputs(c);
                 srd.addProperty("valid",true); srd.addProperty("hp",stats.hp()); srd.addProperty("maximumHp",stats.maximumHp());
                 srd.addProperty("temporaryHp",stats.temporaryHp()); srd.addProperty("ac",stats.armorClass());
                 srd.addProperty("speedFeet",stats.walkingSpeedFeet());

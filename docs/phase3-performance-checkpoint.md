@@ -273,3 +273,22 @@ The frozen geometry oracle calls the current CharacterService: after this reposi
 The final benchmark gate passed **914 assertions and 84 GameTests**, zero failed/skipped tests. New coverage includes actual Tactical send suppression, changed HP/turn delivery, SRD delivered-state coalescing, rejection recovery, revoked observer access, DM-to-player private-field removal without encounter mutation, cache invalidation, failed writes and unbinding. An initial new benchmark fixture mistakenly interpreted `tick()`'s end flag as an active flag; correcting that test assertion was required before collecting the baseline. No existing test was weakened.
 
 **F15: Partially addressed.** Tactical unchanged bandwidth and SRD redundant snapshots/decoding improve with measured evidence. Tactical snapshot construction still runs at existing frequency; broad detection/recruitment/threat searches and real-client fading/render scaling remain open. F14's broader Tactical threat-display fidelity is unchanged. No Phase 4 mechanics or remote publication are included.
+
+## Checkpoint C: memory and persistence
+
+Checkpoint B implementation: `0d73697`. Character refresh now parses the effective sheet once for both summary and response, and reuses immutable validated SRD inputs after the existing visibility check. Every response still owns a fresh mutable JSON tree; editing one response cannot change another response or server state. The final 16-character fixture measured 29 / 43 / 44 µs median/p95/max and 27,192 allocated bytes, compared with checkpoint B's 51–71 µs medians and roughly 68–69 KB allocated. The first optimized run measured 30 µs and 27,424 bytes. No permission result or executable formula is cached.
+
+Storage fixtures now include 128 and the maximum 1,024 validated records, with distinct identities/bindings and at most 32 records per owner. These are stored records, **not 1,024 live combatants**. Each measurement commits actual attacker ammunition and target runtime state, then verifies normal restart identity/resource equality. Three warm-ups and 20 samples use local workspace storage. Sizes are approximately 147 KB and 1.17 MB; larger legal sheets can cost more.
+
+| Stored records | Before action median / p95 / max ms | Final median / p95 / max ms | Final median allocated bytes |
+|---|---|---|---|
+| 128 | 6.588 / 6.978 / 7.255 | 6.731 / 7.106 / 7.183 | 9,640,936 |
+| 1,024 | 47.962 / 59.485 / 63.221 | 47.280 / 58.925 / 72.235 | 75,068,128 |
+
+**Large-store synchronous resource persistence remains a tick-stall risk.** No storage throughput improvement is claimed. The 1,024-record measurement observed five process-wide GC collections and 43 ms cumulative collection time over warm-ups plus measured samples. Collector counters are coarse JVM observations, not retained heap, leak proof, pause attribution to individual actions, or a long-running load study. Near-cap searches also still allocate tens of MB overall; bounded slices reduce blocking and retained cache size, not total allocation to zero.
+
+A candidate byte-array write change coincided with worse large-store results (53.867 ms median / 75.581 ms max) without a supported benefit, and was reverted before this checkpoint. `AtomicJsonFile` is unchanged from checkpoint B. Full new-store validation, old-primary validation before backup, fsync/atomic replacement, write-before-publish, schema checks and fixed-roll CAS retries all remain intact. No acknowledgement is sent before the existing durability point. Schema 2 and schema-1 compatibility are unchanged.
+
+The required final benchmark gate passed **917 assertions and 85 GameTests**, zero failed/skipped tests. Added checks cover independent refresh JSON, multibyte text round-trip, byte-count file bounds, large-store durable ammunition and full restart equality. Existing interruption, corrupt/missing primary, backup recovery, both-invalid, schema and failed-write tests remain passing.
+
+Recommend a separately designed transactional storage/receipt architecture before treating near-cap stores as latency-safe. That requires preserving backup/recovery, migrations, accepted-action atomicity and eventually Phase 7 encounter receipts. This performance pass does not introduce delayed writes, partial validation, crash-time encounter restoration or resource rollback shortcuts. Server shutdown releases the repository and its bounded typed-input cache; cached inputs retain no world/entity references. Real heap/GC stability over prolonged multiplayer sessions remains Not Verified.

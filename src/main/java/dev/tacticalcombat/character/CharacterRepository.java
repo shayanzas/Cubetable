@@ -31,7 +31,7 @@ public final class CharacterRepository {
     private record ParsedSrd(Character source,dev.tacticalcombat.rules.srd.SrdCharacter inputs) {}
     // At most one immutable value per stored character (store limit 1,024). Never caches authorization.
     private final Map<UUID,ParsedSrd> parsedSrd=new HashMap<>();
-    private dev.tacticalcombat.rules.srd.SrdCharacter srdInputs(Character c) {
+    dev.tacticalcombat.rules.srd.SrdCharacter srdInputs(Character c) {
         var cached=parsedSrd.get(c.id);
         if(cached!=null && cached.source==c) return cached.inputs;
         var inputs=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet);

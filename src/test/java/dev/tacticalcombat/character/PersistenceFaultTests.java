@@ -25,6 +25,11 @@ public final class PersistenceFaultTests {
             check(Files.readString(path.resolveSibling("state.json.bak")).equals(good),"interruption preserves validated backup");
             try(var paths=Files.list(dir)) { check(paths.noneMatch(p->p.toString().endsWith(".tmp")),"failed write cleans temporary file"); }
             check(new CharacterRepository(path).campaign(campaign).policy().requireNewApproval(),"normal reload sees previous policy");
+            UUID unicode=repo.createCampaign(admin,"Café 🐉");
+            check(new CharacterRepository(path).campaign(unicode).name().equals("Café 🐉"),"atomic byte encoding preserves multibyte text");
+            Path oversized=dir.resolve("oversized.json");boolean bounded=false;
+            try {new AtomicJsonFile(oversized).write("é".repeat(8*1024*1024+1),value->value);} catch(IOException expected) {bounded=true;}
+            check(bounded && !Files.exists(oversized),"16 MiB bound counts UTF-8 bytes before publication");
         } finally { try(var paths=Files.walk(dir)) { for(Path p:paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p); } }
         System.out.println("Persistence interruption checks passed: "+checks);
     }
