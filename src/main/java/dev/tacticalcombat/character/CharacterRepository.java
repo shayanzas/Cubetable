@@ -289,6 +289,7 @@ public final class CharacterRepository {
                 if(group.equals("collections")) require(e.getValue().isJsonArray(),"Collection must be an array");
             }
         }
+        dev.tacticalcombat.uiapi.SheetSections.validateExtensions(o);
         for(var e:o.entrySet()) require(Set.of("format","kind","theme","ui","text","values","collections").contains(e.getKey()),"Unknown sheet field: "+e.getKey());
     }
     public static void checkDepth(String text,int limit) {
