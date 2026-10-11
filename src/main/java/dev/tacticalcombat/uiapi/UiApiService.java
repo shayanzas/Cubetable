@@ -14,7 +14,7 @@ public final class UiApiService {
         CAMPAIGN_LIST, CAMPAIGN_CREATE, CAMPAIGN_GET, CAMPAIGN_SELECT, CAMPAIGN_INVITE, CAMPAIGN_REMOVE, CAMPAIGN_POLICY, CAMPAIGN_PROFILE,
         ROSTER, CHARACTER_GET, CHARACTER_SECTION, CHARACTER_EDIT, CHARACTER_APPROVE, CHARACTER_REVOKE,
         ASSIGNMENT_LIST, ASSIGNMENT_OFFER, ASSIGNMENT_ANSWER, ASSIGNMENT_CLEAR, CHARACTER_SELECT, BIND, UNBIND, ELIGIBLE_PLAYERS,
-        SPELL_CATALOG, EVENTS, PARTY, INITIATIVE, REST_REQUEST, REST_REVIEW, REST_LIST
+        MANUAL_UPDATE, SPELL_CATALOG, EVENTS, PARTY, INITIATIVE, REST_REQUEST, REST_REVIEW, REST_LIST
     }
     public record Reply(String code,String message,JsonObject data) {}
     /** Minecraft actions remain behind the existing service, never simulated as successful database edits. */
@@ -79,6 +79,15 @@ public final class UiApiService {
                 case CHARACTER_EDIT -> {
                     fields(a,"character revision runtimeRevision section data");UUID id=id(a,"character");var c=repo.visible(p,id);String section=string(a,"section");JsonObject next=SheetSections.update(repo.effectiveSheet(c),section,a.getAsJsonObject("data"));
                     repo.edit(p,id,revision(a),number(a,"runtimeRevision"),CharacterEdits.diff(repo.effectiveSheet(c),next));out=character(p,id);
+                }
+                case SPELL_CATALOG -> {fields(a,"query page");out=RpgRecords.catalog(string(a,"query"),integer(a,"page"));}
+                case MANUAL_UPDATE -> {
+                    fields(a,"scope character revision runtimeRevision change");var change=SheetSections.parse(a.get("change"),RpgRecords.Change.class);UUID id=id(a,"character");String scope=string(a,"scope");
+                    if(scope.equals("LIBRARY")) {var d=library.expected(p,id,revision(a));var data=RpgRecords.apply(JsonParser.parseString(d.sheet()).getAsJsonObject(),change);out=draft(library.update(p,id,revision(a),change.section(),data),true);}
+                    else {
+                        require(scope.equals("CAMPAIGN"),"Unknown character scope");var c=repo.visible(p,id);var sheet=repo.effectiveSheet(c);var data=RpgRecords.apply(sheet,change);
+                        var next=SheetSections.update(sheet,change.section(),data);repo.edit(p,id,revision(a),number(a,"runtimeRevision"),CharacterEdits.diff(sheet,next));out=character(p,id);
+                    }
                 }
                 case CHARACTER_APPROVE, CHARACTER_REVOKE -> {
                     fields(a,"character revision");UUID id=id(a,"character");if(op==Operation.CHARACTER_APPROVE) repo.approve(p,id,revision(a));else repo.revokeApproval(p,id,revision(a));out=character(p,id);

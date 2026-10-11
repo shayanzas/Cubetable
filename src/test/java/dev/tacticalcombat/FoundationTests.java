@@ -88,6 +88,7 @@ public final class FoundationTests {
         CharacterRepositoryTests.run();
         dev.tacticalcombat.character.UiLibraryTests.run();
         dev.tacticalcombat.character.UiLifecycleTests.run();
+        dev.tacticalcombat.character.UiRpgRecordTests.run();
         CharacterSyncTests.run();
         dev.tacticalcombat.character.PersistenceFaultTests.run();
         SrdRulesTests.run();
