@@ -16,6 +16,7 @@ public final class UiNetworking {
     private static final CharacterSessions SESSIONS=new CharacterSessions();
     private static final Map<UUID,UUID> SELECTED=new HashMap<>();
     private static LibraryRepository library;
+    private static UiWorkflowStore workflows;
     private UiNetworking() {}
     public static void register() {
         PayloadTypeRegistry.playC2S().register(UiRequestPayload.ID,UiRequestPayload.CODEC);PayloadTypeRegistry.playS2C().register(UiReplyPayload.ID,UiReplyPayload.CODEC);
@@ -24,8 +25,10 @@ public final class UiNetworking {
         });
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {library=new LibraryRepository(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/library.json"));}
             catch(Exception e) {library=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI library unavailable; existing combat storage preserved",e);}});
+        ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));}
+            catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{SESSIONS.forget(handler.player.getUuid());SELECTED.remove(handler.player.getUuid());});
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{library=null;SESSIONS.clear();SELECTED.clear();});
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
         require(player.getServer().isOnThread(),"UI operations require server thread");
@@ -43,6 +46,30 @@ public final class UiNetworking {
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
+            case ACTIVE -> {
+                fields(a,"");try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }
+                UUID selected=SELECTED.get(p.getUuid());if(selected!=null) try {repo.visible(who,selected);out.addProperty("character",selected.toString());} catch(IllegalArgumentException revoked) {SELECTED.remove(p.getUuid());}
+                var bound=CharacterService.bound(p);if(bound!=null) out.addProperty("boundCharacter",bound.id().toString());out.addProperty("inCombat",CombatManager.isInCombat(p));
+            }
+            case EVENTS -> {fields(a,"campaign cursor kind");UUID campaign=id(a,"campaign");var filter=a.get("kind").isJsonNull()?null:UiEvents.Kind.valueOf(string(a,"kind"));out=SheetSections.JSON.toJsonTree(UiEvents.SESSION.query(repo,who,campaign,number(a,"cursor"),filter)).getAsJsonObject();}
+            case PARTY -> {fields(a,"campaign page");require(workflows!=null,"Workflow service unavailable");UUID campaign=id(a,"campaign");out=UiPresentation.party(p,campaign,integer(a,"page"),workflows.policy(campaign));}
+            case INITIATIVE -> {fields(a,"encounter");out=UiPresentation.initiative(p,id(a,"encounter"));}
+            case PRESENTATION_POLICY -> {fields(a,"campaign revision hp radius");require(workflows!=null,"Workflow service unavailable");UUID campaign=id(a,"campaign");workflows.policy(repo,who,new UiWorkflowStore.Policy(campaign,revision(a)+1,UiWorkflowStore.HpVisibility.valueOf(string(a,"hp")),integer(a,"radius")));out=SheetSections.JSON.toJsonTree(workflows.policy(campaign)).getAsJsonObject();}
+            case REST_REQUEST -> {
+                fields(a,"campaign request kind");require(workflows!=null,"Workflow service unavailable");UUID campaign=id(a,"campaign");require(repo.member(who,campaign),"Campaign membership permission required");
+                var party=UiPresentation.restParty(p,campaign);String dimension=p.getServerWorld().getRegistryKey().getValue().toString();int radius=workflows.policy(campaign).radius();
+                UiPresentation.eligible(p,campaign,party,dimension,p.getBlockX(),p.getBlockY(),p.getBlockZ(),radius);
+                var rest=workflows.request(repo,who,id(a,"request"),campaign,UiWorkflowStore.RestKind.valueOf(string(a,"kind")),party,dimension,p.getBlockX(),p.getBlockY(),p.getBlockZ(),System.currentTimeMillis());
+                out=SheetSections.JSON.toJsonTree(rest).getAsJsonObject();
+                UiEvents.SESSION.publish(rest.id(),campaign,null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest requested; no recovery has been applied",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(party));
+            }
+            case REST_REVIEW -> {
+                fields(a,"request revision approve");require(workflows!=null,"Workflow service unavailable");var rest=workflows.get(repo,who,id(a,"request"));require(repo.manages(who,rest.campaign()),"Only campaign DMs review rest requests");
+                if(bool(a,"approve") && System.currentTimeMillis()<rest.expires()) UiPresentation.eligible(p,rest.campaign(),rest.participants(),rest.dimension(),rest.x(),rest.y(),rest.z(),rest.radius());
+                var saved=workflows.review(repo,who,rest.id(),revision(a),bool(a,"approve"),System.currentTimeMillis());out=SheetSections.JSON.toJsonTree(saved).getAsJsonObject();
+                UiEvents.SESSION.publish(UUID.randomUUID(),rest.campaign(),null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest review: "+saved.state()+"; recovery remains manual",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(rest.participants()));
+            }
+            case REST_LIST -> {fields(a,"campaign page");require(workflows!=null,"Workflow service unavailable");out.add("requests",SheetSections.JSON.toJsonTree(workflows.list(repo,who,id(a,"campaign"),integer(a,"page"))));out.addProperty("serverTime",System.currentTimeMillis());out.addProperty("recoveryAutomated",false);}
             case CAMPAIGN_SELECT -> {fields(a,"campaign");CharacterService.select(p,id(a,"campaign"));SELECTED.remove(p.getUuid());out.addProperty("campaign",id(a,"campaign").toString());}
             case CHARACTER_SELECT -> {
                 fields(a,"character revision");var c=repo.visible(who,id(a,"character"));require(c.revision()==revision(a),"Stale character revision");require(!CombatManager.isInCombat(p),"Character selection locked during combat");

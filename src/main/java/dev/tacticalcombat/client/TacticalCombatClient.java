@@ -45,6 +45,8 @@ public class TacticalCombatClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+        ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.UiReplyPayload.ID,(payload,context)->ClientUiApi.receive(payload));
+        ClientTickEvents.END_CLIENT_TICK.register(client->ClientUiApi.tick());
         ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.SrdStatePayload.ID,(payload,context)->ClientSrdCombat.receive(payload));
         ClientCommandRegistrationCallback.EVENT.register((dispatcher,registryAccess)->dispatcher.register(ClientCommandManager.literal("srdcombat").executes(ctx->{ClientSrdCombat.open();return 1;})));
         ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.CharacterReplyPayload.ID,(payload,context)->ClientCharacters.receive(payload));
@@ -63,6 +65,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 		FadeModels.register();
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientSrdCombat.clear();
+            ClientUiApi.clear();
 			ClientCharacters.clear();
             ClientCombatState.reset();
 			BlockFade.clear();

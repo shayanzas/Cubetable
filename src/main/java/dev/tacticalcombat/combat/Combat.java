@@ -800,6 +800,13 @@ public final class Combat implements Encounter {
 
 	// ---------------------------------------------------------------- networking
 
+    public com.google.gson.JsonObject presentation(ServerPlayerEntity player) {
+        if(!contains(player)) throw new IllegalArgumentException("Encounter permission denied");
+        var out=new com.google.gson.JsonObject();var rows=new com.google.gson.JsonArray();
+        out.addProperty("profile",rules.id());out.addProperty("turn",requests.turn());out.addProperty("round",round);
+        for(var c:order) {var row=new com.google.gson.JsonObject();row.addProperty("id",c.entity.getUuidAsString());row.addProperty("name",c.entity.getName().getString());row.addProperty("initiative",c.initiative);row.addProperty("active",c==current());rows.add(row);}
+        out.add("actors",rows);return out;
+    }
 	public void sync() {
 		if (order.isEmpty()) return;
 

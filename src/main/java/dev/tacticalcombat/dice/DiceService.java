@@ -33,12 +33,21 @@ public final class DiceService {
 		if (label.length() > 48) label = label.substring(0, 48);
 
 		DiceRollPayload payload = new DiceRollPayload(player.getGameProfile().getName(), label, type, modifier, keep, results);
-		for (ServerPlayerEntity p : player.getServer().getPlayerManager().getPlayerList()) {
+		var recipients=new java.util.HashSet<java.util.UUID>();
+        for (ServerPlayerEntity p : player.getServer().getPlayerManager().getPlayerList()) {
 			if (p.getWorld() == player.getWorld()
                     && (p == player || (dev.tacticalcombat.combat.CombatManager.encounter(player) != null
                         ? dev.tacticalcombat.combat.CombatManager.encounter(p) == dev.tacticalcombat.combat.CombatManager.encounter(player)
                         : p.squaredDistanceTo(player) <= 64 * 64))
-                    && ServerPlayNetworking.canSend(p, DiceRollPayload.ID)) ServerPlayNetworking.send(p, payload);
+                    && ServerPlayNetworking.canSend(p, DiceRollPayload.ID)) {ServerPlayNetworking.send(p, payload);recipients.add(p.getUuid());}
         }
+        try {
+            var campaign=dev.tacticalcombat.character.CharacterService.context(player).campaign();
+            if(campaign!=null && dev.tacticalcombat.character.CharacterService.repository().member(dev.tacticalcombat.character.CharacterService.principal(player),campaign)) {
+                var encounter=dev.tacticalcombat.combat.CombatManager.encounter(player);
+                var roll=dev.tacticalcombat.uiapi.UiEvents.Roll.from(type.sides,java.util.Arrays.stream(results).boxed().toList(),keep,modifier,label,false);
+                dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(java.util.UUID.randomUUID(),campaign,encounter==null?null:encounter.id(),0,dev.tacticalcombat.uiapi.UiEvents.Kind.DICE,java.util.List.of(player.getUuid()),"Manual dice roll",roll,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,recipients);
+            }
+        } catch(RuntimeException presentation) {dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("Could not record manual roll presentation",presentation);}
     }
 }

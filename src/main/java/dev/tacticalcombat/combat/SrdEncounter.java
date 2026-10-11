@@ -164,6 +164,7 @@ public final class SrdEncounter implements Encounter {
         try { movement=new SrdMovementTurn(current(),this::frame); }
         catch(IllegalArgumentException denied) { state=State.PAUSED; reason=denied.getMessage(); movement=null; }
         revision++;
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.TURN,List.of(current().getUuid()),"Turn started",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,actors.stream().filter(a->a instanceof ServerPlayerEntity).map(Entity::getUuid).collect(java.util.stream.Collectors.toSet()));
     }
     private SrdMovementTurn.Frame frame() { return new SrdMovementTurn.Frame(id,campaign,RulesProfiles.SRD,turn(),state==State.ACTIVE?current().getUuid():null); }
     void endTurn(CharacterRepository.Principal p) {
@@ -252,6 +253,12 @@ public final class SrdEncounter implements Encounter {
             reason="Resource conflict: no automatic rebase or reroll. End encounter and adjudicate.";
         }
         revision++;
+        if(transaction.state==TransactionState.COMMITTED) try {
+            var t=transaction;var r=t.roll.roll();
+            var mode=SrdRules.rollMode(t.intent.geometry.advantage(),t.intent.geometry.disadvantage()||t.intent.plan.disadvantage());
+            var roll=dev.tacticalcombat.uiapi.UiEvents.Roll.from(20,r.faces(),mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2,r.total()-r.chosen(),"SRD attack",t.roll.critical());
+            dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(t.intent.id,campaign,id,t.intent.turn,dev.tacticalcombat.uiapi.UiEvents.Kind.ATTACK,List.of(t.intent.actor,t.intent.target),t.roll.hit()?"Attack committed":"Miss committed",roll,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(List.of(t.intent.requester,t.intent.actor)));
+        } catch(RuntimeException presentation) {dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("Could not record committed attack presentation",presentation);}
     }
     void retry(CharacterRepository.Principal p) {
         thread(); require(manager(p) && state==State.PAUSED && transaction!=null && transaction.state==TransactionState.SAVE_FAILED,"No failed transaction or permission denied");
@@ -262,6 +269,7 @@ public final class SrdEncounter implements Encounter {
         require(transaction==null || transaction.state==TransactionState.COMMITTED,"Resolve failed attack before adjudication");
         var expected=fresh(actor(target)); var saved=CharacterService.repository().commitSrdHealth(expected,SrdHealth.of(expected.stats()).heal(amount));
         snapshots.put(target,saved); revision++; reason="DM healing committed; end this controlled encounter to resume exploration";
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.HEALING,List.of(target),"DM healing committed: "+amount,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.of(target));
         dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD DM {} healed actor {} by {} in {}",p.id(),target,amount,id);
     }
     void stop(CharacterRepository.Principal p) { thread(); require(manager(p),"Campaign manager required"); CombatManager.endCombat(this); }
@@ -319,6 +327,7 @@ public final class SrdEncounter implements Encounter {
     }
     /** Private snapshot: public order/positions, own HP only; managers may see campaign actors. */
     void authorizeViewer(CharacterRepository.Principal p) {thread();require(viewer(p),"Encounter permission denied");}
+    public JsonObject presentation(CharacterRepository.Principal p) {return snapshot(p);}
     JsonObject snapshot(CharacterRepository.Principal p) {
         authorizeViewer(p);
         var data=new JsonObject(); data.addProperty("state",state.name()); data.addProperty("turn",turn()); data.addProperty("round",round);

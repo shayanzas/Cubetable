@@ -102,7 +102,8 @@ public final class SheetSections {
             fields.forEach((name,t)->strict(value.getAsJsonObject().get(name),t));
         } else if(type==int.class || type==long.class || type==Long.class) {
             require(value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber() && value.getAsString().matches("-?[0-9]{1,18}"),"Expected bounded integer");
-        } else if(type==boolean.class) require(value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean(),"Expected boolean");
+        } else if(type==double.class) require(value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber() && Double.isFinite(value.getAsDouble()),"Expected finite number");
+        else if(type==boolean.class) require(value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean(),"Expected boolean");
         else require(value.isJsonPrimitive() && value.getAsJsonPrimitive().isString(),"Expected text");
     }
     static void inert(Automation status) {require(status==Automation.MANUAL || status==Automation.INFORMATIONAL || status==Automation.UNAVAILABLE,"This record cannot grant automated effects");}

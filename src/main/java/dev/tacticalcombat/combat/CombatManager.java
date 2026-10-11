@@ -40,6 +40,13 @@ public final class CombatManager {
         Encounter owner=encounter(entity);
         return owner!=null && !(owner instanceof Combat);
     }
+    /** Permission checks remain owned by each encounter's projection. */
+    public static com.google.gson.JsonObject presentation(net.minecraft.server.network.ServerPlayerEntity player,java.util.UUID id) {
+        var e=encounters().stream().filter(x->x.id().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("Encounter unavailable"));
+        if(e instanceof SrdEncounter srd) return srd.presentation(dev.tacticalcombat.character.CharacterService.principal(player));
+        if(e instanceof Combat tactical) return tactical.presentation(player);
+        throw new IllegalArgumentException("Encounter presentation unavailable");
+    }
     static boolean claim(Entity actor, Encounter encounter) { return OWNERS.claim(actor.getUuid(), encounter); }
     static void release(Entity actor, Encounter encounter) { OWNERS.release(actor.getUuid(), encounter); }
     static void schedule(Encounter encounter) { if(!COMBATS.contains(encounter)) COMBATS.add(encounter); }

@@ -172,7 +172,7 @@ public final class CharacterRepository {
         }
         validateStats(stats);
         boolean approved=c.approved && !campaign(c.campaign).policy.requireEditApproval();
-        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),stats,approved,revision+1,c.runtimeRevision));
+        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),stats,approved,revision+1,c.runtimeRevision));event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.RESOURCE,"Character record updated; approval policy applied");
     }
     private static final Set<String> CORE=Set.of("hp","hp_max","ac","movement_blocks","initiative_bonus","str","dex","con","int","wis","cha","prof","level");
     public void stat(Principal p,UUID id,long revision,String key,double value) throws IOException {
@@ -186,6 +186,7 @@ public final class CharacterRepository {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs approve characters");
         require(c.revision==revision,"Stale character revision");
         replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,true,revision+1,c.runtimeRevision));
+        event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.APPROVAL,"Character approved");
     }
     public void bind(Principal p,UUID id,long revision,UUID entity,UUID playerOwner) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs bind characters");
@@ -231,10 +232,12 @@ public final class CharacterRepository {
     }
     private void saveAssignment(Assignment a) throws IOException {
         var assignments=new HashMap<>(state.assignments);assignments.put(a.character,a);commit(new State(state.campaigns,state.characters,state.bindings,assignments));
+        var c=character(a.character);dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),c.campaign,null,0,dev.tacticalcombat.uiapi.UiEvents.Kind.ASSIGNMENT,List.of(c.id),"Character control: "+a.decision,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,
+            a.offered==null?Set.copyOf(List.of(c.owner,a.controller)):Set.copyOf(List.of(c.owner,a.controller,a.offered)));
     }
     public void revokeApproval(Principal p,UUID id,long revision) throws IOException {
         var c=character(id);require(manages(p,c.campaign),"Only campaign DMs revoke approval");require(c.revision==revision,"Stale character revision");require(binding(id)==null,"Unbind before revoking approval");
-        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,false,revision+1,c.runtimeRevision));
+        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,c.stats,false,revision+1,c.runtimeRevision));event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.APPROVAL,"Approval revoked; changes requested");
     }
     public void removeMember(Principal p,UUID campaign,long revision,UUID player) throws IOException {
         var c=campaign(campaign);require(manages(p,campaign),"Campaign permission denied");require(c.revision==revision,"Stale campaign revision");
@@ -273,6 +276,9 @@ public final class CharacterRepository {
         // Even a no-op effect advances CAS revision; retrying the same expected state cannot apply twice.
         replace(new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
         return srdSnapshot(current.actor,current.campaign);
+    }
+    private void event(Character c,dev.tacticalcombat.uiapi.UiEvents.Kind kind,String message) {
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),c.campaign,null,0,kind,List.of(c.id),message,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(List.of(c.owner,controller(c.id))));
     }
     private void replace(Character c) throws IOException {
         var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings,state.assignments));

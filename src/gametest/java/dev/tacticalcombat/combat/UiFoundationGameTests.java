@@ -41,4 +41,54 @@ public class UiFoundationGameTests implements FabricGameTest {
         } finally {CharacterService.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
         ctx.complete();
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void partyPrivacyAndRestEligibilityUseLiveWorldState(TestContext ctx) throws Exception {
+        var a=ctx.createMockCreativeServerPlayerInWorld();var b=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,a.getUuid(),false);f.repo.invite(f.dm,f.campaign,2,b.getUuid(),false);
+            var id=f.repo.submit(CharacterService.principal(a),f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,a.getUuid(),a.getUuid());
+            var npc=f.actor(4,2,true);var second=f.actor(6,2,true);
+            var privateView=UiPresentation.party(b,f.campaign,0,new UiWorkflowStore.Policy(f.campaign,0,UiWorkflowStore.HpVisibility.PRIVATE,16)).getAsJsonArray("members");
+            check(privateView.size()==1 && !privateView.get(0).getAsJsonObject().has("hp"),"party excludes NPC enemies and private peer HP");
+            var bars=UiPresentation.party(b,f.campaign,0,new UiWorkflowStore.Policy(f.campaign,1,UiWorkflowStore.HpVisibility.BARS,16)).getAsJsonArray("members").get(0).getAsJsonObject();
+            check(bars.has("healthFraction") && !bars.has("maximumHp"),"bar policy does not expose exact HP fields");
+            check(UiPresentation.party(a,f.campaign,0,new UiWorkflowStore.Policy(f.campaign,0,UiWorkflowStore.HpVisibility.PRIVATE,16)).getAsJsonArray("members").get(0).getAsJsonObject().has("hp"),"owner retains exact private HP");
+            String dimension=ctx.getWorld().getRegistryKey().getValue().toString();a.setPosition(0.5,64,0.5);b.setPosition(1.5,64,0.5);
+            UiPresentation.eligible(a,f.campaign,List.of(a.getUuid(),b.getUuid()),dimension,0,64,0,16);
+            b.setPosition(100.5,64,0.5);rejects(()->UiPresentation.eligible(a,f.campaign,List.of(a.getUuid(),b.getUuid()),dimension,0,64,0,16),"distant party cannot approve rest");
+            var e=SrdLiveGameTests.begin(f,new SrdLiveGameTests.Dice(20,1),npc,second);
+            rejects(()->UiPresentation.initiative(b,e.id()),"campaign membership alone does not expose a separate encounter");
+        } finally {CharacterService.forget(a.getUuid());CharacterService.forget(b.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(a);ctx.getWorld().getServer().getPlayerManager().remove(b);}
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void committedAttackFeedsOnePrivateStructuredRoll(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx)) {
+            var actor=f.actor(2,2,true);var target=f.actor(3,2,true);var e=SrdLiveGameTests.begin(f,new SrdLiveGameTests.Dice(20,1,18),actor,target);
+            var intent=e.preview(f.dm,target.getUuid(),SrdEquipment.Weapon.UNARMED,SrdRules.AttackMode.MELEE,SrdCharacter.Ability.STR,false);var result=e.confirm(f.dm,intent.id());
+            var events=UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.ATTACK).events();
+            check(events.size()==1 && events.getFirst().id().equals(intent.id()),"committed action emits one stable event");
+            check(events.getFirst().roll().total()==result.roll.roll().total() && events.getFirst().roll().faces().equals(result.roll.roll().faces()),"presentation matches authoritative RNG");
+            rejects(()->e.confirm(f.dm,intent.id()),"duplicate accepted intent cannot reroll");
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.ATTACK).events().size()==1,"retry cannot duplicate event");
+        }
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void restGatewayApprovesAdjudicationWithoutRecoveringResources(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();var dm=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,player.getUuid(),false);f.repo.invite(f.dm,f.campaign,2,dm.getUuid(),true);
+            var args=new JsonObject();args.addProperty("campaign",f.campaign.toString());args.addProperty("request",UUID.randomUUID().toString());args.addProperty("kind","SHORT");
+            var request=UiNetworking.handle(player,new UiRequestPayload(1,"REST_REQUEST",args.toString()));check(request.code().equals("OK"),"rest request committed: "+request.message());
+            var review=new JsonObject();review.add("request",args.get("request"));review.addProperty("revision",1);review.addProperty("approve",true);
+            check(!UiNetworking.handle(player,new UiRequestPayload(2,"REST_REVIEW",review.toString())).code().equals("OK"),"requester cannot approve rest");
+            var before=f.repo.state();var response=UiNetworking.handle(dm,new UiRequestPayload(1,"REST_REVIEW",review.toString()));
+            check(response.code().equals("OK") && response.json().contains("APPROVED_FOR_ADJUDICATION"),"DM approval is explicit manual adjudication");
+            check(f.repo.state().equals(before),"rest review cannot heal, recover slots or mutate characters");
+            var buf=new net.minecraft.network.RegistryByteBuf(io.netty.buffer.Unpooled.buffer(),ctx.getWorld().getRegistryManager());
+            try {rejects(()->{try {UiRequestPayload.CODEC.encode(buf,new UiRequestPayload(3,"CAPABILITIES","x".repeat(UiRequestPayload.LIMIT+1)));} catch(io.netty.handler.codec.EncoderException expected) {throw new IllegalArgumentException(expected);}},"actual packet codec bounds");} finally {buf.release();}
+        } finally {ctx.getWorld().getServer().getPlayerManager().remove(player);ctx.getWorld().getServer().getPlayerManager().remove(dm);}
+        ctx.complete();
+    }
 }
