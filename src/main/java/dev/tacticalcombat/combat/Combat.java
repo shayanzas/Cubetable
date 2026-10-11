@@ -32,6 +32,8 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 /**
@@ -66,6 +68,8 @@ public final class Combat implements Encounter {
 	private int round = 1;
 	private int tickCounter = 0;
 	private final Set<ServerPlayerEntity> notified = new HashSet<>();
+    private record SentState(CombatStatePayload payload,int tick) {}
+    private final Map<java.util.UUID,SentState> lastSnapshots=new HashMap<>();
 
 	/** Squares the active player may walk to right now; null when it is not a standing player's turn. */
 	private Grid.Result moveGrid;
@@ -350,6 +354,7 @@ public final class Combat implements Encounter {
 				if (c.entity instanceof ServerPlayerEntity p) {
 					sendInactive(p);
 					notified.remove(p);
+                    lastSnapshots.remove(p.getUuid());
 				}
 			}
 		}
@@ -814,11 +819,14 @@ public final class Combat implements Encounter {
 
 		Combatant cur = current();
 		CombatStatePayload payload = new CombatStatePayload(true, id, requests.turn(), round, turn,
-				(float) cur.moveUsed, (float) cur.moveBudget, cur.actionUsed, cur.bonusActionUsed, entries);
+				(float) cur.moveUsed, (float) cur.moveBudget, cur.actionUsed, cur.bonusActionUsed, List.copyOf(entries));
 
 		for (Combatant c : order) {
 			if (c.entity instanceof ServerPlayerEntity p) {
+                var previous=lastSnapshots.get(p.getUuid());
+                if(previous!=null && previous.payload.equals(payload) && tickCounter-previous.tick<20) continue;
 				ServerPlayNetworking.send(p, payload);
+                lastSnapshots.put(p.getUuid(),new SentState(payload,tickCounter));
 				notified.add(p);
 			}
 		}
@@ -842,6 +850,7 @@ public final class Combat implements Encounter {
 			sendInactive(p);
 		}
 		notified.clear();
+        lastSnapshots.clear();
 		for (Combatant c : order) {
             CombatInteractions.cancel(c.entity);
             CombatManager.release(c.entity, this);

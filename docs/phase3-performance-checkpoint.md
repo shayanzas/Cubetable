@@ -242,3 +242,34 @@ Paired synchronous/incremental measurements use identical fixtures, three warm-u
 These slice measurements include occupancy/chunk capture and geometry/search work, but exclude production gateway validation, packet encoding, other server work and socket delivery. Completion latency is a **modeled schedule** (50 ms between simulated work ticks), not a measured client round trip or actual paced server session. The 300-foot change trades lower blocking time for more total work and allocation: roughly 92.928 MB allocated per incremental request. Retained caches are bounded per slice; this is not a retained-heap or leak measurement. The synchronous ordinary path remains faster and is deliberately retained.
 
 Verification: benchmark build passed 909 assertions and 80 GameTests, including the original 77. New tests cover weighted results across different yield boundaries, complete frozen-reference agreement, block/occupancy invalidation, bounded pending capacity, supersession, completed request identity, turn/end/cancel cleanup. Graphical, actual paced high-load and remote two-client performance remain Not Verified. The existing Phase 1–3 client acceptance gates remain open. Checkpoints B–D follow only after this checkpoint's regression gate passes.
+
+## October 11 — checkpoint B: combat and synchronization
+
+Checkpoint A implementation: `fe56546`. The new system profiler measures 2/4/8/16 actors, then 1/2/4/8 independent two-actor encounters. Three warm-ups precede 20 measured samples per operation. Confirmed attacks are deterministic natural-1 unarmed misses, including actual atomic resource writes, not mocked durability. HP write and normal restart measurements run after encounter termination. Character refresh includes permission-filtered JSON construction/encoding. Invalid request flooding measures authenticated embedded-player rejection, predominantly rate-limit rejection after the existing limit. Setup and spawning are outside timers. Actual network RTT, full attack geometry query counts, process heap retention and FPS are not measured.
+
+Repeated authorized reads reparsed the entire immutable SRD sheet. `CharacterRepository` now caches validated typed inputs by exact immutable Character object identity, with at most one entry per stored character (maximum 1,024). Binding, approval, profile, campaign and owner membership are checked before every access. Successful write-before-publish replacement evicts changed records; a failed write preserves both previous state and its valid inputs. No permissions, actors, worlds, or mutable JSON trees enter this cache. Existing CAS/action transactions are unchanged.
+
+`Combat.sync` still constructs and compares full Tactical state, but sends unchanged state only once per 20 ticks. Changed HP/resources/order/turn state sends immediately at the existing sync call sites. Each recipient retains its own delivery record, cleared on removal/end; initial admission and periodic full recovery remain. There are no deltas or changed wire layouts. The embedded send probe captured **11 snapshots / 1,177 encoded payload bytes before versus 2 / 214 after** over startup plus ten simulated two-tick sync opportunities (81.8% fewer packets/bytes in this finite fixture). The initial baseline log's `explicit_sync_calls=12` label overcounted the startup call; the measured packet count is accurate. These are actual captured send invocations and payload encoding sizes, excluding framing/compression/socket delivery; they are not a real one-second multiplayer session.
+
+SRD request authorization no longer constructs and discards a private snapshot. Delivery tracking now includes encounter identity, revision, campaign revision and administrator status. A delivered watch/response is not immediately repeated on the next tick. Authorization still runs before an unchanged-state skip. Campaign role changes rebuild the private projection even when encounter revision is unchanged. Rejection/cancellation messages that clients do not apply as snapshots cannot suppress a needed full state. Full explicit refresh and original packet bounds/rate limits remain.
+
+Representative 16-actor measurements, microseconds (median / p95 / maximum):
+
+| Operation | Before | After, second successful run | Median allocated bytes before → after |
+|---|---|---|---|
+| Idle encounter tick | 479 / 624 / 874 | 25 / 27 / 48 | 828,816 → 8,576 |
+| Attack preview | 126 / 217 / 369 | 27 / 42 / 45 | 210,728 → 21,656 |
+| Turn transition | 229 / 282 / 300 | 10 / 11 / 12 | 445,312 → 5,384 |
+| Eight independent encounter ticks combined | 2,088 / 2,231 / 2,391 | 75 / 95 / 127 | 3,816,064 → 40,768 |
+| Full private state JSON | 101 / 124 / 126 | 101 / 131 / 153 | 64,584 → 64,456 |
+| Confirmed durable miss | 1,400 / 1,553 / 1,873 | 1,431 / 1,522 / 1,687 | 1,739,632 → 1,473,072 |
+| Character refresh | 51 / 80 / 101 | 71 / 120 / 137 | 68,176 → 69,168 |
+| Atomic HP write | 1,097 / 1,157 / 1,170 | 1,196 / 1,270 / 1,287 | 1,407,528 → 1,353,176 |
+
+The first optimized run had 22 µs idle, 26 µs preview, 9 µs turn transition and 63 µs combined independent ticks. These repeated runs support a substantial CPU/allocation reduction in those paths. Storage and refresh did not improve; their measured variation/regressions remain visible for checkpoint C. Sub-microsecond reads round to zero in the raw microsecond output, not zero cost. Full JSON serialization was already small and is not replaced with a complex delta protocol.
+
+The frozen geometry oracle calls the current CharacterService: after this repository cache change, its timing is **not a frozen whole-runtime published baseline**. Its geometry/search equivalence remains useful. Use the recorded before/current paired system measurements, not post-change reference-adapter timing, to evaluate repository-cache improvement.
+
+The final benchmark gate passed **914 assertions and 84 GameTests**, zero failed/skipped tests. New coverage includes actual Tactical send suppression, changed HP/turn delivery, SRD delivered-state coalescing, rejection recovery, revoked observer access, DM-to-player private-field removal without encounter mutation, cache invalidation, failed writes and unbinding. An initial new benchmark fixture mistakenly interpreted `tick()`'s end flag as an active flag; correcting that test assertion was required before collecting the baseline. No existing test was weakened.
+
+**F15: Partially addressed.** Tactical unchanged bandwidth and SRD redundant snapshots/decoding improve with measured evidence. Tactical snapshot construction still runs at existing frequency; broad detection/recruitment/threat searches and real-client fading/render scaling remain open. F14's broader Tactical threat-display fidelity is unchanged. No Phase 4 mechanics or remote publication are included.

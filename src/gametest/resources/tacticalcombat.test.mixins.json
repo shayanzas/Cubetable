@@ -3,6 +3,7 @@
   "package": "dev.tacticalcombat.testmixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "PacketProbeMixin",
     "CreeperAccess",
     "SlimeAccess",
     "MobGoalsAccess",

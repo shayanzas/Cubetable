@@ -28,6 +28,16 @@ public final class CharacterRepository {
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
     private final AtomicJsonFile file;
     private State state;
+    private record ParsedSrd(Character source,dev.tacticalcombat.rules.srd.SrdCharacter inputs) {}
+    // At most one immutable value per stored character (store limit 1,024). Never caches authorization.
+    private final Map<UUID,ParsedSrd> parsedSrd=new HashMap<>();
+    private dev.tacticalcombat.rules.srd.SrdCharacter srdInputs(Character c) {
+        var cached=parsedSrd.get(c.id);
+        if(cached!=null && cached.source==c) return cached.inputs;
+        var inputs=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet);
+        if(state.characters.get(c.id)==c) parsedSrd.put(c.id,new ParsedSrd(c,inputs));
+        return inputs;
+    }
     public CharacterRepository(Path path) throws IOException {
         this(new AtomicJsonFile(path));
     }
@@ -128,8 +138,7 @@ public final class CharacterRepository {
         require(c.approved && c.profile.equals(RulesProfiles.SRD) && c.profileVersion==1,"Approved SRD 5.1 profile required");
         require(c.campaign.equals(expectedCampaign),"SRD character belongs to another campaign");
         require(member(new Principal(c.owner,false),c.campaign),"SRD character owner is no longer a campaign member");
-        var inputs=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet);
-        return new SrdSnapshot(c.id,actor,c.campaign,c.revision,c.runtimeRevision,inputs);
+        return new SrdSnapshot(c.id,actor,c.campaign,c.revision,c.runtimeRevision,srdInputs(c));
     }
     public void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes) throws IOException {
         edit(p,id,revision,runtimeRevision,changes,false);
@@ -248,7 +257,10 @@ public final class CharacterRepository {
         commit(new State(state.campaigns,records,state.bindings));
         return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
     }
-    private void commit(State next) throws IOException { String json=encode(next); file.write(json,CharacterRepository::decode); state=next; }
+    private void commit(State next) throws IOException {
+        String json=encode(next); file.write(json,CharacterRepository::decode); state=next;
+        parsedSrd.entrySet().removeIf(e->next.characters.get(e.getKey())!=e.getValue().source);
+    }
     public static void validateStats(Map<String,Double> stats) {
         require(stats.size()<=64,"Too many stats");
         for(var e:stats.entrySet()) {

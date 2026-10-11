@@ -16,16 +16,23 @@ public final class SrdNetworking {
     // Reachable-grid searches are substantially more expensive than small state replies.
     private static final RateLimit GRID_LIMIT=new RateLimit(2,20);
     private static final Map<UUID,UUID> WATCHING=new HashMap<>();
-    private static final Map<UUID,Long> SENT=new HashMap<>();
+    private record Delivery(UUID encounter,long revision,long campaignRevision,boolean admin) {}
+    private static final Map<UUID,Delivery> SENT=new HashMap<>();
     private SrdNetworking() {}
     public static void register() {
         PayloadTypeRegistry.playC2S().register(SrdRequestPayload.ID,SrdRequestPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(SrdStatePayload.ID,SrdStatePayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(SrdRequestPayload.ID,(request,ctx)->{
-            if(ServerPlayNetworking.canSend(ctx.player(),SrdStatePayload.ID)) ServerPlayNetworking.send(ctx.player(),handle(ctx.player(),request));
+            if(ServerPlayNetworking.canSend(ctx.player(),SrdStatePayload.ID)) send(ctx.player(),handle(ctx.player(),request));
         });
         ServerTickEvents.END_SERVER_TICK.register(server->{
             SrdGridJobs.tick(SrdNetworking::send);
+            synchronize(server);
+        });
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ SrdGridJobs.cancel(handler.player.getUuid()); LIMIT.forget(handler.player.getUuid()); GRID_LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{SrdGridJobs.clear();LIMIT.clear();GRID_LIMIT.clear();WATCHING.clear();SENT.clear();});
+    }
+    static void synchronize(net.minecraft.server.MinecraftServer server) {
             for(var player:server.getPlayerManager().getPlayerList()) {
                 UUID watching=WATCHING.get(player.getUuid()); if(watching==null) continue;
                 var encounter=find(watching);
@@ -33,19 +40,32 @@ public final class SrdNetworking {
                     send(player,new SrdStatePayload(watching,Long.MAX_VALUE,"ENDED","Encounter ended; D&D resources retained","{}"));
                     WATCHING.remove(player.getUuid()); SENT.remove(player.getUuid()); continue;
                 }
-                if(SENT.getOrDefault(player.getUuid(),-1L)==encounter.revision()) continue;
-                try { send(player,state(encounter,CharacterService.principal(player),"STATE",encounter.reason(),null)); SENT.put(player.getUuid(),encounter.revision()); }
+                try {
+                    var principal=CharacterService.principal(player);encounter.authorizeViewer(principal);
+                    var previous=SENT.get(player.getUuid());
+                    if(previous!=null && previous.encounter.equals(encounter.id()) && previous.revision==encounter.revision()
+                            && previous.campaignRevision==CharacterService.repository().campaign(encounter.campaign()).revision()
+                            && previous.admin==principal.admin()) continue;
+                    send(player,state(encounter,principal,"STATE",encounter.reason(),null));
+                }
                 catch(IllegalArgumentException denied) { WATCHING.remove(player.getUuid()); SENT.remove(player.getUuid()); send(player,new SrdStatePayload(watching,Long.MAX_VALUE,"ENDED","Encounter permission no longer available","{}")); }
             }
-        });
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{ SrdGridJobs.cancel(handler.player.getUuid()); LIMIT.forget(handler.player.getUuid()); GRID_LIMIT.forget(handler.player.getUuid()); WATCHING.remove(handler.player.getUuid()); SENT.remove(handler.player.getUuid()); });
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{SrdGridJobs.clear();LIMIT.clear();GRID_LIMIT.clear();WATCHING.clear();SENT.clear();});
     }
-    private static void send(ServerPlayerEntity p,SrdStatePayload payload) { if(ServerPlayNetworking.canSend(p,SrdStatePayload.ID)) ServerPlayNetworking.send(p,payload); }
+    static void send(ServerPlayerEntity p,SrdStatePayload payload) {
+        if(ServerPlayNetworking.canSend(p,SrdStatePayload.ID)) {
+            ServerPlayNetworking.send(p,payload);
+            if(payload.code().equals("ENDED")) SENT.remove(p.getUuid());
+            else if(!payload.json().equals("{}") && !Set.of("REJECTED","STORAGE_ERROR","GRID_CANCELLED").contains(payload.code())) {
+                var encounter=find(payload.encounter());
+                if(encounter!=null) SENT.put(p.getUuid(),new Delivery(payload.encounter(),payload.revision(),
+                        CharacterService.repository().campaign(encounter.campaign()).revision(),CharacterService.principal(p).admin()));
+            }
+        }
+    }
     static SrdEncounter find(UUID id) { return CombatManager.encounters().stream().filter(e->e.id().equals(id) && e instanceof SrdEncounter).map(e->(SrdEncounter)e).findFirst().orElse(null); }
     static void watch(ServerPlayerEntity p,SrdEncounter encounter) {
         var payload=state(encounter,CharacterService.principal(p),"STATE",encounter.reason(),null);
-        WATCHING.put(p.getUuid(),encounter.id()); SENT.remove(p.getUuid()); send(p,payload);
+        WATCHING.put(p.getUuid(),encounter.id()); send(p,payload);
     }
     static SrdStatePayload state(SrdEncounter encounter,CharacterRepository.Principal p,String code,String message,JsonObject extra) {
         JsonObject data=encounter.snapshot(p); if(extra!=null) extra.entrySet().forEach(e->data.add(e.getKey(),e.getValue()));
@@ -61,7 +81,7 @@ public final class SrdNetworking {
             if(request.json().length()>SrdRequestPayload.LIMIT) throw new IllegalArgumentException("Request too large");
             CharacterRepository.checkDepth(request.json(),8); JsonObject args=JsonParser.parseString(request.json()).getAsJsonObject();
             SrdEncounter encounter=find(request.encounter()); if(encounter==null) throw new IllegalArgumentException("Encounter unavailable");
-            var p=CharacterService.principal(player); encounter.snapshot(p); // Authorize before returning any data.
+            var p=CharacterService.principal(player); encounter.authorizeViewer(p); // Authorize without constructing a discarded snapshot.
             revision=encounter.revision();
             if(request.operation().equals("state")) { WATCHING.put(player.getUuid(),encounter.id()); return state(encounter,p,"STATE",encounter.reason(),null); }
             if(!encounter.admit(p,request)) throw new IllegalArgumentException("Stale, duplicate, excessive or unauthorized request");
@@ -116,7 +136,6 @@ public final class SrdNetworking {
                                 && encounter.id().equals(WATCHING.get(viewer.getUuid()))
                                 && (viewer.getUuid().equals(result.intent.actor()) || CharacterService.repository().manages(CharacterService.principal(viewer),encounter.campaign()))) {
                             send(viewer,state(encounter,CharacterService.principal(viewer),"RESULT",encounter.reason(),extra));
-                            SENT.put(viewer.getUuid(),encounter.revision());
                         }
                     } else code="SAVE_FAILED";
                     message=encounter.reason();

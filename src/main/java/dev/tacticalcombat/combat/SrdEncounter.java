@@ -318,8 +318,9 @@ public final class SrdEncounter implements Encounter {
         }
     }
     /** Private snapshot: public order/positions, own HP only; managers may see campaign actors. */
+    void authorizeViewer(CharacterRepository.Principal p) {thread();require(viewer(p),"Encounter permission denied");}
     JsonObject snapshot(CharacterRepository.Principal p) {
-        thread(); require(viewer(p),"Encounter permission denied");
+        authorizeViewer(p);
         var data=new JsonObject(); data.addProperty("state",state.name()); data.addProperty("turn",turn()); data.addProperty("round",round);
         data.addProperty("campaign",campaign.toString()); data.addProperty("manager",manager(p));
         data.addProperty("reason",reason); data.addProperty("actionUsed",actionUsed);
