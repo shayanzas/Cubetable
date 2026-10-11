@@ -47,6 +47,15 @@ public final class UiLifecycleTests {
         var migrated=new CharacterRepository(legacy);check(migrated.character(id).id().equals(id) && migrated.controller(id).equals(owner.id()),"schema2 adds empty assignment metadata without changing identities");
         migrated.approve(dm,id,2);check(JsonParser.parseString(Files.readString(legacy)).getAsJsonObject().get("schema").getAsInt()==3,"next durable write migrates to schema3");
         var forged=args("character",id);forged.addProperty("admin",true);check(!api.handle(outsider,CHARACTER_GET,forged).code().equals("OK"),"unknown privilege fields rejected");
+        var copySheet=repo.effectiveSheet(repo.character(copy));var changed=copySheet.deepCopy();SrdAuthoring.data(changed).addProperty("hp",4);
+        repo.edit(owner,copy,1,0,CharacterEdits.diff(copySheet,changed));
+        check(SrdCharacterCodec.parseSheet(repo.character(copy).sheet()).hp()==4 && SrdCharacterCodec.parseSheet(repo.character(id).sheet()).hp()==10 && SrdCharacterCodec.parseSheet(library.get(owner,d.id()).sheet()).hp()==10,"campaign HP edits cannot mutate source or sibling copy");
+        repo.policy(dm,campaign,3,new ApprovalPolicy(true,true,true,Set.of("collections.*")));
+        check(!api.handle(owner,CHARACTER_EDIT,args("character",id,"revision",2,"runtimeRevision",0,"section","trackers","data",trackers)).code().equals("OK"),"new tracker API honors campaign owner lock");
+        var failurePath=dir.resolve("assignment-failure.json");Files.copy(path,failurePath);var failing=new CharacterRepository(new AtomicJsonFile(failurePath,destination->{throw new java.io.IOException("injected assignment save failure");}));
+        var before=failing.state();var failingApi=new UiApiService(failing,library,(op,a)->{throw new IllegalArgumentException("unavailable");});
+        check(failingApi.handle(dm,ASSIGNMENT_OFFER,args("character",id,"revision",2,"assignmentRevision",3,"player",substitute.id())).code().equals("STORAGE_ERROR"),"assignment save failure returns no fake success");
+        check(failing.state().equals(before) && failing.controller(id).equals(owner.id()),"failed assignment write leaves current controller/state unchanged");
         System.out.println("UI lifecycle checks passed: "+count);
     }
 }
