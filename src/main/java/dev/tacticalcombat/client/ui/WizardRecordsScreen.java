@@ -1,0 +1,60 @@
+package dev.tacticalcombat.client.ui;
+
+import com.google.gson.*;
+import dev.tacticalcombat.uiapi.SheetSections;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.Screen;
+import java.util.*;
+import static dev.tacticalcombat.client.ui.ManagementState.*;
+import static dev.tacticalcombat.uiapi.UiApiService.Operation.*;
+
+/** Typed manual records for inventory, features and custom spells; none grant combat automation. */
+public final class WizardRecordsScreen extends ManagementScreen {
+    private final String character,section;
+    private JsonObject draft;
+    public WizardRecordsScreen(Screen parent,JsonObject draft,String section) {super(title(section),parent);character=text(draft,"id");this.draft=draft.deepCopy();this.section=section;}
+    private static String title(String s) {return switch(s){case "inventory"->"Equipment and inventory records";case "features"->"Features and feats";case "spellbook"->"Custom spellbook";default->throw new IllegalArgumentException("Unknown section");};}
+    @Override protected void refresh(){clearRows();read(LIBRARY_GET,args("character",character),data->{draft=data;display();});}
+    private void display(){
+        clearRows();JsonObject data=SheetSections.read(draft.getAsJsonObject("sheet"),section);
+        if(section.equals("inventory")) {
+            for(var e:data.getAsJsonArray("items")){var o=e.getAsJsonObject();row(text(o,"name"),o.get("quantity").getAsInt()+" · "+(flag(o,"equipped")?"equipped":"carried")+" · manual record",true,"",()->item(o));}
+            row("+ Add equipment record","Does not grant a Minecraft item or alter AC, attacks or ammunition",true,"",()->item(null));
+        } else if(section.equals("features")) {
+            for(var e:data.getAsJsonArray("entries")){var o=e.getAsJsonObject();row(text(o,"name"),text(o,"kind")+" · "+text(o,"status"),true,"",()->feature(o));}
+            row("+ Add feature / feat record","Manual or informational only; prerequisites are not automatically enforced",true,"",()->feature(null));
+            row("Edit progression / feat summary","Recorded level, XP, class, feat and pending-choice lists",true,"",()->client.setScreen(WizardEditors.progression(this,draft)));
+        } else {
+            for(var e:data.getAsJsonArray("selections")){var selection=e.getAsJsonObject();JsonObject definition=find(data, text(selection,"spell"));row(definition==null?text(selection,"spell"):text(definition,"name"),(flag(selection,"prepared")?"Prepared · ":"")+"custom/manual spell",true,"",()->spell(definition,selection));}
+            row("+ Add custom spell","The verified standard spell catalog is empty; no spellcasting automation",true,"",()->spell(null,null));
+            row("Edit spellcasting summary","Recorded ability, save DC and attack modifier; informational only",true,"",()->client.setScreen(WizardEditors.spellSummary(this,draft)));
+        }
+        if(rows.size()==1) info("No saved records","Use the add action above. Server validation and bounded section storage still apply.");
+    }
+    private static JsonObject find(JsonObject spellbook,String id){for(var e:spellbook.getAsJsonArray("customDefinitions")){var o=e.getAsJsonObject();if(text(o,"id").equals(id))return o;}return null;}
+    private void item(JsonObject existing){
+        String id=existing==null?"custom:"+UUID.randomUUID():text(existing,"id");
+        var fields=List.of(f("name","Name",existing,80),f("quantity","Quantity",existing==null?"1":existing.get("quantity").getAsString(),5),f("equipped","Equipped (true/false)",existing==null?"false":existing.get("equipped").getAsString(),5),f("slot","Slot",existing,40),f("properties","Properties (comma separated)",existing==null?"":join(existing,"properties"),512),f("notes","Notes",existing,1024),f("physicalMapping","Minecraft mapping note",existing,128));
+        open("Equipment record",fields,(state,v)->{JsonObject data=SheetSections.read(state.getAsJsonObject("sheet"),"inventory");JsonObject o=new JsonObject();o.addProperty("id",id);o.addProperty("definition","");o.addProperty("name",required(v,"name"));o.addProperty("quantity",WizardEditors.integer(v,"quantity",0,10000));o.addProperty("equipped",bool(v,"equipped"));o.addProperty("slot",v.get("slot"));o.add("properties",WizardEditors.array(v.get("properties"),24));o.addProperty("notes",v.get("notes"));o.addProperty("physicalMapping",v.get("physicalMapping"));replace(data.getAsJsonArray("items"),id,o);return saveArgs(state,"inventory",data);},"Stored for manual tracking only. No physical item is granted and no combat statistic is derived.");
+    }
+    private void feature(JsonObject existing){
+        String id=existing==null?"custom:"+UUID.randomUUID():text(existing,"id");
+        var fields=List.of(f("name","Name",existing,80),f("kind","Kind: CLASS, SPECIES, BACKGROUND, FEAT, CUSTOM",existing==null?"CUSTOM":text(existing,"kind"),16),f("source","Source",existing,128),f("status","Status: MANUAL or INFORMATIONAL",existing==null?"MANUAL":text(existing,"status"),16),f("description","Description",existing,2048));
+        open("Feature / feat record",fields,(state,v)->{String kind=v.get("kind").trim().toUpperCase(Locale.ROOT),status=v.get("status").trim().toUpperCase(Locale.ROOT);if(!Set.of("CLASS","SPECIES","BACKGROUND","FEAT","CUSTOM").contains(kind))throw new IllegalArgumentException("Unsupported feature kind");if(!Set.of("MANUAL","INFORMATIONAL").contains(status))throw new IllegalArgumentException("Features may only be MANUAL or INFORMATIONAL");JsonObject data=SheetSections.read(state.getAsJsonObject("sheet"),"features"),o=new JsonObject();o.addProperty("id",id);o.addProperty("kind",kind);o.addProperty("name",required(v,"name"));o.addProperty("description",v.get("description"));o.addProperty("source",v.get("source"));o.addProperty("status",status);o.add("durationRounds",JsonNull.INSTANCE);o.add("sourceActor",JsonNull.INSTANCE);o.add("uses",JsonNull.INSTANCE);o.add("history",new JsonArray());replace(data.getAsJsonArray("entries"),id,o);return saveArgs(state,"features",data);},"Feat eligibility and feature effects are not automated. This record cannot grant combat authority.");
+    }
+    private void spell(JsonObject definition,JsonObject selection){
+        String id=definition==null?"custom:"+UUID.randomUUID():text(definition,"id");
+        var fields=List.of(f("name","Name",definition,80),f("level","Level 0–9",definition==null?"0":definition.get("level").getAsString(),1),f("school","School",definition,128),f("castingTime","Casting time",definition,128),f("range","Range",definition,128),f("duration","Duration",definition,128),f("components","Components (for example V, S, M)",components(definition),8),f("materials","Materials",definition,512),f("concentration","Concentration (true/false)",definition==null?"false":definition.get("concentration").getAsString(),5),f("ritual","Ritual (true/false)",definition==null?"false":definition.get("ritual").getAsString(),5),f("known","Known (true/false)",selection==null?"true":selection.get("known").getAsString(),5),f("prepared","Prepared (true/false)",selection==null?"false":selection.get("prepared").getAsString(),5),f("description","Description",definition,4096),f("upcasting","At higher levels",definition,1024));
+        open("Custom spell record",fields,(state,v)->{JsonObject data=SheetSections.read(state.getAsJsonObject("sheet"),"spellbook"),d=new JsonObject();String c=v.get("components").toUpperCase(Locale.ROOT);d.addProperty("id",id);d.addProperty("name",required(v,"name"));d.addProperty("level",WizardEditors.integer(v,"level",0,9));d.addProperty("school",v.get("school"));d.addProperty("castingTime",v.get("castingTime"));d.addProperty("range",v.get("range"));d.addProperty("duration",v.get("duration"));d.addProperty("verbal",c.contains("V"));d.addProperty("somatic",c.contains("S"));d.addProperty("material",c.contains("M"));d.addProperty("materials",v.get("materials"));d.addProperty("concentration",bool(v,"concentration"));d.addProperty("ritual",bool(v,"ritual"));d.addProperty("description",v.get("description"));d.addProperty("upcasting",v.get("upcasting"));d.addProperty("sourceVersion","custom/manual");d.addProperty("custom",true);replace(data.getAsJsonArray("customDefinitions"),id,d);JsonObject s=new JsonObject();s.addProperty("spell",id);s.addProperty("known",bool(v,"known"));s.addProperty("prepared",bool(v,"prepared"));s.addProperty("alwaysPrepared",false);s.addProperty("source","custom/manual");s.addProperty("notes","");replace(data.getAsJsonArray("selections"),id,s,"spell");return saveArgs(state,"spellbook",data);},"Custom/manual spell only. The standard catalog is empty and casting, slots and effects are not automated.");
+    }
+    private void open(String title,List<RecordFormScreen.Field> fields,java.util.function.BiFunction<JsonObject,Map<String,String>,JsonObject> build,String note){client.setScreen(new RecordFormScreen(this,title,LIBRARY_GET,args("character",character),fields,build,LIBRARY_UPDATE,data->MinecraftClient.getInstance().setScreen(this),note).expected(draft));}
+    private JsonObject saveArgs(JsonObject state,String section,JsonObject data){return args("character",character,"revision",revision(state),"section",section,"data",data);}
+    private static void replace(JsonArray a,String id,JsonObject value){replace(a,id,value,"id");}
+    private static void replace(JsonArray a,String id,JsonObject value,String key){for(int i=0;i<a.size();i++)if(text(a.get(i).getAsJsonObject(),key).equals(id)){a.set(i,value);return;}a.add(value);}
+    private static RecordFormScreen.Field f(String key,String label,JsonObject source,int limit){return f(key,label,source==null?"":text(source,key),limit);}
+    private static RecordFormScreen.Field f(String key,String label,String value,int limit){return new RecordFormScreen.Field(key,label,value,limit);}
+    private static String required(Map<String,String> v,String key){String s=v.get(key).trim();if(s.isEmpty())throw new IllegalArgumentException(key+" is required");return s;}
+    private static boolean bool(Map<String,String> v,String key){String s=v.get(key).trim().toLowerCase(Locale.ROOT);if(!s.equals("true")&&!s.equals("false"))throw new IllegalArgumentException(key+" must be true or false");return Boolean.parseBoolean(s);}
+    private static String join(JsonObject o,String key){var values=new ArrayList<String>();for(var e:array(o,key))values.add(e.getAsString());return String.join(", ",values);}
+    private static String components(JsonObject d){if(d==null)return "";var c=new ArrayList<String>();if(flag(d,"verbal"))c.add("V");if(flag(d,"somatic"))c.add("S");if(flag(d,"material"))c.add("M");return String.join(",",c);}
+}

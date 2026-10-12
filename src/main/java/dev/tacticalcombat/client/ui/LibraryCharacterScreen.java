@@ -18,6 +18,7 @@ public final class LibraryCharacterScreen extends ManagementScreen {
     private void display() {
         clearRows();info(text(draft,"name"),text(draft,"mode")+" · "+profile(text(draft,"profile"))+" · "+text(draft,"stage"));
         info("Independent personal source","Campaign copies have independent HP, XP, equipment and resources. Source edits never overwrite an approved copy.");
+        row(text(draft,"stage").equals("DRAFT")?"Resume character creation":"Review creation record","Eleven-stage guided/manual workspace; finalized campaign characters cannot be edited through it",text(draft,"stage").equals("DRAFT"),"Completed sources use this detail page; duplicate one to start a new draft",()->client.setScreen(new CharacterWizardScreen(this,draft)));
         row("Readiness",validation,true,"",()->validate());
         row("Edit name","Save supported basics; changes return this source to DRAFT",true,"",this::name);
         row("Edit SRD numeric combat inputs","Grouped existing authoring fields; full wizard/equipment editor deferred",text(draft,"profile").equals("srd_5_1"),"SRD inputs require the SRD 5.1 profile. Manual pack fields remain under legacy local tools.",this::combat);
@@ -28,7 +29,7 @@ public final class LibraryCharacterScreen extends ManagementScreen {
         row("Submit to campaign","Creates a separate campaign copy, subject to membership and policy",text(draft,"stage").equals("COMPLETE"),"Finalize a valid draft before submitting",()->client.setScreen(new CampaignBrowserScreen(this,this::submission)));
         for(var e:array(draft,"submissions")) {var c=e.getAsJsonObject();row("Campaign copy: "+text(c,"name"),text(c,"campaignName")+" · "+(flag(c,"approved")?"Approved":"Awaiting approval"),true,"",()->{String copy=text(c,"id");client.setScreen(parent instanceof CampaignCharacterScreen target && target.recordId().equals(copy)?parent:new CampaignCharacterScreen(this,copy));});}
         if(flag(draft,"submissionsTruncated")) info("Additional campaign copies","Only the first 128 known submissions are shown. Use campaign rosters for more.");
-        info("Later authoring sections","Full guided wizard, inventory, spellbook, progression and detailed dashboard editing arrive in later checkpoints. No delete, export or transfer API exists.");
+        info("Authoring scope","The creation wizard edits supported library draft sections. A detailed post-creation dashboard, delete, export and transfer APIs remain unavailable.");
     }
     private void validate() {read(LIBRARY_VALIDATE,args("character",id),data->{validation=ManagementState.validation(data);display();client.setScreen(new InfoScreen(this,"Validation results","Supported fields only; not complete guided legality",validation));});}
     private void name() {
