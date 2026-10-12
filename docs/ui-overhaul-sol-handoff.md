@@ -28,12 +28,12 @@ UUIDs/revisions are protocol fields obtained from read models and held by the UI
 
 | Operation | Exact args | Permission/result |
 |---|---|---|
-| `CAPABILITIES` | `{}` | Protocol/section version 1; operations, section defaults and existing SRD authoring fields/options; automation flags are false. |
+| `CAPABILITIES` | `{}` | Protocol/section version 1; `hubQuickSwitch:true` when the Checkpoint 1 server restriction is available; operations, section defaults and existing SRD authoring fields/options; automation flags are false. |
 | `ACTIVE` | `{}` | Selected campaign/character when still authorized, bound character, in-combat flag. Selection is session-local. |
 | `CAMPAIGN_LIST` | `page` | Visible campaigns only; existing summaries include name/profile/revision/manager/policy. Pages 0–8. |
 | `CAMPAIGN_CREATE` | `name` | Server administrator only; creates through existing repository, returns campaign details. Does not implicitly select it. |
 | `CAMPAIGN_GET` | `campaign` | Members/managers; roster member UUIDs and co-DM list only to managers. |
-| `CAMPAIGN_SELECT` | `campaign` | Self-selection among authorized memberships; existing combat lock applies. Clears UI character selection, does not rebind. |
+| `CAMPAIGN_SELECT` | `campaign` or `campaign, quick:true` | Ordinary browser: self-selection among authorized memberships. Checkpoint 1 hub quick-switch: server requires target campaign manager authority when `quick:true` is present. Existing combat lock applies. Clears UI character selection, does not rebind. |
 | `CAMPAIGN_INVITE` | `campaign, revision, player, dm` | Campaign manager invites; only owner/admin appoints co-DMs. |
 | `CAMPAIGN_REMOVE` | `campaign, revision, player` | Manager; cannot remove owner. Owner/admin required to remove co-DM; affected bindings must be released first. |
 | `CAMPAIGN_REVOKE_DM` | `campaign, revision, player` | Owner/admin; delegates to existing role-revocation path, preserving membership and private-view invalidation. |
@@ -41,6 +41,8 @@ UUIDs/revisions are protocol fields obtained from read models and held by the UI
 | `CAMPAIGN_PROFILE` | `campaign, revision, profile` | Manager; changes default only, not existing sheets or encounters. |
 | `ROSTER` | `campaign, page` | Members: names, identity, owner/controller, approval, binding, editing revision, private-view eligibility. No raw other-player sheets. |
 | `ELIGIBLE_PLAYERS` | `campaign` | Managers: up to 256 online player names/UUIDs, membership and combat flags. These are discovery results, not authorization to mutate them. |
+
+Checkpoint 1 keeps the existing operation and adds only the explicit `quick:true` manager check, advertised by `CAPABILITIES.hubQuickSwitch`. Older foundation servers lack that flag and should disable the hub quick-switch while retaining ordinary campaign browsing.
 
 The existing membership model grants a member self-selection among eligible campaigns. This task does not add a per-switch DM approval queue or forcibly change another player's active campaign. Do not depict such a queue as implemented.
 
