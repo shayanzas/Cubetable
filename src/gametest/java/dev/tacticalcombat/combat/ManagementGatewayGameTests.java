@@ -93,4 +93,25 @@ public final class ManagementGatewayGameTests implements FabricGameTest {
             check(f.repo.controller(id).equals(f.dm.id()) && f.repo.binding(id)==null && f.repo.character(id).owner().equals(f.dm.id()),"offline offer never transfers ownership, current control or binding");
         } finally {cleanup(ctx,manager);}ctx.complete();
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void dashboardReadbackKeepsBoundManualTrackersReadOnly(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,player.getUuid(),false);var principal=CharacterService.principal(player);
+            var id=f.repo.submit(principal,f.campaign,"srd_5_1",SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,player.getUuid(),player.getUuid());
+            var dashboard=data(send(player,1,"CHARACTER_GET",args("character",id)));check(dashboard.getAsJsonObject("srd").get("valid").getAsBoolean() && dashboard.has("sheet") && dashboard.has("runtimeRevision"),"dashboard reads authoritative snapshot and structured sheet together");
+            var change=new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,1);var before=f.repo.state();var update=args("scope","CAMPAIGN","character",id,"revision",dashboard.get("revision"),"runtimeRevision",dashboard.get("runtimeRevision"),"change",SheetSections.JSON.toJsonTree(change));
+            check(send(player,2,"MANUAL_UPDATE",update).code().equals("FORBIDDEN"),"bound dashboard manual tracker remains server-refused");check(f.repo.state().equals(before),"refused dashboard update publishes no character or binding changes");
+        } finally {cleanup(ctx,player);}ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void dashboardCampaignSectionEditUsesCasAndApprovalPolicy(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();var outsider=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,player.getUuid(),false);var principal=CharacterService.principal(player);var id=f.repo.submit(principal,f.campaign,"srd_5_1",SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);
+            var snapshot=data(send(player,1,"CHARACTER_GET",args("character",id)));var identity=SheetSections.read(snapshot.getAsJsonObject("sheet"),"identity");identity.addProperty("biography","Dashboard edit");
+            var edit=args("character",id,"revision",snapshot.get("revision"),"runtimeRevision",snapshot.get("runtimeRevision"),"section","identity","data",identity);var saved=data(send(player,2,"CHARACTER_EDIT",edit));check(!saved.get("approved").getAsBoolean() && SheetSections.read(saved.getAsJsonObject("sheet"),"identity").get("biography").getAsString().equals("Dashboard edit"),"confirmed owner section edit follows approval invalidation policy");
+            check(send(player,3,"CHARACTER_EDIT",edit).code().equals("CONFLICT"),"stale dashboard revision cannot overwrite confirmed edit");check(send(outsider,1,"CHARACTER_GET",args("character",id)).code().equals("FORBIDDEN"),"unrelated player cannot inspect dashboard sheet");
+        } finally {cleanup(ctx,player,outsider);}ctx.complete();
+    }
 }

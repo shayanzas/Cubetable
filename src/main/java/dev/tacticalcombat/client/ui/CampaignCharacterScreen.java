@@ -5,7 +5,7 @@ import net.minecraft.client.gui.screen.Screen;
 import static dev.tacticalcombat.client.ui.ManagementState.*;
 import static dev.tacticalcombat.uiapi.UiApiService.Operation.*;
 
-/** Reusable permission-aware lifecycle detail, intentionally not the full post-creation dashboard. */
+/** Permission-aware lifecycle management opened from the detailed dashboard. */
 public final class CampaignCharacterScreen extends ManagementScreen {
     private final String id;
     private JsonObject character;
@@ -19,6 +19,7 @@ public final class CampaignCharacterScreen extends ManagementScreen {
     private void display(String selected) {
         clearRows();boolean manager=manager(character),bound=!text(character,"bound").isEmpty(),manage=canManageCharacter(character);
         info(text(character,"name"),profile(text(character,"profile"))+" · "+(flag(character,"approved")?"Approved":"Awaiting DM approval")+" · "+(bound?"Bound":"Unbound"));
+        row("Open character dashboard","Authoritative combat overview and permission-aware detailed tabs",true,"",()->client.setScreen(CharacterDashboardScreen.campaign(this,id)));
         info("Ownership and control","Owner: "+player(character,text(character,"owner"))+" · controller: "+player(character,text(character,"controller"))+". Assignment never transfers ownership.");
         var srd=character.getAsJsonObject("srd");info("Readiness",srd==null?"Combat statistics follow the selected server profile. Approval and compatible entity binding are required.":text(srd,"reason"));
         row("Inspect supported sheet","Read-only canonical and manual data",true,"",()->client.setScreen(new InfoScreen(this,text(character,"name"),"Server-authoritative campaign copy",character.getAsJsonObject("sheet").toString())));

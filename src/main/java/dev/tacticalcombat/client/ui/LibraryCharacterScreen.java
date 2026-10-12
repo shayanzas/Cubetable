@@ -17,6 +17,7 @@ public final class LibraryCharacterScreen extends ManagementScreen {
     @Override protected void refresh() {if(busy) return;fresh=false;clearRows();read(LIBRARY_GET,args("character",id),data->{draft=data;validation=data.has("errors")?ManagementState.validation(data):"Validate to check supported fields.";display();});}
     private void display() {
         clearRows();info(text(draft,"name"),text(draft,"mode")+" · "+profile(text(draft,"profile"))+" · "+text(draft,"stage"));
+        row("Open character dashboard","Post-creation overview, records, trackers, progression and management",text(draft,"stage").equals("COMPLETE"),"Finalize the draft before using the post-creation dashboard",()->client.setScreen(CharacterDashboardScreen.library(this,id)));
         info("Independent personal source","Campaign copies have independent HP, XP, equipment and resources. Source edits never overwrite an approved copy.");
         row(text(draft,"stage").equals("DRAFT")?"Resume character creation":"Review creation record","Eleven-stage guided/manual workspace; finalized campaign characters cannot be edited through it",text(draft,"stage").equals("DRAFT"),"Completed sources use this detail page; duplicate one to start a new draft",()->client.setScreen(new CharacterWizardScreen(this,draft)));
         row("Readiness",validation,true,"",()->validate());

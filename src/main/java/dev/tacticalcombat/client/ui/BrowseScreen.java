@@ -69,7 +69,7 @@ public final class BrowseScreen extends RpgScreen {
                 case CHARACTERS->HubState.allowManager(HubState.characters(array,client.player.getUuidAsString(),hub.inCombat),hub.manager,hub.inCombat);
             };
             hasNext=mode==Mode.CAMPAIGNS?(page+1)*8<data.get("total").getAsInt():array.size()==8;
-            previous.active=page>0;next.active=hasNext;filter();message=rows.isEmpty()?(quick && mode==Mode.CAMPAIGNS?"No DM-authorized campaigns on this page.":mode==Mode.CAMPAIGNS?"No campaigns on this page.":"No authorized characters on this page."):"Page "+(page+1)+" · "+(mode==Mode.CHARACTERS?hub.campaignName+" · selection does not bind.":mode==Mode.LIBRARY?"Library drafts are independent. Editors arrive in the next checkpoint.":"Choose a campaign by name.");
+            previous.active=page>0;next.active=hasNext;filter();message=rows.isEmpty()?(quick && mode==Mode.CAMPAIGNS?"No DM-authorized campaigns on this page.":mode==Mode.CAMPAIGNS?"No campaigns on this page.":"No authorized characters on this page."):"Page "+(page+1)+" · "+(mode==Mode.CHARACTERS?hub.campaignName+" · selection does not bind.":mode==Mode.LIBRARY?"Library sources are independent from campaign copies.":"Choose a campaign by name.");
             messageColor=RpgTheme.MUTED;
         });
     }
@@ -77,7 +77,7 @@ public final class BrowseScreen extends RpgScreen {
     private void choose(HubState.Choice choice) {
         if(busy) return;
         if(!choice.enabled()) {message=choice.reason();messageColor=RpgTheme.MUTED;return;}
-        if(mode==Mode.LIBRARY) {client.setScreen(new InfoScreen(this,choice.name(),"Library character · "+choice.detail(),"The full library editor and creation wizard arrive in the next UI checkpoint. This draft is independent from campaign approval and binding. Current local/manual character sheets remain available through Tabletop Tools."));return;}
+        if(mode==Mode.LIBRARY) {client.setScreen(choice.detail().startsWith("COMPLETE")?CharacterDashboardScreen.library(this,choice.id()):new LibraryCharacterScreen(this,choice.id()));return;}
         var args=new JsonObject();UiApiService.Operation op;
         if(mode==Mode.CAMPAIGNS) {args.addProperty("campaign",choice.id());if(quick) args.addProperty("quick",true);op=CAMPAIGN_SELECT;}
         else {args.addProperty("character",choice.id());args.addProperty("revision",choice.revision());op=CHARACTER_SELECT;}

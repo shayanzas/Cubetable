@@ -21,10 +21,11 @@ public abstract class ManagementScreen extends RpgScreen {
         super.init();clearChildren();busy=false;fresh=false;rows.clear();actions.clear();
         search(frame.x()+12,frame.y()+36,frame.width()-110,query,s->{query=s;filter();});
         button("Refresh","",frame.x()+frame.width()-86,frame.y()+36,74,20,()->{if(!busy) refresh();});
-        var area=listArea(frame,paged());list=addDrawableChild(new RpgList(area.x(),area.y(),area.width(),area.height(),this::choose));footer();
+        var area=listBounds();list=addDrawableChild(new RpgList(area.x(),area.y(),area.width(),area.height(),this::choose));footer();
         controls();if(ClientUiApi.supported()) refresh();else {message="Server UI unavailable. Local sheets remain under Tabletop Tools.";}
     }
     protected boolean paged() {return false;}
+    protected UiLayout.Rect listBounds() {return listArea(frame,paged());}
     protected void controls() {}
     protected abstract void refresh();
     protected void clearRows() {rows.clear();actions.clear();filter();}
