@@ -257,3 +257,35 @@ A private roll event, when authorized, includes structured data such as:
 ```
 
 This is an excerpt of an event, not a client mutation schema. Neither this API nor the existing UI transport accepts client-supplied authoritative roll results.
+
+## Backend stabilization contract (supersedes earlier bound-tracker limitation)
+
+See [backend stabilization report](ui-overhaul-astra-stabilization.md) for verification, migration and acceptance gates. The earlier checkpoint descriptions above are historical; use this contract for the current branch.
+
+### Independent campaign manual counters
+
+`MANUAL_COUNTER` takes exactly `{character, manualRevision, change}`. `change` is the existing typed `RpgRecords.Change` (`action,section,key,index,value`). It returns the authorized `CHARACTER_GET` snapshot after a successful durable write. `CHARACTER_GET` now includes `manualRevision`, `canTrack` and `manualSections` (an authorized subset of `trackers`, `features`, `spellbook`). `CHARACTER_SECTION` also returns `manualRevision`. Missing capability fields disable the new dashboard controls on older servers.
+
+The current controller may set supported current counters, including increasing them within recorded maxima for manual adjudication. The original owner does not retain this play-bookkeeping permission after assigning control. Campaign managers may adjudicate these counters. Membership, owner lock and field policy are enforced; managers retain their existing policy override. Counter edits do not approve an unapproved character. The owner still retains private reading and ordinary unbound structural editing under the existing policy.
+
+Supported: inspiration, manual death-save marks, exhaustion marker, current Hit Dice, current manual spell slots, and MANUAL pools in `trackers.resources` or `features.resources`. Counter definitions, maxima, nested feature descriptions/uses, preparation, equipment and combat fields remain ordinary structural edits. This operation cannot heal, spend/refund combat actions, edit ammunition, cast, recover resources automatically, enforce conditions, change approval or bind.
+
+Counter updates advance only `manualRevision`; they preserve editing/runtime revisions and active SRD snapshots. Stale counter writes return `CONFLICT`; failed writes return `STORAGE_ERROR` without publication. A replay with the old revision does not apply again. After timeout, reload and explicitly reconcile; do not infer failure or automatically send a rebased write. Generic sheet edits also advance the counter revision so stale indexed slot/Hit Dice updates cannot target a replaced definition.
+
+`CHARACTER_EDIT` accepts additive `manualRevision` alongside its existing fields. Supply it when editing sections. Full replacements of `ui_trackers`, `ui_features` or `ui_spellbook` require this CAS once independent bookkeeping has begun. Older generic edits without it reject rather than overwrite counters; unrelated legacy edits still work. `DashboardSource.sectionArgs` supplies it, and `RecordFormScreen` comparison detects both editing and manual revision changes while preserving staged input. The legacy `MANUAL_UPDATE` retains its bound lock; library workflows still use that operation. Never remove the bound lock or send `MANUAL_COUNTER` as a generic section replacement.
+
+### Storage
+
+Campaign storage is now schema **4**, adding only a `manualRevisions` map. Counter values remain in the existing canonical `ui_*` sheet sections. No new HP/resource database or duplicate sheets exist. Schemas 1–3 load with counter revision zero; the next successful mutation atomically writes schema 4. Characters, approval, bindings, assignments and independent copies are retained. Older binaries cannot read schema 4: rollback requires a complete pre-upgrade world backup, not editing the schema number or relying on a rolling `.bak` file. Library/workflow/section schemas are unchanged.
+
+### Party traversal and events
+
+`PARTY {campaign,page}` keeps its request shape and adds `rosterToken,total,page,pageSize:8,hasMore`. The token covers ordered binding/character identities, editing/manual revisions, online status, campaign/role and sharing-policy generation. It is not an authority credential. Each page independently rechecks membership and filters private data. HP is live when each page is read, not a frozen whole-party health snapshot.
+
+The client aggregates at most 128 pages/1,024 members and publishes only a complete matching-token traversal. Changed tokens discard partial rows and restart. Normal ACTIVE/campaign/events/initiative polling continues between pages; there is no unbounded job queue or render-time request loop. The compact panel caps its visible rows and exposes overflow through L → Inspect party character → searchable full party view. Private sheet access still requires CHARACTER_GET. Continually changing rosters may delay completion; loading/empty state is preferable to mixing permission generations.
+
+EVENTS remains bounded polling, not server push. A cursor beyond the new session sequence resets at the server. A changed session in the HUD forces cursor-zero reconstruction, suppressing historical animations and sorting event history by server sequence. Current-character private RESOURCE/CONDITION/APPROVAL/ASSIGNMENT events recheck ownership/controller/offer access as well as stored recipients and current membership/DM authority. Historical personal combat/dice events retain their original recipient audience while campaign membership is valid; ending an encounter does not erase that history.
+
+New producers: committed SRD damage/temporary-HP loss and zero-HP transitions, actual applied healing amounts, accepted Tactical actions/turns, applied vanilla Tactical health/healing/zero-HP changes, committed manual counters/condition markers, approval invalidation from edits, and privately scoped rejections of admitted SRD operations. No event claims a Tactical action acceptance is a hit. SRD child events derive stable identities from the committed intent; failed resource transactions emit no success. Full inventory/condition/spell gameplay automation, all vanilla status-effect changes, pre-admission packet rejection logging, and permanent history remain unavailable.
+
+Visual polishing should reuse these controls and read models. Keep structure editing locked while bound, show manual counters separately, preserve exact HP filtering, and distinguish pending roster traversal, polling delay and genuine empty state. Do not infer missing events or silently enable counter definitions, rest recovery, spells or class mechanics.
