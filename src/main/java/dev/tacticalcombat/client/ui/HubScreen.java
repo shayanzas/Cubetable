@@ -24,7 +24,7 @@ public final class HubScreen extends RpgScreen {
         var tiles=UiLayout.hubTiles(frame);String[] names={"Campaigns","My Characters","Encounters","DM Tools","Tabletop Tools","Settings"};
         String[] detail={"Browse your campaigns","Library & existing sheets","Tactical & SRD controls","Campaign manager access","Manual packs, dice & cards","Minecraft & future HUD"};
         Runnable[] actions={()->client.setScreen(new CampaignBrowserScreen(this)),()->client.setScreen(new LibraryScreen(this)),()->client.setScreen(new DestinationScreen(this,DestinationScreen.Destination.ENCOUNTERS)),this::dmTools,()->client.setScreen(new DestinationScreen(this,DestinationScreen.Destination.TABLETOP)),()->client.setScreen(new DestinationScreen(this,DestinationScreen.Destination.SETTINGS))};
-        if(!tiles.isEmpty()) {sheetButton=button("Open Sheet","Active character dashboard",frame.x()+frame.width()-104,frame.y()+78,92,20,this::dashboard);for(int i=0;i<names.length;i++) {var r=tiles.get(i);var b=button(names[i],detail[i],r.x(),r.y(),r.width(),r.height(),actions[i]);if(i==3) dmButton=b;}}
+        if(!tiles.isEmpty()) {sheetButton=button("Open Sheet","Active character dashboard",frame.x()+frame.width()-184,frame.y()+8,92,20,this::dashboard);for(int i=0;i<names.length;i++) {var r=tiles.get(i);var b=button(names[i],detail[i],r.x(),r.y(),r.width(),r.height(),actions[i]);if(i==3) dmButton=b;}}
         else {
             var list=addDrawableChild(new RpgList(x,frame.y()+90,frame.width()-24,Math.max(38,frame.height()-120),row->{int i=Integer.parseInt(row.id());if(i==3 && !state.dmTools()) {message=state.dmReason();return;}actions[i].run();}));
             var rows=new ArrayList<HubState.Choice>();for(int i=0;i<names.length;i++) rows.add(new HubState.Choice(Integer.toString(i),names[i],detail[i],true,"",0));destinationList=list;list.rows(rows);lastDm=true;
@@ -78,7 +78,7 @@ public final class HubScreen extends RpgScreen {
         });
     }
     @Override protected void content(DrawContext g,int mx,int my,float delta) {
-        RpgTheme.text(g,textRenderer,state.status==HubState.Status.UNSUPPORTED?"LOCAL TABLETOP · SERVER CONTROLS UNAVAILABLE":"RPG TOOLS · "+(state.inCombat?"ENCOUNTER ACTIVE":"CAMPAIGN & CHARACTER SELECTION"),frame.x()+12,frame.y()+78,frame.width()-(sheetButton==null?24:128),RpgTheme.MUTED);
+        RpgTheme.text(g,textRenderer,state.status==HubState.Status.UNSUPPORTED?"LOCAL TABLETOP · SERVER CONTROLS UNAVAILABLE":"RPG TOOLS · "+(state.inCombat?"ENCOUNTER ACTIVE":"CAMPAIGN & CHARACTER SELECTION"),frame.x()+12,frame.y()+78,frame.width()-24,RpgTheme.MUTED);
     }
     @Override protected int statusWidth() {return frame.width()-180;}
     @Override public void tick() {updateControls();}

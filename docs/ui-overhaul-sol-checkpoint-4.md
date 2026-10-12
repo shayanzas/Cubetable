@@ -5,6 +5,7 @@
 - Branch: `dev/ui-overhaul`
 - Starting commit: `d8c0b6846b13e81937116a3cbb3fd1c63f759c86`
 - Implementation commit: `f14c46fba1f2a393652f4d31c96767078672d5d6` (`Add detailed character dashboard`)
+- Navigation stabilization: committed after this report draft to keep the hub Open Sheet control clear of hub tiles; exact SHA is reported in the final handoff.
 - Documentation is committed separately after final verification.
 - No push, merge, dependency update, schema migration, or protocol change was performed.
 
