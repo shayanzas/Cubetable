@@ -111,9 +111,11 @@ public class SrdLiveGameTests implements FabricGameTest {
             var e=begin(f,new Dice(20,1,20),a,b);
             var preview=e.preview(f.dm,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false); e.confirm(f.dm,preview.id());
             check(e.state()==SrdEncounter.State.PAUSED && b.isAlive() && b.getHealth()==20 && CharacterService.srdStats(b,f.campaign).stats().hp()==0,"zero D&D HP pauses instead of vanilla death");
+            check(dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.ZERO_HP).events().size()==1,"committed zero HP emits one event");
             rejects(()->e.preview(f.dm,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false),"ordinary actions prohibited at adjudication pause");
             rejects(()->e.endTurn(f.dm),"zero HP cannot be skipped as ordinary live turn");
             e.heal(f.dm,b.getUuid(),4); check(CharacterService.srdStats(b,f.campaign).stats().hp()==4 && e.state()==SrdEncounter.State.PAUSED,"scoped DM healing stays paused for explicit termination");
+            check(dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.HEALING).events().getFirst().summary().endsWith("4"),"healing event describes applied gain");
             e.stop(f.dm); check(CharacterService.srdStats(b,f.campaign).stats().hp()==4 && !CombatManager.isInCombat(b),"end retains healed D&D resources");
         }
         ctx.complete();
@@ -171,9 +173,11 @@ public class SrdLiveGameTests implements FabricGameTest {
             check(CharacterService.srdStats(b,f.campaign).stats().hp()==10 && dice.rolls==3,"failed write publishes no HP and retains exact rolls");
             rejects(()->e.endTurn(f.dm),"failed transaction cannot be skipped by end-turn");
             e.retry(f.dm); check(dice.rolls==3 && CharacterService.srdStats(b,f.campaign).stats().hp()==10,"failed retry does not reroll or rebase");
+            check(dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.ATTACK).events().isEmpty() && dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.DAMAGE).events().isEmpty(),"failed transaction emits no success events");
             failure.set(false); e.retry(f.dm);
             check(result.state==SrdEncounter.TransactionState.COMMITTED && CharacterService.srdStats(b,f.campaign).stats().hp()==9 && dice.rolls==3,"same fixed transaction commits once after storage recovery");
             rejects(()->e.retry(f.dm),"committed transaction cannot apply twice");
+            check(dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.DAMAGE).events().size()==1,"successful storage retry emits damage once");
         }
         ctx.complete();
     }

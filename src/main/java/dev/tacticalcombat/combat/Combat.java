@@ -151,7 +151,9 @@ public final class Combat implements Encounter {
         Combatant c = get(actor);
         if (c == null || !isValid(c) || current() != c || c.actionUsed || c.moving()) return null;
         c.actionUsed = true;
-        return new dev.tacticalcombat.core.DamagePermit(id, actor.getUuid());
+        var permit=new dev.tacticalcombat.core.DamagePermit(id, actor.getUuid());
+        presentation(permit.action,dev.tacticalcombat.uiapi.UiEvents.Kind.ATTACK,actor,"Tactical action accepted; outcomes follow vanilla resolution");
+        return permit;
     }
 
     public boolean legalMelee(LivingEntity actor, LivingEntity target) {
@@ -178,8 +180,15 @@ public final class Combat implements Encounter {
 		sync();
 	}
 
+    private void presentation(java.util.UUID event,dev.tacticalcombat.uiapi.UiEvents.Kind kind,LivingEntity actor,String summary) {
+        if(campaign==null)return;
+        var recipients=order.stream().filter(c->c.entity instanceof ServerPlayerEntity).map(c->c.entity.getUuid()).collect(java.util.stream.Collectors.toSet());
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(event,campaign,id,requests.turn(),kind,java.util.List.of(actor.getUuid()),summary,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,recipients);
+    }
+
 	private void beginTurn() {
         requests.nextTurn();
+        presentation(java.util.UUID.randomUUID(),dev.tacticalcombat.uiapi.UiEvents.Kind.TURN,current().entity,"Tactical turn started");
 		Combatant c = current();
 		c.resetTurnResources(rules.movement(stats(c.entity),c.isPlayer()));
 		if (c.entity instanceof ServerPlayerEntity p) {

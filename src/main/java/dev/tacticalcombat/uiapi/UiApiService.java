@@ -14,7 +14,7 @@ public final class UiApiService {
         CAMPAIGN_LIST, CAMPAIGN_CREATE, CAMPAIGN_GET, CAMPAIGN_SELECT, CAMPAIGN_INVITE, CAMPAIGN_REMOVE, CAMPAIGN_REVOKE_DM, CAMPAIGN_POLICY, CAMPAIGN_PROFILE,
         ROSTER, CHARACTER_GET, CHARACTER_SECTION, CHARACTER_EDIT, CHARACTER_APPROVE, CHARACTER_REVOKE,
         ASSIGNMENT_LIST, ASSIGNMENT_OFFER, ASSIGNMENT_ANSWER, ASSIGNMENT_CLEAR, CHARACTER_SELECT, BIND, UNBIND, ELIGIBLE_PLAYERS, ELIGIBLE_ENTITIES,
-        MANUAL_UPDATE, SPELL_CATALOG, EVENTS, PARTY, INITIATIVE, REST_REQUEST, REST_REVIEW, REST_LIST
+        MANUAL_COUNTER, MANUAL_UPDATE, SPELL_CATALOG, EVENTS, PARTY, INITIATIVE, REST_REQUEST, REST_REVIEW, REST_LIST
     }
     public record Reply(String code,String message,JsonObject data) {}
     /** Minecraft actions remain behind the existing service, never simulated as successful database edits. */
@@ -86,12 +86,16 @@ public final class UiApiService {
                     });out.add("characters",rows);
                 }
                 case CHARACTER_GET -> {fields(a,"character");out=character(p,id(a,"character"));}
-                case CHARACTER_SECTION -> {fields(a,"character section");var c=repo.visible(p,id(a,"character"));out.add("section",SheetSections.read(repo.effectiveSheet(c),string(a,"section")));out.addProperty("revision",c.revision());out.addProperty("runtimeRevision",c.runtimeRevision());out.addProperty("automation","INFORMATIONAL_OR_MANUAL");}
+                case CHARACTER_SECTION -> {fields(a,"character section");var c=repo.visible(p,id(a,"character"));out.add("section",SheetSections.read(repo.effectiveSheet(c),string(a,"section")));out.addProperty("revision",c.revision());out.addProperty("runtimeRevision",c.runtimeRevision());out.addProperty("manualRevision",repo.manualRevision(c.id()));out.addProperty("automation","INFORMATIONAL_OR_MANUAL");}
                 case CHARACTER_EDIT -> {
-                    fields(a,"character revision runtimeRevision section data");UUID id=id(a,"character");var c=repo.visible(p,id);String section=string(a,"section");JsonObject next=SheetSections.update(repo.effectiveSheet(c),section,a.getAsJsonObject("data"));
-                    repo.edit(p,id,revision(a),number(a,"runtimeRevision"),CharacterEdits.diff(repo.effectiveSheet(c),next));out=character(p,id);
+                    fields(a,a.has("manualRevision")?"character revision runtimeRevision manualRevision section data":"character revision runtimeRevision section data");UUID id=id(a,"character");var c=repo.visible(p,id);String section=string(a,"section");JsonObject next=SheetSections.update(repo.effectiveSheet(c),section,a.getAsJsonObject("data"));
+                    repo.editSections(p,id,revision(a),number(a,"runtimeRevision"),a.has("manualRevision")?number(a,"manualRevision"):0,CharacterEdits.diff(repo.effectiveSheet(c),next));out=character(p,id);
                 }
                 case SPELL_CATALOG -> {fields(a,"query page");out=RpgRecords.catalog(string(a,"query"),integer(a,"page"));}
+                case MANUAL_COUNTER -> {
+                    fields(a,"character manualRevision change");UUID id=id(a,"character");
+                    repo.track(p,id,number(a,"manualRevision"),SheetSections.parse(a.get("change"),RpgRecords.Change.class));out=character(p,id);
+                }
                 case MANUAL_UPDATE -> {
                     fields(a,"scope character revision runtimeRevision change");var change=SheetSections.parse(a.get("change"),RpgRecords.Change.class);UUID id=id(a,"character");String scope=string(a,"scope");
                     if(scope.equals("LIBRARY")) {var d=library.expected(p,id,revision(a));var data=RpgRecords.apply(JsonParser.parseString(d.sheet()).getAsJsonObject(),change);out=draft(library.update(p,id,revision(a),change.section(),data),true);}
@@ -122,7 +126,7 @@ public final class UiApiService {
         }
     }
     private JsonObject campaign(CharacterRepository.Principal p,UUID id) {require(repo.member(p,id),"Campaign permission denied");var c=repo.campaign(id);var out=new JsonObject();out.addProperty("id",id.toString());out.addProperty("name",c.name());out.addProperty("profile",c.profile());out.addProperty("revision",c.revision());out.addProperty("manager",repo.manages(p,id));out.addProperty("canManageRoles",p.admin() || c.owner().equals(p.id()));out.add("policy",SheetSections.JSON.toJsonTree(c.policy()));if(repo.manages(p,id)) {out.addProperty("owner",c.owner().toString());out.add("members",SheetSections.JSON.toJsonTree(c.members()));out.add("dms",SheetSections.JSON.toJsonTree(c.dms()));}return out;}
-    private JsonObject character(CharacterRepository.Principal p,UUID id) {var out=new CharacterSyncService(repo).snapshot(p,id);out.addProperty("combatAuthority",repo.character(id).profile().equals(RulesProfiles.SRD)?"collections.srd_combat":"server stats/profile");out.addProperty("extensionAuthority","ui_* sections are recorded/manual only");out.addProperty("controller",repo.controller(id).toString());out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));return out;}
+    private JsonObject character(CharacterRepository.Principal p,UUID id) {var out=new CharacterSyncService(repo).snapshot(p,id);out.addProperty("combatAuthority",repo.character(id).profile().equals(RulesProfiles.SRD)?"collections.srd_combat":"server stats/profile");out.addProperty("extensionAuthority","ui_* sections are recorded/manual only");out.addProperty("manualRevision",repo.manualRevision(id));var manualSections=new JsonArray();for(String section:List.of("trackers","features","spellbook"))if(repo.mayTrack(p,id,section))manualSections.add(section);out.add("manualSections",manualSections);out.addProperty("canTrack",!manualSections.isEmpty());out.addProperty("controller",repo.controller(id).toString());out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));return out;}
     public static JsonObject draft(LibraryRepository.Draft d,boolean full) {var o=new JsonObject();o.addProperty("id",d.id().toString());o.addProperty("name",name(d.sheet()));o.addProperty("profile",d.profile());o.addProperty("mode",d.mode().name());o.addProperty("stage",d.stage().name());o.addProperty("revision",d.revision());if(full) o.add("sheet",JsonParser.parseString(d.sheet()));return o;}
     public static String name(String sheet) {var o=JsonParser.parseString(sheet).getAsJsonObject();String n=o.has("text") && o.getAsJsonObject("text").has("name")?o.getAsJsonObject("text").get("name").getAsString():"Unnamed character";return n.substring(0,Math.min(80,n.length()));}
     /** Provenance is informational and may be absent/malformed in legacy custom sheets. It grants no authority. */

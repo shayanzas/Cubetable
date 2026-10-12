@@ -78,6 +78,7 @@ public final class SrdNetworking {
     }
     public static SrdStatePayload handle(ServerPlayerEntity player,SrdRequestPayload request) {
         long revision=0;
+        SrdEncounter admitted=null;
         try {
             if(!player.getServer().isOnThread()) throw new IllegalArgumentException("Server thread required");
             if(!ServerPlayNetworking.canSend(player,SrdStatePayload.ID)) throw new IllegalArgumentException("SRD v1 client required");
@@ -89,6 +90,7 @@ public final class SrdNetworking {
             revision=encounter.revision();
             if(request.operation().equals("state")) { selectWatch(player,encounter.id()); return state(encounter,p,"STATE",encounter.reason(),null); }
             if(!encounter.admit(p,request)) throw new IllegalArgumentException("Stale, duplicate, excessive or unauthorized request");
+            admitted=encounter;
             var extra=new JsonObject(); String message="Request accepted",code="OK";
             switch(request.operation()) {
                 case "tie" -> {
@@ -151,12 +153,17 @@ public final class SrdNetworking {
                 case "end" -> { encounter.stop(p); return new SrdStatePayload(encounter.id(),Long.MAX_VALUE,"ENDED","Encounter ended","{}"); }
                 default -> throw new IllegalArgumentException("Unsupported SRD operation");
             }
+            if(code.equals("REJECTED")) rejection(encounter,player,request);
             selectWatch(player,encounter.id()); return state(encounter,p,code,message,extra);
         } catch(java.io.IOException storage) { return new SrdStatePayload(request.encounter(),revision,"STORAGE_ERROR","Healing was not committed; refresh and retry","{}"); }
         catch(RuntimeException denied) {
+            if(admitted!=null) rejection(admitted,player,request);
             String text=denied.getMessage()==null?"Invalid SRD request":denied.getMessage();
             return new SrdStatePayload(request.encounter(),revision,"REJECTED",text.substring(0,Math.min(256,text.length())),"{}");
         }
+    }
+    private static void rejection(SrdEncounter encounter,ServerPlayerEntity player,SrdRequestPayload request) {
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(dev.tacticalcombat.uiapi.UiEvents.derived(request.request(),player.getUuid()+":rejection"),encounter.campaign(),encounter.id(),request.turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.REJECTION,java.util.List.of(player.getUuid()),"Admitted SRD operation rejected; inspect the direct response for details",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,java.util.Set.of(player.getUuid()));
     }
     private static int integer(JsonObject args,String key) { return args.get(key).getAsBigDecimal().intValueExact(); }
 }

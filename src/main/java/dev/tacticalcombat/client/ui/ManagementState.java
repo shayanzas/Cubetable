@@ -25,7 +25,7 @@ public final class ManagementState {
     public static boolean canManageCharacter(JsonObject data) {return manager(data) && text(data,"bound").isEmpty();}
     public static boolean canSelect(JsonObject data,String self,String campaign,boolean combat) {return !combat && text(data,"campaign").equals(campaign) && (manager(data) || text(data,"controller").equals(self));}
     public static boolean canApprove(JsonObject data,boolean approve) {return canManageCharacter(data) && flag(data,"approved")!=approve;}
-    public static boolean needsEditReview(JsonObject original,JsonObject latest) {return original!=null && original.has("revision") && latest.has("revision") && revision(original)!=revision(latest);}
+    public static boolean needsEditReview(JsonObject original,JsonObject latest) {return original!=null && original.has("revision") && latest.has("revision") && (revision(original)!=revision(latest) || original.has("manualRevision") && latest.has("manualRevision") && original.get("manualRevision").getAsLong()!=latest.get("manualRevision").getAsLong());}
     public static int formCapacity(int frameHeight) {return Math.max(1,(frameHeight-124)/36);}
     public static boolean canAnswer(JsonObject assignment,String self) {return text(assignment,"decision").equals("PENDING") && text(assignment,"offered").equals(self) && !flag(assignment,"bound");}
     public static boolean selectablePlayer(JsonObject row,boolean assignment) {return !assignment || flag(row,"member") && !flag(row,"inCombat");}

@@ -15,9 +15,15 @@ public final class UiPresentation {
     public static JsonObject party(ServerPlayerEntity player,UUID campaign,int page,UiWorkflowStore.Policy policy) {
         var repo=CharacterService.repository();var p=CharacterService.principal(player);require(repo.member(p,campaign),"Campaign permission denied");require(page>=0 && page<=128,"Invalid page");
         var out=new JsonObject();var rows=new JsonArray();
+        var bindings=new HashMap<UUID,UUID>();repo.state().bindings().forEach((actor,character)->bindings.put(character,actor));
         // Only player-bound characters, never NPC enemies, are shareable as party members.
-        repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign) && repo.controller(c.id()).equals(repo.binding(c.id())))
-            .sorted(Comparator.comparing(c->c.id().toString())).skip(page*8L).limit(8).forEach(c->{
+        var roster=repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign) && repo.controller(c.id()).equals(bindings.get(c.id())))
+            .sorted(Comparator.comparing(c->c.id().toString())).toList();
+        StringBuilder identity=new StringBuilder(campaign+":"+repo.campaign(campaign).revision()+":"+policy.revision()+":"+p.id()+":"+p.admin());
+        for(var c:roster) identity.append(":").append(c.id()).append(":").append(repo.controller(c.id())).append(":").append(c.revision()).append(":").append(repo.manualRevision(c.id())).append(":").append(player.getServer().getPlayerManager().getPlayer(repo.controller(c.id()))!=null);
+        out.addProperty("rosterToken",UUID.nameUUIDFromBytes(identity.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString());
+        out.addProperty("total",roster.size());out.addProperty("page",page);out.addProperty("pageSize",8);out.addProperty("hasMore",(page+1)*8<roster.size());
+        roster.stream().skip(page*8L).limit(8).forEach(c->{
                 var row=new JsonObject();row.addProperty("character",c.id().toString());row.addProperty("name",UiApiService.name(c.sheet()));row.addProperty("skinPlayer",repo.controller(c.id()).toString());
                 boolean privateView=repo.manages(p,campaign) || c.owner().equals(p.id()) || repo.controller(c.id()).equals(p.id());
                 row.addProperty("online",player.getServer().getPlayerManager().getPlayer(repo.controller(c.id()))!=null);
@@ -39,7 +45,7 @@ public final class UiPresentation {
                         }
                     }row.add("recordedConditions",conditions);
                 }
-                var entity=player.getServer().getPlayerManager().getPlayer(repo.binding(c.id()));var encounter=entity==null?null:CombatManager.encounter(entity);row.addProperty("inCombat",encounter!=null);if(encounter!=null) row.addProperty("encounter",encounter.id().toString());rows.add(row);
+                var entity=player.getServer().getPlayerManager().getPlayer(bindings.get(c.id()));var encounter=entity==null?null:CombatManager.encounter(entity);row.addProperty("inCombat",encounter!=null);if(encounter!=null) row.addProperty("encounter",encounter.id().toString());rows.add(row);
             });out.add("members",rows);out.addProperty("hpVisibility",policy.hp().name());out.add("policy",SheetSections.JSON.toJsonTree(policy));return out;
     }
     public static JsonObject initiative(ServerPlayerEntity player,UUID encounter) {

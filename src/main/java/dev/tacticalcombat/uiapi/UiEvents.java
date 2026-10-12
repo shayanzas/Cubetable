@@ -29,6 +29,16 @@ public final class UiEvents {
     private final LinkedHashMap<UUID,Event> events=new LinkedHashMap<>();
     private long sequence;
     private UUID session=UUID.randomUUID();
+    public static UUID derived(UUID transaction,String kind) {return UUID.nameUUIDFromBytes((transaction+":"+kind).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+    private static boolean currentCharacterAccess(CharacterRepository repo,CharacterRepository.Principal p,Event event) {
+        if(!Set.of(Kind.RESOURCE,Kind.CONDITION,Kind.APPROVAL,Kind.ASSIGNMENT).contains(event.kind))return true;
+        for(UUID id:event.actors) if(repo.state().characters().containsKey(id)) {
+            var c=repo.character(id);var assignment=repo.assignment(id);
+            if(c.owner().equals(p.id()) || repo.controller(id).equals(p.id()) || assignment!=null && p.id().equals(assignment.offered())) return true;
+            return false;
+        }
+        return true;
+    }
     public boolean publish(UUID id,UUID campaign,UUID encounter,long turn,Kind kind,List<UUID> actors,String summary,Roll roll,Visibility visibility,Set<UUID> recipients) {
         Objects.requireNonNull(id);Objects.requireNonNull(campaign);Objects.requireNonNull(kind);Objects.requireNonNull(visibility);
         if(events.containsKey(id)) return false;
@@ -41,10 +51,10 @@ public final class UiEvents {
         catch(RuntimeException failure) {System.getLogger("Cubetable events").log(System.Logger.Level.WARNING,"Could not record presentation event",failure);}
     }
     public Page query(CharacterRepository repo,CharacterRepository.Principal who,UUID campaign,long cursor,Kind filter) {
-        require(repo.member(who,campaign),"Campaign event permission denied");require(cursor>=0,"Invalid event cursor");var result=new ArrayList<Event>();long next=cursor;
+        require(repo.member(who,campaign),"Campaign event permission denied");require(cursor>=0,"Invalid event cursor");if(cursor>sequence)cursor=0;var result=new ArrayList<Event>();long next=cursor;
         for(var e:events.values()) if(e.sequence>cursor) {
             next=e.sequence;
-            if(e.campaign.equals(campaign) && (filter==null || filter==e.kind) && (e.visibility==Visibility.CAMPAIGN || repo.manages(who,campaign) || e.visibility==Visibility.RECIPIENTS_AND_DM && e.recipients.contains(who.id()))) result.add(e);
+            if(e.campaign.equals(campaign) && (filter==null || filter==e.kind) && (e.visibility==Visibility.CAMPAIGN || repo.manages(who,campaign) || e.visibility==Visibility.RECIPIENTS_AND_DM && e.recipients.contains(who.id()) && currentCharacterAccess(repo,who,e))) result.add(e);
             if(result.size()==16) break;
         }
         long oldest=events.isEmpty()?sequence+1:events.values().iterator().next().sequence;

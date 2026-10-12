@@ -95,6 +95,7 @@ public final class FoundationTests {
         dev.tacticalcombat.client.ui.WizardUiTests.run();
         dev.tacticalcombat.client.ui.DashboardUiTests.run();
         dev.tacticalcombat.client.ui.HudUiTests.run();
+        dev.tacticalcombat.character.UiStabilizationTests.run();
         CharacterSyncTests.run();
         dev.tacticalcombat.character.PersistenceFaultTests.run();
         SrdRulesTests.run();

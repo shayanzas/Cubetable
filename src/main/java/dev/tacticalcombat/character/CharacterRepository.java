@@ -27,8 +27,9 @@ public final class CharacterRepository {
     public record Assignment(UUID character,UUID controller,UUID offered,Decision decision,long revision,List<ControlChange> history) {
         public Assignment {history=List.copyOf(history);}
     }
-    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments) {
-        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings);assignments=Map.copyOf(assignments); }
+    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments,Map<UUID,Long> manualRevisions) {
+        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings);assignments=Map.copyOf(assignments); manualRevisions=Map.copyOf(manualRevisions); }
+        public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments) {this(campaigns,characters,bindings,assignments,Map.of());}
         public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings) {this(campaigns,characters,bindings,Map.of());}
     }
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
@@ -64,7 +65,7 @@ public final class CharacterRepository {
         require(state.campaigns.size()<64,"Campaign limit reached");
         UUID id=UUID.randomUUID(); var campaigns=new HashMap<>(state.campaigns);
         campaigns.put(id,new Campaign(id,name,p.id,Set.of(),Set.of(p.id),RulesProfiles.TACTICAL,1));
-        commit(new State(campaigns,state.characters,state.bindings,state.assignments)); return id;
+        commit(new State(campaigns,state.characters,state.bindings,state.assignments,state.manualRevisions)); return id;
     }
     public void invite(Principal p,UUID id,long revision,UUID player,boolean dm) throws IOException {
         Campaign c=campaign(id); require(c.revision==revision,"Stale campaign revision");
@@ -92,7 +93,7 @@ public final class CharacterRepository {
     }
     private void updateCampaign(Campaign c) throws IOException {
         var campaigns=new HashMap<>(state.campaigns); campaigns.put(c.id,c);
-        commit(new State(campaigns,state.characters,state.bindings,state.assignments));
+        commit(new State(campaigns,state.characters,state.bindings,state.assignments,state.manualRevisions));
     }
     public UUID submit(Principal p,UUID campaign,String profile,String sheet) throws IOException {
         require(member(p,campaign),"Join this campaign before submitting a character");
@@ -117,7 +118,7 @@ public final class CharacterRepository {
         }
         validateStats(stats);
         records.put(id,new Character(id,campaign,p.id,profile,1,sheet,stats,!campaignRecord.policy.requireNewApproval(),1));
-        commit(new State(state.campaigns,records,state.bindings,state.assignments)); return id;
+        commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions)); return id;
     }
     public Character visible(Principal p,UUID id) {
         Character c=state.characters.get(id);
@@ -149,10 +150,18 @@ public final class CharacterRepository {
     public void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes) throws IOException {
         edit(p,id,revision,runtimeRevision,changes,false);
     }
+    public void editSections(Principal p,UUID id,long revision,long runtimeRevision,long manualRevision,JsonObject changes) throws IOException {
+        edit(p,id,revision,runtimeRevision,changes,false,manualRevision);
+    }
     private void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes,boolean explicitStatCommand) throws IOException {
+        edit(p,id,revision,runtimeRevision,changes,explicitStatCommand,null);
+    }
+    private void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes,boolean explicitStatCommand,Long manualExpected) throws IOException {
         Character c=visible(p,id); require(c.owner.equals(p.id) || manages(p,c.campaign),"Only owner or campaign DM edits character data"); require(c.revision==revision,"Stale character revision; refresh and reconcile");
         require(binding(id)==null,"Unbind the character before editing its approved stats");
         if(changes.size()==0) return;
+        if(changes.keySet().stream().anyMatch(k->Set.of("collections.ui_trackers","collections.ui_features","collections.ui_spellbook").contains(k)))
+            require(manualExpected==null?manualRevision(id)==0:manualExpected==manualRevision(id),"Stale manual revision; refresh using the section editor");
         if(!manages(p,c.campaign)) for(String field:changes.keySet())
             require(campaign(c.campaign).policy.permits(field),"Owner editing locked or field forbidden: "+field);
         if(changes.has("values.hp")) require(c.runtimeRevision==runtimeRevision,"Stale health revision; refresh and reconcile HP");
@@ -172,7 +181,47 @@ public final class CharacterRepository {
         }
         validateStats(stats);
         boolean approved=c.approved && !campaign(c.campaign).policy.requireEditApproval();
-        replace(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),stats,approved,revision+1,c.runtimeRevision));event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.RESOURCE,"Character record updated; approval policy applied");
+        replaceManual(new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),stats,approved,revision+1,c.runtimeRevision));event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.RESOURCE,"Character record updated; approval policy applied");
+        if(c.approved!=approved)event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.APPROVAL,"Editing invalidated approval under campaign policy");
+        if(changes.has("collections.ui_features") && !recordedConditions(effectiveSheet(c)).equals(recordedConditions(sheet)))event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.CONDITION,"Recorded conditions updated; no automatic effects");
+    }
+    /** Independent CAS for inert counters. Generic sheet edits invalidate this CAS too. */
+    public long manualRevision(UUID id) {character(id);return state.manualRevisions.getOrDefault(id,0L);}
+    public boolean mayTrack(Principal p,UUID id) {
+        var c=character(id);
+        // Accepted controller replaces owner for play bookkeeping; managers may adjudicate.
+        return member(p,c.campaign) && (manages(p,c.campaign) || controller(id).equals(p.id) && !campaign(c.campaign).policy.ownerLocked());
+    }
+    public boolean mayTrack(Principal p,UUID id,String section) {
+        var c=character(id);return Set.of("trackers","features","spellbook").contains(section) && mayTrack(p,id)
+            && (manages(p,c.campaign) || campaign(c.campaign).policy.permits("collections.ui_"+section));
+    }
+    public void track(Principal p,UUID id,long expected,dev.tacticalcombat.uiapi.RpgRecords.Change change) throws IOException {
+        var c=visible(p,id);require(mayTrack(p,id),"Only current controller or campaign DM may update manual counters");
+        require(manualRevision(id)==expected,"Stale manual revision; refresh and reconcile counters");
+        require(change!=null,"Manual change required");
+        if(!manages(p,c.campaign)) require(campaign(c.campaign).policy.permits("collections.ui_"+change.section()),"Manual field forbidden by campaign policy");
+        var sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
+        var data=dev.tacticalcombat.uiapi.RpgRecords.apply(sheet,change);
+        var next=dev.tacticalcombat.uiapi.SheetSections.update(sheet,change.section(),data);
+        validateSheet(next.toString());
+        // Whitelisted RpgRecords operations touch ui_* counter values only. No revision used
+        // by SrdSnapshot, approved inputs, ownership, assignment or binding changes here.
+        replaceManual(new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,next.toString(),c.stats,c.approved,c.revision,c.runtimeRevision));
+        event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.RESOURCE,"Manual "+change.action()+" recorded; no gameplay effect");
+        if(change.action()==dev.tacticalcombat.uiapi.RpgRecords.Action.EXHAUSTION && !dev.tacticalcombat.uiapi.SheetSections.read(sheet,"trackers").get("exhaustion").equals(data.get("exhaustion")))
+            event(c,dev.tacticalcombat.uiapi.UiEvents.Kind.CONDITION,"Manual exhaustion marker changed; no automatic effects");
+    }
+    private void replaceManual(Character c) throws IOException {
+        var revisions=new HashMap<>(state.manualRevisions);long revision=manualRevision(c.id);
+        require(revision<Long.MAX_VALUE,"Manual revision exhausted");revisions.put(c.id,revision+1);
+        var records=new HashMap<>(state.characters);records.put(c.id,c);
+        commit(new State(state.campaigns,records,state.bindings,state.assignments,revisions));
+    }
+    private static JsonArray recordedConditions(JsonObject sheet) {
+        var out=new JsonArray();for(var e:dev.tacticalcombat.uiapi.SheetSections.read(sheet,"features").getAsJsonArray("entries"))
+            if(Set.of("CONDITION","TEMPORARY").contains(e.getAsJsonObject().get("kind").getAsString()))out.add(e);
+        return out;
     }
     private static final Set<String> CORE=Set.of("hp","hp_max","ac","movement_blocks","initiative_bonus","str","dex","con","int","wis","cha","prof","level");
     public void stat(Principal p,UUID id,long revision,String key,double value) throws IOException {
@@ -195,12 +244,12 @@ public final class CharacterRepository {
         require(member(new Principal(controller(id),false),c.campaign),"Controller campaign membership required");
         require(playerOwner==null || controller(id).equals(playerOwner),"Cannot bind another player's character to this player");
         require(!state.bindings.containsKey(entity) && !state.bindings.containsValue(id),"Entity or character already bound");
-        var bindings=new HashMap<>(state.bindings); bindings.put(entity,id); commit(new State(state.campaigns,state.characters,bindings,state.assignments));
+        var bindings=new HashMap<>(state.bindings); bindings.put(entity,id); commit(new State(state.campaigns,state.characters,bindings,state.assignments,state.manualRevisions));
     }
     public void unbind(Principal p,UUID entity) throws IOException {
         UUID id=state.bindings.get(entity); require(id!=null,"Entity is not bound");
         require(manages(p,character(id).campaign),"Campaign permission denied");
-        var bindings=new HashMap<>(state.bindings); bindings.remove(entity); commit(new State(state.campaigns,state.characters,bindings,state.assignments));
+        var bindings=new HashMap<>(state.bindings); bindings.remove(entity); commit(new State(state.campaigns,state.characters,bindings,state.assignments,state.manualRevisions));
     }
     /** Controller never changes ownership. All control changes require an unbound character. */
     public UUID controller(UUID id) {var a=state.assignments.get(id);return a!=null && a.controller!=null?a.controller:character(id).owner;}
@@ -232,7 +281,7 @@ public final class CharacterRepository {
         var history=new ArrayList<ControlChange>(old==null?List.of():old.history);if(history.size()>=16) history.removeFirst();history.add(new ControlChange(who,target,decision));return history;
     }
     private void saveAssignment(Assignment a) throws IOException {
-        var assignments=new HashMap<>(state.assignments);assignments.put(a.character,a);commit(new State(state.campaigns,state.characters,state.bindings,assignments));
+        var assignments=new HashMap<>(state.assignments);assignments.put(a.character,a);commit(new State(state.campaigns,state.characters,state.bindings,assignments,state.manualRevisions));
         var c=character(a.character);dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),c.campaign,null,0,dev.tacticalcombat.uiapi.UiEvents.Kind.ASSIGNMENT,List.of(c.id),"Character control: "+a.decision,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,
             a.offered==null?Set.copyOf(List.of(c.owner,a.controller)):Set.copyOf(List.of(c.owner,a.controller,a.offered)));
     }
@@ -258,7 +307,7 @@ public final class CharacterRepository {
             var stats=new HashMap<>(c.stats); stats.put("hp",hp);
             records.put(id,new Character(id,c.campaign,c.owner,c.profile,c.profileVersion,c.sheet,stats,c.approved,c.revision,c.runtimeRevision+1)); changed=true;
         }
-        if(changed) commit(new State(state.campaigns,records,state.bindings,state.assignments));
+        if(changed) commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions));
     }
     /** Trusted accepted-effect persistence seam. No packet/command exposes this API.
      * The caller must retain its action identity and expected snapshot across retries: this is CAS,
@@ -282,7 +331,7 @@ public final class CharacterRepository {
         dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),c.campaign,null,0,kind,List.of(c.id),message,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(List.of(c.owner,controller(c.id))));
     }
     private void replace(Character c) throws IOException {
-        var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings,state.assignments));
+        var records=new HashMap<>(state.characters); records.put(c.id,c); commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions));
     }
     /** Single atomic store replacement for one accepted weapon action: attacker stock AND target HP.
      * No gameplay endpoint may supply health/stock directly; the encounter retains both expected snapshots.
@@ -311,7 +360,7 @@ public final class CharacterRepository {
             require(c.runtimeRevision<Long.MAX_VALUE,"Runtime revision exhausted");
             records.put(c.id,new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
         }
-        commit(new State(state.campaigns,records,state.bindings,state.assignments));
+        commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions));
         return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
     }
     private void commit(State next) throws IOException {
@@ -360,15 +409,15 @@ public final class CharacterRepository {
     }
     private static void require(boolean value,String message) { if(!value) throw new IllegalArgumentException(message); }
     private static String encode(State s) {
-        JsonObject root=new JsonObject(); root.addProperty("schema",3);
+        JsonObject root=new JsonObject(); root.addProperty("schema",4);
         root.add("campaigns",GSON.toJsonTree(new ArrayList<>(s.campaigns.values()))); root.add("characters",GSON.toJsonTree(new ArrayList<>(s.characters.values())));
-        root.add("assignments",GSON.toJsonTree(new ArrayList<>(s.assignments.values()))); root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
+        root.add("manualRevisions",GSON.toJsonTree(s.manualRevisions)); root.add("assignments",GSON.toJsonTree(new ArrayList<>(s.assignments.values()))); root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
     }
     private static State decode(String json) {
         checkDepth(json,24);
         JsonObject root=JsonParser.parseString(json).getAsJsonObject();
         int schema=root.get("schema").getAsInt();
-        if(schema!=1 && schema!=2 && schema!=3) throw new UnsupportedOperationException("Unsupported save schema");
+        if(schema!=1 && schema!=2 && schema!=3 && schema!=4) throw new UnsupportedOperationException("Unsupported save schema");
         var campaigns=new HashMap<UUID,Campaign>(); var characters=new HashMap<UUID,Character>(); var bindings=new HashMap<UUID,UUID>();
         require(root.getAsJsonArray("campaigns").size()<=64 && root.getAsJsonArray("characters").size()<=1024,"Save limits exceeded");
         for(JsonElement e:root.getAsJsonArray("campaigns")) {
@@ -390,7 +439,7 @@ public final class CharacterRepository {
             require(characters.containsKey(id) && characters.get(id).approved && used.add(id),"Invalid or duplicate binding"); bindings.put(actor,id);
         }
         var assignments=new HashMap<UUID,Assignment>();
-        if(schema==3) {
+        if(schema>=3) {
             require(root.getAsJsonArray("assignments").size()<=1024,"Assignment limit");
             for(var row:root.getAsJsonArray("assignments")) {
                 var a=GSON.fromJson(row,Assignment.class);
@@ -400,6 +449,15 @@ public final class CharacterRepository {
                 require(assignments.put(a.character,a)==null,"Duplicate assignment");
             }
         }
-        return new State(campaigns,characters,bindings,assignments);
+        var manualRevisions=new HashMap<UUID,Long>();
+        if(schema>=4) {
+            require(root.getAsJsonObject("manualRevisions").size()<=1024,"Manual revision limit");
+            for(var e:root.getAsJsonObject("manualRevisions").entrySet()) {
+                UUID id=UUID.fromString(e.getKey());String value=e.getValue().getAsString();
+                require(characters.containsKey(id) && e.getValue().isJsonPrimitive() && e.getValue().getAsJsonPrimitive().isNumber() && value.matches("[0-9]{1,19}"),"Invalid manual revision");
+                long revision=Long.parseLong(value);require(revision>=0,"Invalid manual revision");manualRevisions.put(id,revision);
+            }
+        }
+        return new State(campaigns,characters,bindings,assignments,manualRevisions);
     }
 }

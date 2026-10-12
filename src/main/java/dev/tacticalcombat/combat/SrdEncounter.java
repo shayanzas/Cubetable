@@ -257,7 +257,18 @@ public final class SrdEncounter implements Encounter {
             var t=transaction;var r=t.roll.roll();
             var mode=SrdRules.rollMode(t.intent.geometry.advantage(),t.intent.geometry.disadvantage()||t.intent.plan.disadvantage());
             var roll=dev.tacticalcombat.uiapi.UiEvents.Roll.from(20,r.faces(),mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2,r.total()-r.chosen(),"SRD attack",t.roll.critical());
-            dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(t.intent.id,campaign,id,t.intent.turn,dev.tacticalcombat.uiapi.UiEvents.Kind.ATTACK,List.of(t.intent.actor,t.intent.target),t.roll.hit()?"Attack committed":"Miss committed",roll,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(List.of(t.intent.requester,t.intent.actor)));
+            dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(t.intent.id,campaign,id,t.intent.turn,dev.tacticalcombat.uiapi.UiEvents.Kind.ATTACK,List.of(t.intent.actor,t.intent.target),t.roll.hit()?"Hit committed":"Miss committed",roll,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(List.of(t.intent.requester,t.intent.actor)));
+            var before=t.intent.defender.stats();
+            int lost=before.hp()-t.health.current(),absorbed=before.temporaryHp()-t.health.temporary();
+            var recipients=new java.util.HashSet<UUID>();recipients.add(t.intent.target);
+            var targetRecord=CharacterService.repository().character(t.intent.defender.character());
+            recipients.add(targetRecord.owner());recipients.add(CharacterService.repository().controller(targetRecord.id()));
+            if(lost>0 || absorbed>0) dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(
+                dev.tacticalcombat.uiapi.UiEvents.derived(t.intent.id,"damage"),campaign,id,t.intent.turn,dev.tacticalcombat.uiapi.UiEvents.Kind.DAMAGE,
+                List.of(t.intent.target),"SRD committed HP loss: "+lost+"; temporary HP spent: "+absorbed,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,recipients);
+            if(before.hp()>0 && t.health.zeroHp()) dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(
+                dev.tacticalcombat.uiapi.UiEvents.derived(t.intent.id,"zero"),campaign,id,t.intent.turn,dev.tacticalcombat.uiapi.UiEvents.Kind.ZERO_HP,
+                List.of(t.intent.target),"Zero D&D HP; paused for DM adjudication, no automatic death saves",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,recipients);
         } catch(RuntimeException presentation) {dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("Could not record committed attack presentation",presentation);}
     }
     void retry(CharacterRepository.Principal p) {
@@ -269,7 +280,7 @@ public final class SrdEncounter implements Encounter {
         require(transaction==null || transaction.state==TransactionState.COMMITTED,"Resolve failed attack before adjudication");
         var expected=fresh(actor(target)); var saved=CharacterService.repository().commitSrdHealth(expected,SrdHealth.of(expected.stats()).heal(amount));
         snapshots.put(target,saved); revision++; reason="DM healing committed; end this controlled encounter to resume exploration";
-        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.HEALING,List.of(target),"DM healing committed: "+amount,null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.of(target));
+        dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.HEALING,List.of(target),"DM healing committed: "+(saved.stats().hp()-expected.stats().hp()),null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,Set.of(target));
         dev.tacticalcombat.TacticalCombatMod.LOGGER.info("SRD DM {} healed actor {} by {} in {}",p.id(),target,amount,id);
     }
     void stop(CharacterRepository.Principal p) { thread(); require(manager(p),"Campaign manager required"); CombatManager.endCombat(this); }

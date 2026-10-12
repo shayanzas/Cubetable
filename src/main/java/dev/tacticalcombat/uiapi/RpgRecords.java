@@ -3,7 +3,7 @@ import com.google.gson.*;
 import java.util.*;
 import static dev.tacticalcombat.uiapi.SheetSections.require;
 
-/** Explicit manual bookkeeping only. Caller must commit through library CAS or campaign edit policy. */
+/** Explicit manual bookkeeping only. Caller must commit through library CAS, legacy unbound edit policy, or the independent campaign counter CAS. */
 public final class RpgRecords {
     public enum Action { INSPIRATION, DEATH_SUCCESSES, DEATH_FAILURES, EXHAUSTION, HIT_DICE, SPELL_SLOT, RESOURCE }
     public record Change(Action action,String section,String key,int index,int value) {}

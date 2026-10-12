@@ -89,13 +89,13 @@ public final class UiNetworking {
                 UiPresentation.eligible(p,campaign,party,dimension,p.getBlockX(),p.getBlockY(),p.getBlockZ(),radius);
                 var rest=workflows.request(repo,who,id(a,"request"),campaign,UiWorkflowStore.RestKind.valueOf(string(a,"kind")),party,dimension,p.getBlockX(),p.getBlockY(),p.getBlockZ(),System.currentTimeMillis());
                 out=SheetSections.JSON.toJsonTree(rest).getAsJsonObject();
-                UiEvents.SESSION.publish(rest.id(),campaign,null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest requested; no recovery has been applied",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(party));
+                UiEvents.SESSION.safePublish(rest.id(),campaign,null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest requested; no recovery has been applied",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(party));
             }
             case REST_REVIEW -> {
                 fields(a,"request revision approve");require(workflows!=null,"Workflow service unavailable");var rest=workflows.get(repo,who,id(a,"request"));require(repo.manages(who,rest.campaign()),"Only campaign DMs review rest requests");
                 if(bool(a,"approve") && System.currentTimeMillis()<rest.expires()) UiPresentation.eligible(p,rest.campaign(),rest.participants(),rest.dimension(),rest.x(),rest.y(),rest.z(),rest.radius());
                 var saved=workflows.review(repo,who,rest.id(),revision(a),bool(a,"approve"),System.currentTimeMillis());out=SheetSections.JSON.toJsonTree(saved).getAsJsonObject();
-                UiEvents.SESSION.publish(UUID.randomUUID(),rest.campaign(),null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest review: "+saved.state()+"; recovery remains manual",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(rest.participants()));
+                UiEvents.SESSION.safePublish(UUID.randomUUID(),rest.campaign(),null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest review: "+saved.state()+"; recovery remains manual",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(rest.participants()));
             }
             case REST_LIST -> {fields(a,"campaign page");require(workflows!=null,"Workflow service unavailable");out.add("requests",SheetSections.JSON.toJsonTree(workflows.list(repo,who,id(a,"campaign"),integer(a,"page"))));out.addProperty("serverTime",System.currentTimeMillis());out.addProperty("recoveryAutomated",false);}
             case CAMPAIGN_SELECT -> {

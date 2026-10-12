@@ -91,4 +91,80 @@ public class UiFoundationGameTests implements FabricGameTest {
         } finally {ctx.getWorld().getServer().getPlayerManager().remove(player);ctx.getWorld().getServer().getPlayerManager().remove(dm);}
         ctx.complete();
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void manualCountersPreserveActiveSrdIntentAndActionAuthority(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            SrdLiveGameTests.capability(player);var p=CharacterService.principal(player);f.repo.invite(f.dm,f.campaign,1,p.id(),false);
+            player.setPosition(f.origin.getX()+2.5,f.origin.getY()+1,f.origin.getZ()+2.5);
+            var id=f.repo.submit(f.dm,f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);f.repo.offerControl(f.dm,id,2,0,p.id());f.repo.answerControl(p,id,1,true);f.repo.bind(f.dm,id,2,p.id(),p.id());
+            var target=f.actor(3,2,true);var e=SrdLiveGameTests.begin(f,new SrdLiveGameTests.Dice(20,1,18),player,target);
+            var intent=e.preview(p,target.getUuid(),SrdEquipment.Weapon.UNARMED,SrdRules.AttackMode.MELEE,SrdCharacter.Ability.STR,false);
+            long revision=e.revision(),turn=e.turn();var snapshot=f.repo.srdSnapshot(p.id(),f.campaign);var original=e.snapshot(p);
+            var change=new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,1);
+            var request=new JsonObject();request.addProperty("character",id.toString());request.addProperty("manualRevision",0);request.add("change",SheetSections.JSON.toJsonTree(change));
+            check(UiNetworking.handle(player,new UiRequestPayload(1,"MANUAL_COUNTER",request.toString())).code().equals("OK"),"bound accepted controller uses authenticated counter API");
+            check(e.revision()==revision&&e.turn()==turn&&f.repo.srdSnapshot(p.id(),f.campaign).equals(snapshot),"no encounter or combat snapshot change");
+            e.tick();check(e.state()==SrdEncounter.State.ACTIVE&&e.snapshot(p).get("actionUsed").equals(original.get("actionUsed")),"no pause or extra action");
+            e.grid(p);var result=e.confirm(p,intent.id());check(result.state==SrdEncounter.TransactionState.COMMITTED,"pre-counter preview still commits once");
+            rejects(()->e.confirm(p,intent.id()),"counter did not make intent replayable");
+            check(UiNetworking.handle(player,new UiRequestPayload(2,"MANUAL_COUNTER",request.toString())).code().equals("CONFLICT"),"stale counter remains conflict during encounter");
+            check(f.repo.character(id).approved()&&f.repo.character(id).revision()==snapshot.revision(),"counter preserved approval/editing revision");
+            var events=UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.DAMAGE).events();check(events.size()==1&&events.getFirst().id().equals(UiEvents.derived(intent.id(),"damage")),"committed damage has stable derived event identity");
+            check(UiEvents.SESSION.query(f.repo,p,f.campaign,0,UiEvents.Kind.DAMAGE).events().isEmpty(),"attacker cannot inspect NPC private HP change");
+            var rejected=new SrdRequestPayload(e.id(),e.turn(),UUID.randomUUID(),"unsupported","{}");
+            check(SrdNetworking.handle(player,rejected).code().equals("REJECTED"),"admitted invalid operation rejected");
+            check(UiEvents.SESSION.query(f.repo,p,f.campaign,0,UiEvents.Kind.REJECTION).events().size()==1,"authoritative rejection privately recorded");
+            SrdNetworking.handle(player,rejected);check(UiEvents.SESSION.query(f.repo,p,f.campaign,0,UiEvents.Kind.REJECTION).events().size()==1,"replayed rejection does not duplicate log");
+            e.end();
+        } finally {CharacterService.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void partyPaginationTracksRosterAndPrivacyGenerations(TestContext ctx) throws Exception {
+        var viewer=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,viewer.getUuid(),false);var owners=new ArrayList<UUID>();
+            for(int i=0;i<17;i++){
+                UUID owner=UUID.randomUUID();owners.add(owner);f.repo.invite(f.dm,f.campaign,f.repo.campaign(f.campaign).revision(),owner,false);
+                var id=f.repo.submit(new CharacterRepository.Principal(owner,false),f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,owner,owner);
+            }
+            f.actor(4,4,true);var policy=new UiWorkflowStore.Policy(f.campaign,0,UiWorkflowStore.HpVisibility.PRIVATE,16);
+            var pages=new dev.tacticalcombat.client.ui.PartyPages();JsonObject combined=null;
+            for(int i=0;i<3;i++){var page=UiPresentation.party(viewer,f.campaign,i,policy);check(page.get("total").getAsInt()==17,"NPC excluded from paginated total");combined=pages.accept(page);}
+            check(combined.getAsJsonArray("members").size()==17,"all offline bound player identities aggregate");
+            for(var row:combined.getAsJsonArray("members"))check(!row.getAsJsonObject().has("hp")&&!row.getAsJsonObject().get("online").getAsBoolean(),"private HP omitted and offline reported");
+            var first=UiPresentation.party(viewer,f.campaign,0,policy);pages.accept(first);f.repo.unbind(f.dm,owners.getFirst());
+            check(pages.accept(UiPresentation.party(viewer,f.campaign,1,policy))==null&&pages.restarted(),"unbind invalidates in-progress roster");
+            var bars=UiPresentation.party(viewer,f.campaign,0,new UiWorkflowStore.Policy(f.campaign,1,UiWorkflowStore.HpVisibility.BARS,16));
+            check(!bars.get("rosterToken").equals(first.get("rosterToken"))&&bars.getAsJsonArray("members").get(0).getAsJsonObject().has("healthFraction"),"sharing policy has new token and filtered fields");
+            var exact=UiPresentation.party(viewer,f.campaign,0,new UiWorkflowStore.Policy(f.campaign,2,UiWorkflowStore.HpVisibility.EXACT,16));check(exact.getAsJsonArray("members").get(0).getAsJsonObject().has("hp"),"exact policy supplies HP");
+        } finally {ctx.getWorld().getServer().getPlayerManager().remove(viewer);}
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void tacticalEventsObserveAppliedHealthNotRejectedDamage(TestContext ctx) throws Exception {
+        var observer=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            var a=f.actor(2,2,false);var b=f.actor(3,2,false);
+            f.repo.invite(f.dm,f.campaign,1,observer.getUuid(),false);CharacterService.select(observer,f.campaign);
+            observer.setPosition(f.origin.getX()+2.5,f.origin.getY()+1,f.origin.getZ()+3.5);
+            var combat=Combat.start(ctx.getWorld(),List.of(observer),List.of(a,b),new CharacterService.Context(f.campaign,RulesProfiles.TACTICAL));f.encounters.add(combat);
+            while(combat.current().entity==observer)combat.endTurn();
+            int turns=UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.TURN).events().size();
+            var active=combat.current().entity;var target=active==a?b:a;float before=target.getHealth();
+            var damage=ctx.getWorld().getDamageSources().mobAttack(active);
+            check(!target.damage(damage,2)&&target.getHealth()==before,"unpermitted damage rejected");
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.DAMAGE).events().isEmpty(),"rejected vanilla damage emits no success");
+            check(CombatActions.melee(active,target,()->target.damage(damage,2)),"accepted damage applies");
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.DAMAGE).events().size()==1,"actual vanilla health change emits once");
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.ATTACK).events().size()==1,"accepted Tactical action recorded");
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.TURN).events().size()==turns,"Tactical first turn recorded");
+            target.heal(1);check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.HEALING).events().size()==1,"actual vanilla healing emits once");
+            combat.endTurn();check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.TURN).events().size()==turns+1,"next Tactical turn recorded");
+            target.timeUntilRegen=0;target.damage(ctx.getWorld().getDamageSources().generic(),1000);
+            check(UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,UiEvents.Kind.ZERO_HP).events().size()==1,"applied vanilla lethal transition recorded");
+        } finally {CharacterService.forget(observer.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(observer);}
+        ctx.complete();
+    }
 }
