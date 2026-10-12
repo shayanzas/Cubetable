@@ -22,7 +22,8 @@
       "dev.tacticalcombat.combat.SrdGridBudgetGameTests",
       "dev.tacticalcombat.combat.SrdSystemPerformanceGameTests",
       "dev.tacticalcombat.combat.UiFoundationGameTests",
-      "dev.tacticalcombat.combat.HubGatewayGameTests"
+      "dev.tacticalcombat.combat.HubGatewayGameTests",
+      "dev.tacticalcombat.combat.ManagementGatewayGameTests"
     ]
   },
   "depends": {

@@ -37,11 +37,39 @@ public final class UiNetworking {
         try {
             require(library!=null,"Library service unavailable");require(request.json().length()<=UiRequestPayload.LIMIT,"Request too large");CharacterRepository.checkDepth(request.json(),24);
             var op=Operation.valueOf(request.operation());var args=JsonParser.parseString(request.json()).getAsJsonObject();
-            if(op==Operation.CHARACTER_GET) CharacterService.captureForViewer(player,id(args,"character"));
+            if(op==Operation.CHARACTER_GET) {
+                UUID character=id(args,"character");
+                try {CharacterService.repository().visible(CharacterService.principal(player),character);}
+                catch(IllegalArgumentException denied) {return new UiReplyPayload(request.sequence(),"FORBIDDEN","Character viewing permission denied","{}");}
+                CharacterService.captureForViewer(player,character);
+            }
             var response=new UiApiService(CharacterService.repository(),library,(operation,a)->world(player,operation,a)).handle(CharacterService.principal(player),op,args);
+            if(response.code().equals("OK")) {
+                if(op==Operation.CAPABILITIES) response.data().addProperty("canCreateCampaign",CharacterService.principal(player).admin());
+                // Only resolve identities already present in this authorized read model. Never enumerate accounts.
+                var names=new JsonObject();collectNames(player,response.data(),names,0);if(!names.isEmpty()) response.data().add("playerNames",names);
+            }
+            require(response.data().toString().length()<=UiReplyPayload.LIMIT,"Result too large");
             return new UiReplyPayload(request.sequence(),response.code(),response.message(),response.data().toString());
         } catch(java.io.IOException e) {return new UiReplyPayload(request.sequence(),"STORAGE_ERROR","Health capture failed; refresh before retrying","{}");}
         catch(RuntimeException e) {return new UiReplyPayload(request.sequence(),"REJECTED","Invalid UI request or unavailable service","{}");}
+    }
+    private static void collectNames(ServerPlayerEntity p,JsonElement value,JsonObject names,int depth) {
+        if(depth>4 || names.size()>=256 || value==null || value.isJsonNull()) return;
+        if(value.isJsonArray()) {for(var e:value.getAsJsonArray()) collectNames(p,e,names,depth+1);return;}
+        if(!value.isJsonObject()) return;
+        for(var entry:value.getAsJsonObject().entrySet()) {
+            if(Set.of("sheet","history","origin","policy").contains(entry.getKey())) continue;
+            if(Set.of("owner","controller","offered","members","dms").contains(entry.getKey())) {
+                var ids=entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray():new JsonArray();
+                if(!entry.getValue().isJsonArray()) ids.add(entry.getValue());
+                for(var e:ids) if(!e.isJsonNull() && names.size()<256) {
+                    UUID id=UUID.fromString(e.getAsString());var online=p.getServer().getPlayerManager().getPlayer(id);
+                    String name=online!=null?online.getName().getString():p.getServer().getUserCache()==null?"Unknown offline player":p.getServer().getUserCache().getByUuid(id).map(profile->profile.getName()).orElse("Unknown offline player");
+                    names.addProperty(id.toString(),name.substring(0,Math.min(80,name.length())));
+                }
+            } else collectNames(p,entry.getValue(),names,depth+1);
+        }
     }
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
@@ -93,6 +121,7 @@ public final class UiNetworking {
                 var nearby=new ArrayList<LivingEntity>();p.getServerWorld().collectEntitiesByType(net.minecraft.util.TypeFilter.instanceOf(LivingEntity.class),p.getBoundingBox().expand(32),entity->entity.isAlive() && !entity.isSpectator(),nearby,65);
                 var rows=new JsonArray();for(var entity:nearby.stream().limit(64).toList()) {
                     var row=new JsonObject();row.addProperty("id",entity.getUuidAsString());row.addProperty("name",entity.getName().getString().substring(0,Math.min(80,entity.getName().getString().length())));
+                    row.addProperty("position",entity.getBlockX()+", "+entity.getBlockY()+", "+entity.getBlockZ());
                     boolean occupied=CharacterService.bound(entity)!=null,combat=CombatManager.isInCombat(entity),controller=!(entity instanceof ServerPlayerEntity) || repo.controller(c.id()).equals(entity.getUuid());
                     boolean type=!c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD) || entity instanceof ServerPlayerEntity || entity instanceof net.minecraft.entity.mob.MobEntity;
                     row.addProperty("eligible",c.approved() && repo.binding(c.id())==null && !occupied && !combat && controller && type);

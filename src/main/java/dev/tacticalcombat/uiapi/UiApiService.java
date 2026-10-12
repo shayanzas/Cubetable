@@ -31,13 +31,24 @@ public final class UiApiService {
             JsonObject out=new JsonObject();
             switch(op) {
                 case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("hubQuickSwitch",true);out.addProperty("sectionsVersion",1);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
-                case LIBRARY_LIST -> {fields(a,"page");var rows=new JsonArray();for(var d:library.list(p,integer(a,"page"))) rows.add(draft(d,false));out.add("characters",rows);out.addProperty("pageSize",8);}
+                case LIBRARY_LIST -> {fields(a,"page");var rows=new JsonArray();for(var d:library.list(p,integer(a,"page"))) {var row=draft(d,false);var errors=library.validate(p,d.id());row.addProperty("supportedValid",errors.isEmpty());row.addProperty("validationErrors",errors.size());rows.add(row);}out.add("characters",rows);out.addProperty("pageSize",8);}
                 case LIBRARY_CREATE -> {
                     fields(a,"profile mode sheet");String profile=string(a,"profile");String sheet=a.get("sheet").isJsonNull()?SrdAuthoring.template().toString():string(a,"sheet");
                     if(a.get("sheet").isJsonNull()) require(profile.equals(RulesProfiles.SRD),"Supply a manual pack sheet for this profile");
                     out=draft(library.create(p,profile,SheetSections.Mode.valueOf(string(a,"mode")),sheet),true);
                 }
-                case LIBRARY_GET -> {fields(a,"character");out=draft(library.get(p,id(a,"character")),true);}
+                case LIBRARY_GET -> {
+                    fields(a,"character");var d=library.get(p,id(a,"character"));out=draft(d,true);var copies=new JsonArray();int total=0;
+                    for(var c:repo.state().characters().values().stream().sorted(Comparator.comparing(c->c.id().toString())).toList()) {
+                        if(!c.owner().equals(p.id()) || !repo.member(p,c.campaign())) continue;
+                        var sheet=JsonParser.parseString(c.sheet()).getAsJsonObject();var origin=origin(sheet);
+                        if(origin==null) continue;
+                        if(!origin.get("library").getAsString().equals(d.id().toString())) continue;
+                        total++;if(copies.size()>=128) continue;
+                        var row=new JsonObject();row.addProperty("id",c.id().toString());row.addProperty("name",name(c.sheet()));row.addProperty("campaign",c.campaign().toString());row.addProperty("campaignName",repo.campaign(c.campaign()).name());row.addProperty("approved",c.approved());row.add("origin",origin.deepCopy());copies.add(row);
+                    }
+                    out.add("submissions",copies);out.addProperty("submissionsTruncated",total>128);out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,d.id())));out.addProperty("guidedRulesComplete",false);
+                }
                 case LIBRARY_UPDATE -> {fields(a,"character revision section data");out=draft(library.update(p,id(a,"character"),revision(a),string(a,"section"),a.getAsJsonObject("data")),true);}
                 case LIBRARY_VALIDATE -> {fields(a,"character");out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,id(a,"character"))));out.addProperty("guidedRulesComplete",false);}
                 case LIBRARY_FINALIZE -> {fields(a,"character revision");out=draft(library.finalizeDraft(p,id(a,"character"),revision(a)),true);}
@@ -47,9 +58,8 @@ public final class UiApiService {
                     require(d.stage()==LibraryRepository.Stage.COMPLETE,"Finalize library character before submission");require(repo.member(p,campaign),"Campaign membership permission required");
                     UUID existing=null;
                     for(var c:repo.state().characters().values()) if(c.campaign().equals(campaign) && c.owner().equals(p.id())) {
-                        var sheet=JsonParser.parseString(c.sheet()).getAsJsonObject();var collections=sheet.getAsJsonObject("collections");
-                        if(collections!=null && collections.has("ui_origin")) {
-                            var origin=collections.getAsJsonArray("ui_origin").get(0).getAsJsonObject();
+                        var sheet=JsonParser.parseString(c.sheet()).getAsJsonObject();var origin=origin(sheet);
+                        if(origin!=null) {
                             if(origin.get("submission").getAsString().equals(submission.toString())) {require(origin.get("library").getAsString().equals(d.id().toString()) && origin.get("revision").getAsLong()==d.revision(),"Submission identity reused with different source");existing=c.id();break;}
                         }
                     }
@@ -71,8 +81,8 @@ public final class UiApiService {
                 case ROSTER -> {
                     fields(a,"campaign page");UUID campaign=id(a,"campaign");require(repo.member(p,campaign),"Campaign permission denied");int page=integer(a,"page");require(page>=0 && page<=128,"Invalid page");
                     var rows=new JsonArray();repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign)).sorted(Comparator.comparing(c->c.id().toString())).skip(page*8L).limit(8).forEach(c->{
-                        var row=new JsonObject();row.addProperty("id",c.id().toString());row.addProperty("name",name(c.sheet()));row.addProperty("approved",c.approved());row.addProperty("owner",c.owner().toString());row.addProperty("controller",repo.controller(c.id()).toString());row.addProperty("revision",c.revision());
-                        var binding=repo.binding(c.id());if(binding!=null) row.addProperty("bound",binding.toString());row.addProperty("privateView",c.owner().equals(p.id()) || repo.controller(c.id()).equals(p.id()) || repo.manages(p,campaign));rows.add(row);
+                        var row=new JsonObject();row.addProperty("id",c.id().toString());row.addProperty("name",name(c.sheet()));row.addProperty("profile",c.profile());row.addProperty("approved",c.approved());row.addProperty("owner",c.owner().toString());row.addProperty("controller",repo.controller(c.id()).toString());row.addProperty("revision",c.revision());
+                        var binding=repo.binding(c.id());if(binding!=null) row.addProperty("bound",binding.toString());row.addProperty("readiness",!c.approved()?"Needs approval":binding==null?"Needs binding":"Inspect for live readiness");row.addProperty("privateView",c.owner().equals(p.id()) || repo.controller(c.id()).equals(p.id()) || repo.manages(p,campaign));rows.add(row);
                     });out.add("characters",rows);
                 }
                 case CHARACTER_GET -> {fields(a,"character");out=character(p,id(a,"character"));}
@@ -96,7 +106,7 @@ public final class UiApiService {
                 case ASSIGNMENT_LIST -> {
                     fields(a,"campaign page");UUID campaign=id(a,"campaign");require(repo.member(p,campaign),"Campaign permission denied");int page=integer(a,"page");require(page>=0 && page<=128,"Invalid page");
                     var rows=new JsonArray();repo.state().assignments().values().stream().filter(x->repo.character(x.character()).campaign().equals(campaign) && (repo.manages(p,campaign) || p.id().equals(x.offered()) || p.id().equals(x.controller()) || p.id().equals(repo.character(x.character()).owner())))
-                        .sorted(Comparator.comparing(x->x.character().toString())).skip(page*8L).limit(8).forEach(x->rows.add(SheetSections.JSON.toJsonTree(x)));out.add("assignments",rows);
+                        .sorted(Comparator.comparing(x->x.character().toString())).skip(page*8L).limit(8).forEach(x->{var row=SheetSections.JSON.toJsonTree(x).getAsJsonObject();var c=repo.character(x.character());row.addProperty("name",name(c.sheet()));row.addProperty("profile",c.profile());row.addProperty("bound",repo.binding(c.id())!=null);rows.add(row);});out.add("assignments",rows);
                 }
                 case ASSIGNMENT_OFFER -> {fields(a,"character revision assignmentRevision player");UUID id=id(a,"character");repo.offerControl(p,id,revision(a),number(a,"assignmentRevision"),id(a,"player"));out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));}
                 case ASSIGNMENT_ANSWER -> {fields(a,"character revision accept");UUID id=id(a,"character");repo.answerControl(p,id,revision(a),bool(a,"accept"));out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));}
@@ -111,10 +121,18 @@ public final class UiApiService {
             return new Reply(code,msg.substring(0,Math.min(240,msg.length())),new JsonObject());
         }
     }
-    private JsonObject campaign(CharacterRepository.Principal p,UUID id) {require(repo.member(p,id),"Campaign permission denied");var c=repo.campaign(id);var out=new JsonObject();out.addProperty("id",id.toString());out.addProperty("name",c.name());out.addProperty("profile",c.profile());out.addProperty("revision",c.revision());out.addProperty("manager",repo.manages(p,id));out.add("policy",SheetSections.JSON.toJsonTree(c.policy()));if(repo.manages(p,id)) {out.add("members",SheetSections.JSON.toJsonTree(c.members()));out.add("dms",SheetSections.JSON.toJsonTree(c.dms()));}return out;}
+    private JsonObject campaign(CharacterRepository.Principal p,UUID id) {require(repo.member(p,id),"Campaign permission denied");var c=repo.campaign(id);var out=new JsonObject();out.addProperty("id",id.toString());out.addProperty("name",c.name());out.addProperty("profile",c.profile());out.addProperty("revision",c.revision());out.addProperty("manager",repo.manages(p,id));out.addProperty("canManageRoles",p.admin() || c.owner().equals(p.id()));out.add("policy",SheetSections.JSON.toJsonTree(c.policy()));if(repo.manages(p,id)) {out.addProperty("owner",c.owner().toString());out.add("members",SheetSections.JSON.toJsonTree(c.members()));out.add("dms",SheetSections.JSON.toJsonTree(c.dms()));}return out;}
     private JsonObject character(CharacterRepository.Principal p,UUID id) {var out=new CharacterSyncService(repo).snapshot(p,id);out.addProperty("combatAuthority",repo.character(id).profile().equals(RulesProfiles.SRD)?"collections.srd_combat":"server stats/profile");out.addProperty("extensionAuthority","ui_* sections are recorded/manual only");out.addProperty("controller",repo.controller(id).toString());out.add("assignment",SheetSections.JSON.toJsonTree(repo.assignment(id)));return out;}
     public static JsonObject draft(LibraryRepository.Draft d,boolean full) {var o=new JsonObject();o.addProperty("id",d.id().toString());o.addProperty("name",name(d.sheet()));o.addProperty("profile",d.profile());o.addProperty("mode",d.mode().name());o.addProperty("stage",d.stage().name());o.addProperty("revision",d.revision());if(full) o.add("sheet",JsonParser.parseString(d.sheet()));return o;}
     public static String name(String sheet) {var o=JsonParser.parseString(sheet).getAsJsonObject();String n=o.has("text") && o.getAsJsonObject("text").has("name")?o.getAsJsonObject("text").get("name").getAsString():"Unnamed character";return n.substring(0,Math.min(80,n.length()));}
+    /** Provenance is informational and may be absent/malformed in legacy custom sheets. It grants no authority. */
+    public static JsonObject origin(JsonObject sheet) {
+        try {
+            var collections=sheet.getAsJsonObject("collections");if(collections==null || !collections.has("ui_origin")) return null;
+            var rows=collections.getAsJsonArray("ui_origin");if(rows.size()!=1 || !rows.get(0).isJsonObject()) return null;var o=rows.get(0).getAsJsonObject();
+            if(!o.keySet().equals(Set.of("library","revision","submission"))) return null;id(o,"library");id(o,"submission");if(number(o,"revision")<1) return null;return o;
+        }catch(RuntimeException invalid) {return null;}
+    }
     public static void fields(JsonObject a,String allowed) {require(a.keySet().equals(allowed.isEmpty()?Set.of():Set.of(allowed.split(" "))),"Missing or unknown request fields");}
     public static UUID id(JsonObject a,String key) {return UUID.fromString(string(a,key));}
     public static String string(JsonObject a,String key) {var e=a.get(key);require(e!=null && e.isJsonPrimitive() && e.getAsJsonPrimitive().isString(),"Expected text: "+key);return e.getAsString();}
