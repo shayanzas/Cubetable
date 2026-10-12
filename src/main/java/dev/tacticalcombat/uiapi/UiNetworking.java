@@ -70,7 +70,11 @@ public final class UiNetworking {
                 UiEvents.SESSION.publish(UUID.randomUUID(),rest.campaign(),null,0,UiEvents.Kind.REST,List.of(p.getUuid()),"Rest review: "+saved.state()+"; recovery remains manual",null,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.copyOf(rest.participants()));
             }
             case REST_LIST -> {fields(a,"campaign page");require(workflows!=null,"Workflow service unavailable");out.add("requests",SheetSections.JSON.toJsonTree(workflows.list(repo,who,id(a,"campaign"),integer(a,"page"))));out.addProperty("serverTime",System.currentTimeMillis());out.addProperty("recoveryAutomated",false);}
-            case CAMPAIGN_SELECT -> {fields(a,"campaign");CharacterService.select(p,id(a,"campaign"));SELECTED.remove(p.getUuid());out.addProperty("campaign",id(a,"campaign").toString());}
+            case CAMPAIGN_SELECT -> {
+                if(a.has("quick")) {fields(a,"campaign quick");require(bool(a,"quick") && repo.manages(who,id(a,"campaign")),"Only campaign DMs may use hub quick-switch");}
+                else fields(a,"campaign");
+                CharacterService.select(p,id(a,"campaign"));SELECTED.remove(p.getUuid());out.addProperty("campaign",id(a,"campaign").toString());
+            }
             case CHARACTER_SELECT -> {
                 fields(a,"character revision");var c=repo.visible(who,id(a,"character"));require(c.revision()==revision(a),"Stale character revision");require(!CombatManager.isInCombat(p),"Character selection locked during combat");
                 require(Objects.equals(CharacterService.selected(p),c.campaign()),"Select the character's campaign first");require(repo.controller(c.id()).equals(p.getUuid()) || repo.manages(who,c.campaign()),"Character control permission denied");

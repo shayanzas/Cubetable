@@ -33,6 +33,8 @@ public final class SrdCharacterFormScreen extends Screen {
     private void button(String title,int x,int y,int w,Runnable action) {
         addDrawableChild(ButtonWidget.builder(Text.literal(title),b->action.run()).dimensions(x,y,w,20).build());
     }
+    /** Foreground is drawn before super.render; skip its late default background blur. */
+    @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
     @Override public boolean shouldPause() { return false; }
     @Override protected void init() {
         String pending=input==null?null:input.getText(), previousKey=inputKey;

@@ -114,6 +114,7 @@ public final class CharacterSheetScreen extends Screen {
 		}
 	}
 
+	private final Screen parent;
 	private final List<Hit> hits = new ArrayList<>();
 	private final float[] scroll = new float[8];
 	private final float[] maxScroll = new float[8];
@@ -133,10 +134,19 @@ public final class CharacterSheetScreen extends Screen {
 	private float formMaxScroll;
 	private boolean deleteArmed;
 
-	public CharacterSheetScreen() {
+	public CharacterSheetScreen() {this(null);}
+	public CharacterSheetScreen(Screen parent) {
 		super(Text.literal("Character Sheet"));
+		this.parent=parent;
 		loadSize();
 	}
+
+    public static void open(Screen parent) {
+        pendingOpen=false;
+        if(!loaded) {SheetLibrary.reload();loaded=true;}
+        MinecraftClient.getInstance().setScreen(new CharacterSheetScreen(parent));
+    }
+    @Override public void close() {client.setScreen(parent);}
 
 	private int winW() {
 		return MathHelper.clamp(sizeW, Math.min(MIN_W, width - 8), Math.max(Math.min(MIN_W, width - 8), width - 8));

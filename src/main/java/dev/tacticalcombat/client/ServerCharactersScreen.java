@@ -29,6 +29,8 @@ public final class ServerCharactersScreen extends Screen {
     }
     private int panelWidth() { return Math.min(440,width-16); }
     private int left() { return (width-panelWidth())/2; }
+    /** Foreground is drawn before super.render; skip its late default background blur. */
+    @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
     @Override public boolean shouldPause() { return false; }
     @Override protected void init() {
         rebuild();
@@ -114,7 +116,7 @@ public final class ServerCharactersScreen extends Screen {
             });
             if(canCreateSrd) button("New SRD",2,3,height-52,()->confirm("Create a new SRD server draft? It starts unarmored with average abilities and no class assumptions. Edit SRD fields, save and request approval.",()->request("srd_create",new JsonObject(),true)));
         }
-        button("Back to local sheet",0,1,height-28,this::close);
+        button("Back",0,1,height-28,this::close);
     }
     private void stepField(int direction) {
         Runnable change=()->{

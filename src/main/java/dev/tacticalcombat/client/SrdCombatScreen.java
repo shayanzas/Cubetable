@@ -20,7 +20,12 @@ public final class SrdCombatScreen extends Screen {
     private SrdMovement.Cell selected,hover;
     private List<SrdMovement.Cell> cells=List.of();
     private final List<String> tieChoice=new ArrayList<>();
-    public SrdCombatScreen() { super(Text.literal("SRD controlled encounter")); }
+    private final Screen parent;
+    public SrdCombatScreen() {this(null);}
+    public SrdCombatScreen(Screen parent) {super(Text.literal("SRD controlled encounter"));this.parent=parent;}
+    @Override public void close() {client.setScreen(parent);}
+    /** Foreground is drawn before super.render; skip its late default background blur. */
+    @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
     @Override public boolean shouldPause() { return false; }
     private int left() { return (width-Math.min(440,width-16))/2; }
     private int panel() { return Math.min(440,width-16); }
