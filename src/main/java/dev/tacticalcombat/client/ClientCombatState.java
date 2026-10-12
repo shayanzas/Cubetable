@@ -48,6 +48,7 @@ public final class ClientCombatState {
 	private static float prevBlend;
 
 	private ClientCombatState() {}
+    public static java.util.UUID hudEncounter() {return encounter;}
 
 	public static void apply(CombatStatePayload p) {
 		active = p.active();

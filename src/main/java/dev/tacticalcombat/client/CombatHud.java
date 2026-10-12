@@ -46,7 +46,7 @@ public final class CombatHud {
 		int screenW = ctx.getScaledWindowWidth();
 		int screenH = ctx.getScaledWindowHeight();
 
-		drawInitiativeBar(ctx, font, screenW, entries);
+		if(!dev.tacticalcombat.client.ui.CubetableHud.replacesInitiative()) drawInitiativeBar(ctx, font, screenW, entries);
 		drawTurnPanel(ctx, mc, font, screenW, screenH, entries);
 	}
 

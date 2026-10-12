@@ -13,6 +13,19 @@ import static dev.tacticalcombat.combat.SrdEncounterGameTests.*;
 import static dev.tacticalcombat.client.ui.ManagementState.args;
 
 public final class ManagementGatewayGameTests implements FabricGameTest {
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void hudSharedRollReadbackKeepsEventIdentityAndPrivateRecipients(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();var manager=ctx.createMockCreativeServerPlayerInWorld();var peer=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,player.getUuid(),false);f.repo.invite(f.dm,f.campaign,2,manager.getUuid(),true);f.repo.invite(f.dm,f.campaign,3,peer.getUuid(),false);
+            UUID event=UUID.randomUUID();var roll=UiEvents.Roll.from(20,List.of(18,7),1,5,"Private attack",false);
+            UiEvents.SESSION.publish(event,f.campaign,null,1,UiEvents.Kind.ATTACK,List.of(player.getUuid()),"Committed roll",roll,UiEvents.Visibility.RECIPIENTS_AND_DM,Set.of(player.getUuid()));
+            var a=data(send(player,1,"EVENTS",args("campaign",f.campaign,"cursor",0,"kind",null)));var b=data(send(manager,1,"EVENTS",args("campaign",f.campaign,"cursor",0,"kind",null)));var hidden=data(send(peer,1,"EVENTS",args("campaign",f.campaign,"cursor",0,"kind",null)));
+            check(a.get("session").equals(b.get("session")) && a.getAsJsonArray("events").get(0).getAsJsonObject().get("id").getAsString().equals(event.toString()) && b.getAsJsonArray("events").get(0).getAsJsonObject().get("id").getAsString().equals(event.toString()),"authorized clients receive one shared event identity/session");
+            var visible=a.getAsJsonArray("events").get(0).getAsJsonObject().getAsJsonObject("roll");check(visible.get("total").getAsInt()==23 && visible.getAsJsonArray("faces").get(0).getAsInt()==18,"HUD sees unchanged server raw face and total");check(hidden.getAsJsonArray("events").isEmpty(),"ordinary unauthorized peer gets no hidden faces or modifiers");
+            check(data(send(player,2,"EVENTS",args("campaign",f.campaign,"cursor",a.get("cursor"),"kind",null))).getAsJsonArray("events").isEmpty(),"event cursor does not retransmit an already received roll");
+        } finally {cleanup(ctx,player,manager,peer);}ctx.complete();
+    }
     private static UiReplyPayload send(ServerPlayerEntity p,long sequence,String op,JsonObject args) {return UiNetworking.handle(p,new UiRequestPayload(sequence,op,args.toString()));}
     private static JsonObject data(UiReplyPayload reply) {check(reply.code().equals("OK"),reply.code()+": "+reply.message());return JsonParser.parseString(reply.json()).getAsJsonObject();}
     private static void cleanup(TestContext ctx,ServerPlayerEntity... players) {for(var p:players) {CharacterService.forget(p.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(p);}}

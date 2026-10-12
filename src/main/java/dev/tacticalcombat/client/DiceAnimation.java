@@ -81,6 +81,7 @@ public final class DiceAnimation {
 	}
 
 	private static void printResult(MinecraftClient client, DiceRollPayload roll) {
+        if(!dev.tacticalcombat.client.ui.CubetableHud.options().diceChat()) return;
 		int kept = roll.keptIndex();
 		StringBuilder list = new StringBuilder();
 		for (int i = 0; i < roll.results().length; i++) {

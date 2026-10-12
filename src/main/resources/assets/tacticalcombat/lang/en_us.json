@@ -24,5 +24,7 @@
   "tacticalcombat.cmd.no_enemies": "No hostile creatures nearby to fight.",
   "tacticalcombat.cmd.started": "Combat started.",
   "tacticalcombat.cmd.ended": "Combat ended.",
-  "tacticalcombat.cmd.not_in_combat": "You are not in combat."
+  "tacticalcombat.cmd.not_in_combat": "You are not in combat.",
+  "key.tacticalcombat.event_log": "Cubetable event log (Shift: resize panel)",
+  "key.tacticalcombat.skip_dice": "Skip Cubetable dice animation"
 }

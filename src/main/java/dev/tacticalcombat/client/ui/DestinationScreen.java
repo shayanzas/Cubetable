@@ -29,7 +29,7 @@ public final class DestinationScreen extends RpgScreen {
             }
             case SETTINGS -> {
                 button("Minecraft options","GUI scale, accessibility & video settings",x,y,w,34,()->client.setScreen(new OptionsScreen(this,client.options)));
-                button("Cubetable HUD customization","Pending development",x,y+40,w,34,()->client.setScreen(new InfoScreen(this,"HUD customization","Pending development","Drag handles, panel scaling and animation settings arrive with the later HUD checkpoint. Current settings remain in Minecraft Options and the existing manual-sheet controls.")));
+                button("Cubetable HUD customization","Local layout, font, visibility and dice settings",x,y+40,w,34,()->client.setScreen(new HudSettingsScreen(this)));
                 addDrawableChild(new RpgTextBox(x,y+82,w,Math.max(24,frame.height()-158),"The shared UI uses native text size. Change Minecraft GUI scale for your display; no character or combat data is changed."));
             }
             case HELP -> {

@@ -21,6 +21,7 @@ public final class ClientSrdCombat {
     static int focusEntity=-1;
     private static final LinkedHashSet<String> presented=new LinkedHashSet<>();
     private ClientSrdCombat() {}
+    public static UUID hudEncounter() {return encounter;}
     public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear(); }
     public static void receive(SrdStatePayload payload) {
         if(payload.code().equals("ENDED")) {
@@ -45,9 +46,9 @@ public final class ClientSrdCombat {
                 var player=MinecraftClient.getInstance().player;
                 if(presented.add(result.get("action").getAsString())) {
                     if(presented.size()>32) presented.remove(presented.iterator().next());
-                    if(player!=null) player.sendMessage(net.minecraft.text.Text.literal(message+"; d20 faces "+result.get("faces")+"; damage dice "+result.get("damageFaces")),false);
+                    if(player!=null && (!dev.tacticalcombat.client.ui.CubetableHud.campaignEvents() || dev.tacticalcombat.client.ui.CubetableHud.options().diceChat())) player.sendMessage(net.minecraft.text.Text.literal(message+"; d20 faces "+result.get("faces")+"; damage dice "+result.get("damageFaces")),false);
                     var faces=result.getAsJsonArray("faces");
-                    if(faces.size()>=1 && faces.size()<=2) DiceAnimation.enqueue(new DiceRollPayload("SRD server","Accepted attack",dev.tacticalcombat.dice.DiceType.D20,
+                    if((!dev.tacticalcombat.client.ui.CubetableHud.campaignEvents() || dev.tacticalcombat.client.ui.CubetableHud.options().legacyDice()) && faces.size()>=1 && faces.size()<=2) dev.tacticalcombat.client.ui.CubetableHud.legacy(new DiceRollPayload("SRD server","Accepted attack",dev.tacticalcombat.dice.DiceType.D20,
                             result.get("total").getAsInt()-result.get("chosen").getAsInt(),result.get("keep").getAsInt(),faces.asList().stream().mapToInt(JsonElement::getAsInt).toArray()));
                 }
             }
