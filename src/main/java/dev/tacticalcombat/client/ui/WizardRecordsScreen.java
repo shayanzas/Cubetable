@@ -27,6 +27,7 @@ public final class WizardRecordsScreen extends ManagementScreen {
             row("Remove equipment record","Confirmed removal from the sheet only; no Minecraft inventory mutation",!data.getAsJsonArray("items").isEmpty(),"No equipment records",()->removeChoice("items","Equipment record to remove",data));
         } else if(section.equals("features")) {
             for(var e:data.getAsJsonArray("entries")){var o=e.getAsJsonObject();row(text(o,"name"),text(o,"kind")+" · "+text(o,"status"),true,"",()->feature(o));}
+            row("Browse SRD feat: Grappler","Limited verified feat reference · Strength 13 prerequisite · manual/informational",true,"",()->{var choice=Srd2014Catalog.FEATS.getFirst();var entry=new JsonObject();entry.addProperty("id","custom:"+UUID.randomUUID());entry.addProperty("name",choice.name());entry.addProperty("kind","FEAT");entry.addProperty("source","SRD 5.1 (2014)");entry.addProperty("status","INFORMATIONAL");entry.addProperty("description",choice.summary()+" "+choice.guidance());feature(entry);});
             row("+ Add feature / feat record","Manual or informational only; prerequisites are not automatically enforced",true,"",()->feature(null));
             row("+ Add manual resource pool","Uses, recharge and current/maximum values; bookkeeping only",true,"",()->pool(null));
             for(var e:data.getAsJsonArray("resources")){var o=e.getAsJsonObject();row("Resource: "+text(o,"name"),o.get("current").getAsInt()+" / "+o.get("maximum").getAsInt()+" · "+text(o,"recharge"),true,"",()->pool(o));}

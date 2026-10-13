@@ -77,4 +77,18 @@ public class HubGatewayGameTests implements FabricGameTest {
         ctx.complete();
     }
 
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void libraryDeletionChecksAuthenticatedOwnerAndRevision(TestContext ctx)throws Exception {
+        var owner=ctx.createMockCreativeServerPlayerInWorld();var peer=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            var create=new JsonObject();create.addProperty("profile",RulesProfiles.SRD);create.addProperty("mode","MANUAL");create.add("sheet",JsonNull.INSTANCE);
+            var reply=send(owner,1,"LIBRARY_CREATE",create);check(reply.code().equals("OK"),"create private source");var source=JsonParser.parseString(reply.json()).getAsJsonObject();
+            var deletion=new JsonObject();deletion.addProperty("character",source.get("id").getAsString());deletion.addProperty("revision",1);
+            check(send(peer,1,"LIBRARY_DELETE",deletion).code().equals("FORBIDDEN"),"another authenticated player cannot delete source");
+            deletion.addProperty("revision",0);check(send(owner,2,"LIBRARY_DELETE",deletion).code().equals("CONFLICT"),"stale deletion rejected");
+            deletion.addProperty("revision",1);var before=f.repo.state();check(send(owner,3,"LIBRARY_DELETE",deletion).code().equals("OK"),"owner confirmed deletion");check(f.repo.state().equals(before),"source deletion never mutates campaign data or bindings");
+        }finally{CharacterService.forget(owner.getUuid());CharacterService.forget(peer.getUuid());UiNetworking.forget(owner.getUuid());UiNetworking.forget(peer.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(owner);ctx.getWorld().getServer().getPlayerManager().remove(peer);}
+        ctx.complete();
+    }
+
 }

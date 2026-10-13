@@ -10,6 +10,7 @@ public final class DestinationScreen extends RpgScreen {
     public enum Destination { ENCOUNTERS, DM, TABLETOP, SETTINGS, HELP }
     private final Destination destination;
     public DestinationScreen(Screen parent,Destination destination) {super(switch(destination) {case ENCOUNTERS->"Encounters";case DM->"DM Tools";case TABLETOP->"Tabletop Tools";case SETTINGS->"Settings";case HELP->"Cubetable Help";},parent);this.destination=destination;}
+    private void openRoster(){request(dev.tacticalcombat.uiapi.UiApiService.Operation.ACTIVE,ManagementState.args(),a->{String campaign=ManagementState.text(a.data(),"campaign");if(!a.code().equals("OK")||campaign.isEmpty())return;request(dev.tacticalcombat.uiapi.UiApiService.Operation.CAMPAIGN_GET,ManagementState.args("campaign",campaign),r->{if(r.code().equals("OK")&&ManagementState.flag(r.data(),"manager"))client.setScreen(new CampaignRosterScreen(this,campaign));});});}
     @Override protected void init() {
         super.init();clearChildren();int x=frame.x()+12,w=frame.width()-24,y=frame.y()+38;
         switch(destination) {
@@ -20,8 +21,8 @@ public final class DestinationScreen extends RpgScreen {
                 addDrawableChild(new RpgTextBox(x,y+82,w,Math.max(24,frame.height()-158),"The encounter browser and graphical encounter setup arrive later. Existing /srdcombat and /tbc commands remain available."));
             }
             case DM -> {
-                button("Existing server workspace","Review campaigns and character approvals",x,y,w,34,()->client.setScreen(new ServerCharactersScreen(this,null)));
-                addDrawableChild(new RpgTextBox(x,y+42,w,Math.max(38,frame.height()-118),"Your campaign manager role was checked with the server. Full DM management screens arrive in a later checkpoint. Existing controls continue enforcing their own permissions. Live takeover is unavailable."));
+                button("Campaign character roster","Inspect, approve, request changes, assign and bind",x,y,w,34,this::openRoster);
+                addDrawableChild(new RpgTextBox(x,y+42,w,Math.max(38,frame.height()-118),"Your campaign manager role was checked with the server. The roster and dashboard Manage tab provide ordinary character review. The server checks authority for every action. Live takeover is unavailable."));
             }
             case TABLETOP -> {
                 button("Local character sheets","Generic D20, Percentile & manual dice",x,y,w,34,()->CharacterSheetScreen.open(this));

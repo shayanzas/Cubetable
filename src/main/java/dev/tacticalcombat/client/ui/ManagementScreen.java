@@ -20,10 +20,13 @@ public abstract class ManagementScreen extends RpgScreen {
     protected ManagementScreen(String title,Screen parent) {super(title,parent);}
     @Override protected void init() {
         if(list!=null){savedOffset=list.firstVisible();savedSelection=list.selectedIndex();}super.init();clearChildren();busy=false;fresh=false;rows.clear();actions.clear();
-        search(frame.x()+12,frame.y()+36,frame.width()-110,query,s->{query=s;filter();});
-        button("Refresh","",frame.x()+frame.width()-86,frame.y()+36,74,20,()->{if(!busy) refresh();});
+        searchControls();
         var area=listBounds();list=addDrawableChild(new RpgList(area.x(),area.y(),area.width(),area.height(),this::choose));footer();
         list.restorePosition(savedOffset,savedSelection);controls();if(ClientUiApi.supported()) refresh();else {message="Server UI unavailable. Local sheets remain under Tabletop Tools.";}
+    }
+    protected void searchControls(){
+        search(frame.x()+12,frame.y()+36,frame.width()-110,query,s->{query=s;filter();});
+        button("Refresh","",frame.x()+frame.width()-86,frame.y()+36,74,20,()->{if(!busy) refresh();});
     }
     protected boolean paged() {return false;}
     protected UiLayout.Rect listBounds() {return listArea(frame,paged());}
@@ -40,7 +43,7 @@ public abstract class ManagementScreen extends RpgScreen {
         actions.getOrDefault(choice.id(),()->{}).run();
     }
     protected void read(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> result) {
-        request(op,args,r->{if(r.code().equals("OK")) {fresh=true;message="Server state refreshed.";messageColor=RpgTheme.MUTED;result.accept(r.data());}else {fresh=false;if(!r.code().equals("RATE_LIMIT"))clearRows();message=r.code().equals("RATE_LIMIT")?"The server is busy. Wait briefly and refresh; existing character data is retained.":r.code()+": "+r.message()+" Refresh before retrying.";}});
+        request(op,args,r->{if(r.code().equals("OK")) {fresh=true;message="Server state refreshed.";messageColor=RpgTheme.MUTED;result.accept(r.data());}else {fresh=false;if(!r.code().equals("RATE_LIMIT")){clearRows();if(list!=null)list.rows(List.of());}message=r.code().equals("RATE_LIMIT")?"The server is busy. Wait briefly and refresh; existing character data is retained.":r.code()+": "+r.message()+" Refresh before retrying.";}});
     }
     protected void mutate(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> result) {
         if(busy || !fresh) {message="Refresh authoritative state before changing it.";return;}
@@ -59,6 +62,6 @@ public abstract class ManagementScreen extends RpgScreen {
     }
     private Runnable afterRefresh;
     protected void returnChoice(Screen destination,Runnable action) {client.setScreen(destination);if(destination instanceof ManagementScreen m) m.afterRefresh=action;else action.run();}
-    @Override public void tick() {super.tick();filter();if(afterRefresh!=null && !busy) {var action=afterRefresh;afterRefresh=null;if(fresh) {try {action.run();}catch(RuntimeException failure) {message=failure.getMessage()==null?"Action unavailable; refresh and review again.":failure.getMessage();messageColor=RpgTheme.ERROR;}}else message="Confirmation cancelled because the latest server read failed. Refresh and review again.";}}
+    @Override public void tick() {super.tick();if(fresh||!rows.isEmpty())filter();if(afterRefresh!=null && !busy) {var action=afterRefresh;afterRefresh=null;if(fresh) {try {action.run();}catch(RuntimeException failure) {message=failure.getMessage()==null?"Action unavailable; refresh and review again.":failure.getMessage();messageColor=RpgTheme.ERROR;}}else message="Confirmation cancelled because the latest server read failed. Refresh and review again.";}}
     protected String self() {return client.player==null?"":client.player.getUuidAsString();}
 }
