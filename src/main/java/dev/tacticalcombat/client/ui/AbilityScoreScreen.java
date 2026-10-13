@@ -22,11 +22,13 @@ public final class AbilityScoreScreen extends RpgScreen {
     @Override protected void init() {
         super.init();clearChildren();busy=false;fresh=false;int x=frame.x()+12,w=frame.width()-24;
         int methodW=(w-18)/4;WizardModel.ScoreMethod[] methods=WizardModel.ScoreMethod.values();for(int i=0;i<4;i++) {var m=methods[i];var b=button(switch(m){case STANDARD_ARRAY->"Standard";case POINT_BUY->"Point Buy";case MANUAL->"Manual";case EXTERNAL_ROLLS->"External rolls";},"",x+i*(methodW+6),frame.y()+36,methodW,20,()->{method=m;if(m==WizardModel.ScoreMethod.STANDARD_ARRAY) applyStandard();dirty=true;updateMessage();init();});b.selected(method==m);}
-        int columns=frame.width()>=500?3:2,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+76;
-        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*38;var input=addDrawableChild(new TextFieldWidget(textRenderer,fx,fy,fieldW,20,Text.literal(key)));input.setMaxLength(2);input.setText(values.get(key));input.setChangedListener(v->{values.put(key,v);dirty=true;updateMessage();});}
+        int columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+76;
+        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*38;var input=addDrawableChild(new TextFieldWidget(textRenderer,fx+20,fy,fieldW-40,20,Text.literal(key)));input.setMaxLength(2);input.setText(values.get(key));input.setChangedListener(v->{values.put(key,v);dirty=true;updateMessage();});
+            button("−","",fx,fy,18,20,()->adjust(key,-1,input));button("+","",fx+fieldW-18,fy,18,20,()->adjust(key,1,input));}
         footer();button("Reload","",frame.x()+frame.width()-202,frame.y()+frame.height()-30,76,20,this::reload);button("Save scores","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
         reload();updateMessage();
     }
+    private void adjust(String key,int delta,TextFieldWidget input){try{int current=Integer.parseInt(values.get(key));int min=method==WizardModel.ScoreMethod.POINT_BUY?8:1,max=method==WizardModel.ScoreMethod.POINT_BUY?15:30;input.setText(Integer.toString(Math.clamp(current+delta,min,max)));}catch(NumberFormatException ignored){message="Enter a whole score first.";}}
     private void applyStandard() {for(int i=0;i<KEYS.size();i++) values.put(KEYS.get(i),Integer.toString(WizardModel.STANDARD_ARRAY.get(i)));}
     private Map<String,Integer> scores() {var scores=new LinkedHashMap<String,Integer>();for(String k:KEYS) try {scores.put(k,Integer.parseInt(values.get(k)));}catch(RuntimeException e) {throw new IllegalArgumentException("All six scores must be whole numbers");}return scores;}
     private void updateMessage() {try {var s=scores();WizardModel.validateScores(method,s);message=method==WizardModel.ScoreMethod.POINT_BUY?WizardModel.pointRemaining(s)+" of 27 points remain.":method==WizardModel.ScoreMethod.EXTERNAL_ROLLS?"Enter values rolled outside this wizard. No client roll is trusted.":"Valid "+method.name().toLowerCase(Locale.ROOT).replace('_',' ')+" values.";messageColor=RpgTheme.SUCCESS;}catch(RuntimeException e) {message=e.getMessage();messageColor=RpgTheme.ERROR;}}
@@ -39,9 +41,9 @@ public final class AbilityScoreScreen extends RpgScreen {
     }
     @Override public void tick(){super.tick();if(confirmedSnapshot!=null&&!busy){String reviewed=confirmedSnapshot;confirmedSnapshot=null;if(fresh&&snapshot.toString().equals(reviewed)){baseline=snapshot.deepCopy();reviewRequired=false;save();}else{message="Server changed again or refresh failed. Compare again before saving.";reviewRequired=true;}}}
     @Override protected void content(DrawContext g,int mx,int my,float delta) {
-        int x=frame.x()+12,w=frame.width()-24,columns=frame.width()>=500?3:2,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+64;
+        int x=frame.x()+12,w=frame.width()-24,columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+64;
         for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*38;int score;try{score=Integer.parseInt(values.get(key));}catch(Exception e){score=10;}RpgTheme.text(g,textRenderer,key.toUpperCase(Locale.ROOT)+" · modifier "+String.format("%+d",WizardModel.modifier(score)),fx,fy,fieldW,RpgTheme.MUTED);}
-        paragraphs(g,"Species bonuses are not auto-applied. These saved effective values feed the existing server SRD combat codec; inventory/features never rewrite them.",x,top+(KEYS.size()+columns-1)/columns*38+6,w,28);
+        paragraphs(g,"Species bonuses are not auto-applied. These saved effective values feed the existing server SRD combat codec; inventory/features never rewrite them.",x,top+(KEYS.size()+columns-1)/columns*38+6,w,Math.max(0,frame.height()-40-(64+(KEYS.size()+columns-1)/columns*38+6)));
     }
     @Override protected int statusWidth(){return frame.width()-300;}
     @Override public void close(){if(saving){message="Save pending; wait for acknowledgment.";return;}if(dirty) client.setScreen(new RpgConfirmationScreen(this,"Discard score edits?","Entered values have not been persisted.",()->client.setScreen(parent)));else super.close();}

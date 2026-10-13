@@ -21,7 +21,8 @@ public final class WizardRecordsScreen extends ManagementScreen {
         clearRows();JsonObject data=SheetSections.read(draft.getAsJsonObject("sheet"),section);
         if(section.equals("inventory")) {
             for(var e:data.getAsJsonArray("items")){var o=e.getAsJsonObject();row(text(o,"name"),o.get("quantity").getAsInt()+" · "+(flag(o,"equipped")?"equipped":"carried")+" · manual record",true,"",()->item(o));}
-            row("+ Add equipment record","Does not grant a Minecraft item or alter AC, attacks or ammunition",true,"",()->item(null));
+            row("Browse SRD equipment","Existing supported weapons/armor only; a sheet record grants no combat stat or physical item",true,"",this::equipmentPicker);
+            row("+ Add custom equipment record","Does not grant a Minecraft item or alter AC, attacks or ammunition",true,"",()->item(null));
             row("Edit recorded currency","Copper, silver, electrum, gold and platinum sheet values",true,"",this::currency);
             row("Remove equipment record","Confirmed removal from the sheet only; no Minecraft inventory mutation",!data.getAsJsonArray("items").isEmpty(),"No equipment records",()->removeChoice("items","Equipment record to remove",data));
         } else if(section.equals("features")) {
@@ -40,6 +41,7 @@ public final class WizardRecordsScreen extends ManagementScreen {
         if(rows.size()==1) info("No saved records","Use the add action above. Server validation and bounded section storage still apply.");
     }
     private static JsonObject find(JsonObject spellbook,String id){for(var e:spellbook.getAsJsonArray("customDefinitions")){var o=e.getAsJsonObject();if(text(o,"id").equals(id))return o;}return null;}
+    private void equipmentPicker(){var names=new ArrayList<String>();for(var w:dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.values())if(w!=dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.UNARMED)names.add(w.name());for(var a:dev.tacticalcombat.rules.srd.SrdEquipment.Armor.values())if(a!=dev.tacticalcombat.rules.srd.SrdEquipment.Armor.NONE)names.add(a.name());client.setScreen(new ChoiceScreen(this,"Supported SRD equipment records",names,n->n.toLowerCase(Locale.ROOT).replace('_',' '),n->{var selected=new JsonObject();selected.addProperty("id","custom:"+UUID.randomUUID());selected.addProperty("name",n.toLowerCase(Locale.ROOT).replace('_',' '));selected.addProperty("quantity",1);selected.addProperty("equipped",false);selected.addProperty("slot","");selected.add("properties",new JsonArray());selected.addProperty("notes","SRD 5.1 equipment reference; manual sheet record, no automatic combat effect");selected.addProperty("physicalMapping","");item(selected);}));}
     private void item(JsonObject existing){
         String id=existing==null?"custom:"+UUID.randomUUID():text(existing,"id");
         var fields=List.of(f("name","Name",existing,80),f("quantity","Quantity",existing==null?"1":existing.get("quantity").getAsString(),5),f("equipped","Equipped (true/false)",existing==null?"false":existing.get("equipped").getAsString(),5),f("slot","Slot",existing,40),f("properties","Properties (comma separated)",existing==null?"":join(existing,"properties"),512),f("notes","Notes",existing,1024),f("physicalMapping","Minecraft mapping note",existing,128));

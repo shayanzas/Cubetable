@@ -59,6 +59,11 @@ public final class LibraryRepository {
         var d=expected(p,id,revision);require(validate(d).isEmpty(),"Character has validation errors; review before finalizing");
         var next=new Draft(id,d.owner,d.profile,d.mode,Stage.COMPLETE,revision+1,d.sheet);save(next);return next;
     }
+    public void delete(CharacterRepository.Principal p,UUID id,long revision)throws IOException {
+        expected(p,id,revision);var next=new HashMap<>(drafts);next.remove(id);
+        var root=new JsonObject();root.addProperty("schema",1);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
+        file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);
+    }
     public Draft expected(CharacterRepository.Principal p,UUID id,long revision) {
         var d=get(p,id);require(d.revision==revision,"Stale library revision; reload and reconcile");require(revision<Long.MAX_VALUE,"Revision exhausted");return d;
     }

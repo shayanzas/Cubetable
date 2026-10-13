@@ -13,6 +13,8 @@ import java.util.function.*;
 public final class RecordFormScreen extends RpgScreen {
     public record Field(String key,String label,String initial,int limit) {}
     private final List<Field> fields;
+    private final Map<String,TextFieldWidget> inputs=new HashMap<>();
+    private String focusKey="";private int cursor;
     private final Map<String,String> values=new LinkedHashMap<>();
     private final UiApiService.Operation readOp,saveOp;
     private final JsonObject readArgs;
@@ -35,12 +37,13 @@ public final class RecordFormScreen extends RpgScreen {
     public static int capacity(int frameHeight) {return ManagementState.formCapacity(frameHeight);}
     public RecordFormScreen expected(JsonObject initial) {baseline=initial.deepCopy();return this;}
     @Override protected void init() {
-        super.init();clearChildren();busy=false;fresh=false;saving=false;
+        for(var e:inputs.entrySet())if(e.getValue().isFocused()){focusKey=e.getKey();cursor=e.getValue().getCursor();}inputs.clear();super.init();clearChildren();busy=false;fresh=false;saving=false;
         int x=frame.x()+12,w=frame.width()-24,n=capacity(frame.height());page=Math.min(page,(fields.size()-1)/n);
         for(int i=page*n;i<Math.min(fields.size(),(page+1)*n);i++) {
             var f=fields.get(i);int y=frame.y()+54+(i-page*n)*36;
+            if(f.label().contains("true/false")){var toggle=button(Boolean.parseBoolean(values.get(f.key()))?"☑ Yes":"☐ No","",x,y,w,20,()->{boolean value=!Boolean.parseBoolean(values.get(f.key()));values.put(f.key(),Boolean.toString(value));dirty=true;for(var child:children())if(child instanceof RpgButton b&&b.getY()==y)b.setMessage(Text.literal(value?"☑ Yes":"☐ No"));});toggle.hint(f.label().replace(" (true/false)",""));continue;}
             var input=addDrawableChild(new TextFieldWidget(textRenderer,x,y,w,20,Text.literal(f.label())));input.setMaxLength(f.limit());input.setText(values.get(f.key()));
-            input.setChangedListener(v->{values.put(f.key(),v);dirty=true;});
+            input.setChangedListener(v->{values.put(f.key(),v);dirty=true;});inputs.put(f.key(),input);if(f.key().equals(focusKey)){setInitialFocus(input);input.setCursor(cursor,false);}
         }
         int bottom=frame.y()+frame.height()-60;
         button("‹ Fields","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;

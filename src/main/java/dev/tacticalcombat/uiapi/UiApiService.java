@@ -10,7 +10,7 @@ import static dev.tacticalcombat.uiapi.SheetSections.require;
 /** Versioned, explicit application operations. Network adapter supplies the authenticated principal and world hooks. */
 public final class UiApiService {
     public enum Operation {
-        CAPABILITIES, ACTIVE, PRESENTATION_POLICY, LIBRARY_LIST, LIBRARY_CREATE, LIBRARY_GET, LIBRARY_UPDATE, LIBRARY_VALIDATE, LIBRARY_FINALIZE, LIBRARY_DUPLICATE, LIBRARY_SUBMIT,
+        CAPABILITIES, ACTIVE, PRESENTATION_POLICY, LIBRARY_LIST, LIBRARY_CREATE, LIBRARY_GET, LIBRARY_UPDATE, LIBRARY_VALIDATE, LIBRARY_FINALIZE, LIBRARY_DUPLICATE, LIBRARY_SUBMIT, LIBRARY_DELETE,
         CAMPAIGN_LIST, CAMPAIGN_CREATE, CAMPAIGN_GET, CAMPAIGN_SELECT, CAMPAIGN_INVITE, CAMPAIGN_REMOVE, CAMPAIGN_REVOKE_DM, CAMPAIGN_POLICY, CAMPAIGN_PROFILE,
         ROSTER, CHARACTER_GET, CHARACTER_SECTION, CHARACTER_EDIT, CHARACTER_APPROVE, CHARACTER_REVOKE,
         ASSIGNMENT_LIST, ASSIGNMENT_OFFER, ASSIGNMENT_ANSWER, ASSIGNMENT_CLEAR, CHARACTER_SELECT, BIND, UNBIND, ELIGIBLE_PLAYERS, ELIGIBLE_ENTITIES,
@@ -50,6 +50,7 @@ public final class UiApiService {
                     out.add("submissions",copies);out.addProperty("submissionsTruncated",total>128);out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,d.id())));out.addProperty("guidedRulesComplete",false);
                 }
                 case LIBRARY_UPDATE -> {fields(a,"character revision section data");out=draft(library.update(p,id(a,"character"),revision(a),string(a,"section"),a.getAsJsonObject("data")),true);}
+                case LIBRARY_DELETE -> {fields(a,"character revision");library.delete(p,id(a,"character"),revision(a));out.addProperty("deleted",true);}
                 case LIBRARY_VALIDATE -> {fields(a,"character");out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,id(a,"character"))));out.addProperty("guidedRulesComplete",false);}
                 case LIBRARY_FINALIZE -> {fields(a,"character revision");out=draft(library.finalizeDraft(p,id(a,"character"),revision(a)),true);}
                 case LIBRARY_DUPLICATE -> {fields(a,"character revision");out=draft(library.duplicate(p,id(a,"character"),revision(a)),true);}

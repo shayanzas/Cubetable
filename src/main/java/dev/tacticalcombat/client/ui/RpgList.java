@@ -13,10 +13,11 @@ import org.lwjgl.glfw.GLFW;
 public final class RpgList extends ClickableWidget {
     private List<HubState.Choice> rows=List.of();
     private final Consumer<HubState.Choice> choose;
-    private final int rowHeight=38;
+    private final int rowHeight;
     private int first,selected;
     private String selectedId="";
-    public RpgList(int x,int y,int w,int h,Consumer<HubState.Choice> choose) {super(x,y,w,h,Text.literal("Available choices"));this.choose=choose;}
+    public RpgList(int x,int y,int w,int h,Consumer<HubState.Choice> choose) {this(x,y,w,h,38,choose);}
+    public RpgList(int x,int y,int w,int h,int rowHeight,Consumer<HubState.Choice> choose){super(x,y,w,h,Text.literal("Available choices"));this.rowHeight=rowHeight;this.choose=choose;}
     public void rows(List<HubState.Choice> rows) {this.rows=List.copyOf(rows);for(int i=0;i<rows.size();i++)if(rows.get(i).id().equals(selectedId)){selected=i;break;}selected=Math.clamp(selected,0,Math.max(0,rows.size()-1));first=Math.clamp(first,0,Math.max(0,rows.size()-capacity()));selectedId=rows.isEmpty()?"":rows.get(selected).id();}
     int firstVisible(){return visibleFirst();}
     int selectedIndex(){return rows.isEmpty()?0:Math.clamp(selected,0,rows.size()-1);}
