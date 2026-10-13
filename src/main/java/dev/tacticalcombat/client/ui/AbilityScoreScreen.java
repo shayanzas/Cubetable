@@ -18,12 +18,15 @@ public final class AbilityScoreScreen extends RpgScreen {
     private WizardModel.ScoreMethod method=WizardModel.ScoreMethod.STANDARD_ARRAY;
     private boolean dirty,fresh,saving,reviewRequired;
     private String confirmedSnapshot;
+    private final Map<String,TextFieldWidget> inputs=new HashMap<>();
+    private String focusedKey="";private int focusedCursor;
     public AbilityScoreScreen(Screen parent,JsonObject draft) {super("Ability scores · SRD 5.1 (2014)",parent);character=text(draft,"id");baseline=draft.deepCopy();var data=SrdAuthoring.data(draft.getAsJsonObject("sheet"));for(String k:KEYS) values.put(k,data.getAsJsonObject("abilities").get(k).getAsString());}
     @Override protected void init() {
+        for(var e:inputs.entrySet())if(e.getValue().isFocused()){focusedKey=e.getKey();focusedCursor=e.getValue().getCursor();}inputs.clear();
         super.init();clearChildren();busy=false;fresh=false;int x=frame.x()+12,w=frame.width()-24;
-        int methodW=(w-18)/4;WizardModel.ScoreMethod[] methods=WizardModel.ScoreMethod.values();for(int i=0;i<4;i++) {var m=methods[i];var b=button(switch(m){case STANDARD_ARRAY->"Standard";case POINT_BUY->"Point Buy";case MANUAL->"Manual";case EXTERNAL_ROLLS->"External rolls";},"",x+i*(methodW+6),frame.y()+36,methodW,20,()->{method=m;if(m==WizardModel.ScoreMethod.STANDARD_ARRAY) applyStandard();dirty=true;updateMessage();init();});b.selected(method==m);}
-        int columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+76;
-        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*38;var input=addDrawableChild(new TextFieldWidget(textRenderer,fx+20,fy,fieldW-40,20,Text.literal(key)));input.setMaxLength(2);input.setText(values.get(key));input.setChangedListener(v->{values.put(key,v);dirty=true;updateMessage();});
+        int methodW=(w-18)/4;WizardModel.ScoreMethod[] methods=WizardModel.ScoreMethod.values();for(int i=0;i<4;i++) {var m=methods[i];var b=button(switch(m){case STANDARD_ARRAY->"Standard";case POINT_BUY->"Point Buy";case MANUAL->"Manual";case EXTERNAL_ROLLS->"External rolls";},"",x+i*(methodW+6),frame.y()+36,methodW,20,()->{method=m;if(m==WizardModel.ScoreMethod.STANDARD_ARRAY) applyStandard();dirty=true;updateMessage();init();});b.selected(method==m);b.hint(m==WizardModel.ScoreMethod.EXTERNAL_ROLLS?"Enter externally rolled scores. Server-verified ability generation is not implemented.":m==WizardModel.ScoreMethod.STANDARD_ARRAY?"Assign 15, 14, 13, 12, 10 and 8 exactly once.":m==WizardModel.ScoreMethod.POINT_BUY?"27 points; scores must be 8–15.":"Enter effective scores, within server bounds.");}
+        int columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+(frame.height()<200?71:76),stride=frame.height()<200?33:46;
+        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*stride;var input=addDrawableChild(new TextFieldWidget(textRenderer,fx+20,fy,fieldW-40,20,Text.literal(key)));input.setMaxLength(2);input.setText(values.get(key));input.setChangedListener(v->{values.put(key,v);dirty=true;updateMessage();});inputs.put(key,input);if(key.equals(focusedKey)){setInitialFocus(input);input.setCursor(focusedCursor,false);}
             button("−","",fx,fy,18,20,()->adjust(key,-1,input));button("+","",fx+fieldW-18,fy,18,20,()->adjust(key,1,input));}
         footer();button("Reload","",frame.x()+frame.width()-202,frame.y()+frame.height()-30,76,20,this::reload);button("Save scores","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
         reload();updateMessage();
@@ -41,9 +44,9 @@ public final class AbilityScoreScreen extends RpgScreen {
     }
     @Override public void tick(){super.tick();if(confirmedSnapshot!=null&&!busy){String reviewed=confirmedSnapshot;confirmedSnapshot=null;if(fresh&&snapshot.toString().equals(reviewed)){baseline=snapshot.deepCopy();reviewRequired=false;save();}else{message="Server changed again or refresh failed. Compare again before saving.";reviewRequired=true;}}}
     @Override protected void content(DrawContext g,int mx,int my,float delta) {
-        int x=frame.x()+12,w=frame.width()-24,columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+64;
-        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*38;int score;try{score=Integer.parseInt(values.get(key));}catch(Exception e){score=10;}RpgTheme.text(g,textRenderer,key.toUpperCase(Locale.ROOT)+" · modifier "+String.format("%+d",WizardModel.modifier(score)),fx,fy,fieldW,RpgTheme.MUTED);}
-        paragraphs(g,"Species bonuses are not auto-applied. These saved effective values feed the existing server SRD combat codec; inventory/features never rewrite them.",x,top+(KEYS.size()+columns-1)/columns*38+6,w,Math.max(0,frame.height()-40-(64+(KEYS.size()+columns-1)/columns*38+6)));
+        int x=frame.x()+12,w=frame.width()-24,columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+(frame.height()<200?59:64),stride=frame.height()<200?33:46;
+        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*stride;int score;try{score=Integer.parseInt(values.get(key));}catch(Exception e){score=10;}RpgTheme.panel(g,fx-2,fy-3,fieldW+4,stride-3,RpgTheme.PANEL,false);CreatorIcons.draw(g,key,fx,fy,12);RpgTheme.text(g,textRenderer,key.toUpperCase(Locale.ROOT)+" "+String.format("%+d",WizardModel.modifier(score)),fx+16,fy,fieldW-16,RpgTheme.GOLD);}
+        paragraphs(g,"These are effective scores. Race bonuses are not applied for you. External rolls are unverified; features and equipment do not rewrite these scores.",x,top+(KEYS.size()+columns-1)/columns*stride+6,w,Math.max(0,frame.height()-40-(64+(KEYS.size()+columns-1)/columns*stride+6)));
     }
     @Override protected int statusWidth(){return frame.width()-300;}
     @Override public void close(){if(saving){message="Save pending; wait for acknowledgment.";return;}if(dirty) client.setScreen(new RpgConfirmationScreen(this,"Discard score edits?","Entered values have not been persisted.",()->client.setScreen(parent)));else super.close();}

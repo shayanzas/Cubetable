@@ -46,10 +46,10 @@ public final class RecordFormScreen extends RpgScreen {
             input.setChangedListener(v->{values.put(f.key(),v);dirty=true;});inputs.put(f.key(),input);if(f.key().equals(focusKey)){setInitialFocus(input);input.setCursor(cursor,false);}
         }
         int bottom=frame.y()+frame.height()-60;
-        button("‹ Fields","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;
+        button("Previous page","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;
         button("Reload","",x+(w-12)/3+6,bottom,(w-12)/3,20,this::reload).hint("Fetch the latest revision without discarding staged text. Review concurrent changes before saving.");
-        button("Fields ›","",x+2*((w-12)/3+6),bottom,(w-12)/3,20,()->{if(!busy && (page+1)*n<fields.size()) {page++;init();}}).active=(page+1)*n<fields.size();
-        footer();button("Save section","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
+        button("Next page","",x+2*((w-12)/3+6),bottom,(w-12)/3,20,()->{if(!busy && (page+1)*n<fields.size()) {page++;init();}}).active=(page+1)*n<fields.size();
+        footer();button("Save changes","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
         reload();
     }
     private void reload() {

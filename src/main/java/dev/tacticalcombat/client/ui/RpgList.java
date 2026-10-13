@@ -32,7 +32,7 @@ public final class RpgList extends ClickableWidget {
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
         for(int i=first;i<Math.min(rows.size(),first+capacity());i++) {
             var row=rows.get(i);int y=getY()+(i-first)*rowHeight;boolean hover=isMouseOver(mx,my) && rowAt(my)==i;
-            RpgTheme.panel(g,getX(),y,width-5,rowHeight-4,hover?RpgTheme.HOVER:RpgTheme.PANEL,isFocused() && selected==i);
+            if(row.enabled()||!row.reason().equals(row.detail()))RpgTheme.panel(g,getX(),y,width-5,rowHeight-4,hover?RpgTheme.HOVER:RpgTheme.PANEL,isFocused() && selected==i);
             RpgTheme.text(g,font,row.name(),getX()+8,y+6,width-22,row.enabled()?RpgTheme.TEXT:RpgTheme.MUTED);
             RpgTheme.text(g,font,row.detail(),getX()+8,y+20,width-22,RpgTheme.MUTED);
         }
@@ -42,7 +42,7 @@ public final class RpgList extends ClickableWidget {
         }
         }
         if(isMouseOver(mx,my) && rowAt(my)<rows.size()) {
-            var row=rows.get(rowAt(my));MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(row.name()+"\n"+row.detail()+(row.reason().isEmpty()?"":"\n"+row.reason())));
+            var row=rows.get(rowAt(my));MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(row.name()+"\n"+row.detail()+(row.reason().isEmpty()||row.reason().equals(row.detail())?"":"\n"+row.reason())));
         }
     }
     @Override public boolean mouseClicked(double x,double y,int button) {
