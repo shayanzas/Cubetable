@@ -22,7 +22,7 @@ public final class CreatorWorkspace {
         int dx=stacked?x:x+left+6,dy=stacked?gridTop+gridHeight+32:gridTop;
         pane.label("Preview: "+value,dx,dy,right,RpgTheme.GOLD);dy+=18;
         boolean known=Srd2014Catalog.SPECIES.stream().anyMatch(e->e.name().equals(base));
-        var description=new FeatureReference.Entry("srd51:race:"+race.id(),(known?race.name():value)+" overview","D&D 5e SRD 5.1 (2014)",0,"","Reference","","","","","INFORMATIONAL",known?CreatorLore.details(CreatorFlow.Step.IDENTITY,race):"Custom race: recorded manually. Select a standard race or use Custom Race to edit this record.");feature(pane,description,dx,dy,right,inspect);dy+=21;
+        var description=new FeatureReference.Entry(known?"srd51:race:"+race.id():"custom:race:reference",(known?race.name():value.isBlank()?"Race":value)+" overview",known?"D&D 5e SRD 5.1 (2014)":"Personal record",0,"","Reference","","","","","INFORMATIONAL",known?CreatorLore.details(CreatorFlow.Step.IDENTITY,race):"Custom race: recorded manually. Select a standard race or use Custom Race to edit this record.");feature(pane,description,dx,dy,right,inspect);dy+=21;
         for(String sub:CreatorFlow.subraces(base)){String selected=CreatorFlow.recordedRace(race.name(),sub);pane.control("subrace:"+sub,new RpgButton(dx,dy,right,18,sub,"",()->{state.fields.put("species",selected);rebuild.run();}).selected(value.equals(selected)).hint("Inspect/save this subrace; traits remain reference only."));dy+=21;}
         String sub=value.contains(" — ")?value.substring(value.indexOf(" — ")+3):CreatorFlow.subraces(base).contains(value)?value:"";
         pane.label("Race traits · reference",dx,dy,right,RpgTheme.GOLD);dy+=17;
