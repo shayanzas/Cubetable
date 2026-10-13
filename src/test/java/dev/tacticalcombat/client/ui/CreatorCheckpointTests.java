@@ -13,14 +13,14 @@ public final class CreatorCheckpointTests {
     private static int count;
     private static void check(boolean value,String message){if(!value)throw new AssertionError(message);count++;}
     public static void run()throws Exception {
-        check(CreatorFlow.Step.values().length==11,"Unified sections include details, overview and finish");
+        check(CreatorFlow.Step.values().length==9,"Nine focused creator sections");
         check(Arrays.stream(CreatorFlow.Step.values()).noneMatch(s->s.title.contains("Method")),"No method stage in presentation");
         for(int[] size:List.of(new int[]{320,180},new int[]{480,257},new int[]{640,360},new int[]{854,480},new int[]{1280,720},new int[]{1920,1080})) {
             var frame=UiLayout.frame(size[0],size[1],720);var l=CreatorFlow.layout(frame);
             check(l.navigation().fits(size[0],size[1])&&l.content().fits(size[0],size[1]),"Creator regions fit "+Arrays.toString(size));
             check(!l.navigation().overlaps(l.content()),"Separate navigation and content");
             if(l.summary().width()>0)check(l.summary().fits(size[0],size[1])&&!l.summary().overlaps(l.content()),"Summary region independent");
-            for(var step:List.of(CreatorFlow.Step.IDENTITY,CreatorFlow.Step.CLASS,CreatorFlow.Step.BACKGROUND))for(boolean sub:List.of(false,true)) {
+            for(var step:List.of(CreatorFlow.Step.IDENTITY,CreatorFlow.Step.CLASS))for(boolean sub:List.of(false,true)) {
                 var c=CreatorFlow.catalogLayout(l.content(),step,sub);
                 var rects=List.of(c.name(),c.subraces(),c.search(),c.grid(),c.details(),c.choose(),c.custom()).stream().filter(r->r.width()>0).toList();
                 for(var r:rects)check(r.fits(size[0],size[1])&&r.y()+r.height()<=l.content().y()+l.content().height(),"Usable catalog region fits");

@@ -5,9 +5,9 @@ import java.util.*;
 /** Presentation stages only: persisted draft modes and section schemas remain compatible. */
 public final class CreatorFlow {
     public enum Step {
-        IDENTITY("Identity"), CLASS("Class"), BACKGROUND("Background"), ABILITIES("Abilities"),
-        PROFICIENCIES("Proficiencies"), EQUIPMENT("Equipment"), FEATURES("Features & Feats"),
-        SPELLS("Spells"), DETAILS("Character Details"), OVERVIEW("Overview"), REVIEW("Review & Finish");
+        IDENTITY("Identity"), CLASS("Class"), ABILITIES("Ability Points"),
+        PROFICIENCIES("Proficiencies"), EQUIPMENT("Equipment"), FEATURES("Features"),
+        SPELLS("Spells"), DETAILS("Character Details"), REVIEW("Review & Finish");
         public final String title;
         Step(String title){this.title=title;}
     }
@@ -18,6 +18,7 @@ public final class CreatorFlow {
         var shell=CharacterShell.layout(frame);
         return new Layout(shell.rail(),shell.content(),shell.summary(),1);
     }
+    public static Map<Step,WizardModel.Status> statuses(com.google.gson.JsonObject draft){var old=WizardModel.statuses(draft);var out=new EnumMap<Step,WizardModel.Status>(Step.class);for(var step:Step.values()){var stage=switch(step){case IDENTITY->WizardModel.Stage.SPECIES;case CLASS->WizardModel.Stage.CLASS;case ABILITIES->WizardModel.Stage.ABILITIES;case PROFICIENCIES->WizardModel.Stage.PROFICIENCIES;case EQUIPMENT->WizardModel.Stage.EQUIPMENT;case FEATURES->WizardModel.Stage.FEATURES;case SPELLS->WizardModel.Stage.SPELLS;case DETAILS,REVIEW->WizardModel.Stage.REVIEW;};var status=old.get(stage);if(step==Step.IDENTITY)status=new WizardModel.Status(old.get(WizardModel.Stage.BASICS).complete()&&status.complete(),status.detail());if(step==Step.DETAILS)status=new WizardModel.Status(true,"Optional story");out.put(step,status);}return out;}
     public static Step errorStep(String section) {
         return switch(section){case "basics","identity"->Step.IDENTITY;case "combat","abilities"->Step.ABILITIES;case "proficiencies"->Step.PROFICIENCIES;case "inventory"->Step.EQUIPMENT;case "features"->Step.FEATURES;case "spellbook"->Step.SPELLS;case "progression"->Step.DETAILS;default->Step.REVIEW;};
     }
