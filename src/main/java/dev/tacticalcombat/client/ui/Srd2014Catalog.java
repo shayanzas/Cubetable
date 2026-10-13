@@ -8,7 +8,7 @@ public final class Srd2014Catalog {
     public static final List<Choice> SPECIES=List.of(
         c("human","Human","Versatile folk; base walking speed 30 feet.","SRD 2014 ability implications are guidance only in this wizard."),
         c("elf","Elf","Darkvision, keen senses, Fey Ancestry and trance; speed 30 feet.","Choose High Elf subrace in the identity editor if desired; no bonus is auto-applied."),
-        c("dwarf","Dwarf","Darkvision, resilience and stonecunning; speed 25 feet.","Hill and Mountain dwarf records are informational; armor/stat grants are not automated."),
+        c("dwarf","Dwarf","Darkvision, resilience and stonecunning; speed 25 feet.","The SRD Hill Dwarf subrace is available; traits and stat grants remain manual."),
         c("halfling","Halfling","Lucky, brave and nimble; speed 25 feet.","Lightfoot subrace can be recorded; traits are not automated."),
         c("dragonborn","Dragonborn","Draconic ancestry, breath weapon and damage resistance; speed 30 feet.","Breath and resistance automation is unavailable."),
         c("gnome","Gnome","Darkvision and Gnome Cunning; speed 25 feet.","Rock Gnome subrace can be recorded; traits are informational."),

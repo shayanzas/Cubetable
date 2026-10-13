@@ -15,6 +15,11 @@ public final class WizardEditors {
         return form(parent,"Canonical character name",draft,List.of(new RecordFormScreen.Field("name","Character name",text(draft,"name"),80)),
             (state,v)->args("character",text(draft,"id"),"revision",revision(state),"section","basics","data",args("name",v.get("name"))),"The canonical library name; no duplicate identity name is created.");
     }
+    public static Screen customIdentity(Screen parent,JsonObject draft,String key,String label) {
+        var current=SheetSections.read(draft.getAsJsonObject("sheet"),"identity");var fields=new ArrayList<RecordFormScreen.Field>();fields.add(f(key,label,current,128));
+        if(key.equals("characterClass"))fields.add(f("subclass","Subclass · optional",current,128));
+        return section(parent,"Custom "+label,draft,"identity",fields,(state,v)->{var i=SheetSections.read(state.getAsJsonObject("sheet"),"identity");v.forEach(i::addProperty);return i;},"Custom choice; discuss its benefits with your DM. No combat effects are applied.");
+    }
     public static Screen identity(Screen parent,JsonObject draft) {
         JsonObject d=SheetSections.read(draft.getAsJsonObject("sheet"),"identity");var fields=new ArrayList<RecordFormScreen.Field>();
         fields.add(f("species","Species / race",d,128));fields.add(f("characterClass","Class",d,128));fields.add(f("subclass","Subclass",d,128));fields.add(f("background","Background",d,128));fields.add(f("alignment","Alignment",d,128));fields.add(f("age","Age",d,128));fields.add(f("height","Height / build",d,128));

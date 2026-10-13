@@ -8,7 +8,9 @@
     "ChatHudAccessor",
     "GameRendererMixin",
     "InGameHudMixin",
-    "KeyboardInputMixin"
+    "KeyboardInputMixin",
+    "NarrativeEditBoxAccessor",
+    "NarrativeSelectionAccessor"
   ],
   "injectors": {
     "defaultRequire": 1
