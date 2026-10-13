@@ -1,36 +1,36 @@
 package dev.tacticalcombat.client.ui;
 
+import com.google.gson.*;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
 import java.util.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 
-/** Sprite regions, not reference sheets. Race artwork is deliberately excluded. */
+/** Individually isolated ORIGINAL sprites: no guessed atlas cells, padding or bleed. */
 public final class CreatorIcons {
     public record Sprite(int x,int y,int width,int height) {}
     public static final Map<String,Sprite> REGIONS;
-    private static final Identifier TEXTURE=Identifier.of("tacticalcombat","textures/gui/creator/icons.png");
     static {
-        var map=new LinkedHashMap<String,Sprite>();
-        String[] classes={"barbarian","bard","cleric","druid","fighter","monk","ranger","rogue","warlock","wizard"};
-        int[] starts={0,147,280,425,566,705,849,999,1143,1293,1448};
-        for(int i=0;i<classes.length;i++)map.put(classes[i],new Sprite(starts[i],35,starts[i+1]-starts[i],192));
-        String[] systems={"str","dex","con","int","wis","cha","skills","saves","expertise","weapons","armor","tools"};
-        for(int i=0;i<systems.length;i++)map.put(systems[i],new Sprite(i*120,247,120,172));
-        String[] rest={"languages","equipment","features","feats","spells","cantrips","action","bonus","reaction","hp","proficiency","inspect"};
-        for(int i=0;i<rest.length;i++)map.put(rest[i],new Sprite(i*120,447,120,170));
-        String[] backgrounds={"custom","acolyte","charlatan","criminal","entertainer","folk_hero","guild_artisan","noble"};
-        for(int i=0;i<backgrounds.length;i++)map.put(backgrounds[i],new Sprite(i*181,630,181,214));
-        map.put("outlander",new Sprite(0,844,196,242));map.put("sage",new Sprite(200,844,200,242));
-        map.put("soldier",new Sprite(485,835,224,251));map.put("urchin",new Sprite(773,844,210,242));
-        map.put("paladin",new Sprite(0,0,887,887));map.put("sorcerer",new Sprite(887,0,887,887));
-        REGIONS=Map.copyOf(map);
+        try(var stream=CreatorIcons.class.getResourceAsStream("/assets/tacticalcombat/textures/gui/creator/sprites.json")) {
+            if(stream==null)throw new IllegalStateException("Missing UI sprite manifest");
+            var root=JsonParser.parseReader(new InputStreamReader(stream,StandardCharsets.UTF_8)).getAsJsonObject();
+            if(root.get("schema").getAsInt()!=1)throw new IllegalStateException("Unsupported sprite manifest");
+            var map=new LinkedHashMap<String,Sprite>();
+            root.getAsJsonObject("sprites").entrySet().forEach(e->{var s=e.getValue().getAsJsonObject();map.put(e.getKey(),new Sprite(0,0,s.get("width").getAsInt(),s.get("height").getAsInt()));});
+            REGIONS=Map.copyOf(map);
+        }catch(IOException error){throw new ExceptionInInitializerError(error);}
     }
     private CreatorIcons() {}
+    public static UiLayout.Rect fitted(Sprite sprite,UiLayout.Rect slot,int padding) {
+        int available=Math.max(1,Math.min(slot.width(),slot.height())-2*padding);
+        int longest=Math.max(sprite.width()-4,sprite.height()-4);
+        int width=Math.max(1,available*(sprite.width()-4)/longest),height=Math.max(1,available*(sprite.height()-4)/longest);
+        return new UiLayout.Rect(slot.x()+(slot.width()-width)/2,slot.y()+(slot.height()-height)/2,width,height);
+    }
     public static void draw(DrawContext g,String key,int x,int y,int size) {
-        var r=REGIONS.get(key);if(r==null)return;
-        boolean extra=key.equals("paladin")||key.equals("sorcerer");
-        var texture=extra?Identifier.of("tacticalcombat","textures/gui/creator/class-extra.png"):TEXTURE;
-        int longest=Math.max(r.width(),r.height()),w=Math.max(1,size*r.width()/longest),h=Math.max(1,size*r.height()/longest);
-        g.drawTexture(texture,x+(size-w)/2,y+(size-h)/2,w,h,(float)r.x(),(float)r.y(),r.width(),r.height(),extra?1774:1448,extra?887:1086);
+        var sprite=REGIONS.get(key);if(sprite==null)return;
+        var rect=fitted(sprite,new UiLayout.Rect(x,y,size,size),1);
+        g.drawTexture(Identifier.of("tacticalcombat","textures/gui/creator/sprites/"+key+".png"),rect.x(),rect.y(),rect.width(),rect.height(),2f,2f,sprite.width()-4,sprite.height()-4,sprite.width(),sprite.height());
     }
 }
