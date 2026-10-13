@@ -32,7 +32,7 @@ public final class CharacterCanvas extends ClickableWidget {
     public void position(int value){offset=Math.clamp(value,0,Math.max(0,total-height));}
     public String focusedKey(){return focused==null?"":focused.key();}
     public void focus(String key){for(var child:controls)if(child.key().equals(key)){focusChild(child);return;}}
-    private void focusChild(Child child){if(focused!=null)focused.widget().setFocused(false);focused=child;if(child!=null){child.widget().setFocused(true);if(child.y()<offset)position(child.y());else if(child.y()+child.widget().getHeight()>offset+height)position(child.y()+child.widget().getHeight()-height);}}
+    private void focusChild(Child child){if(focused!=null&&focused!=child)focused.widget().setFocused(false);focused=child;if(child!=null){child.widget().setFocused(true);if(child.y()<offset)position(child.y());else if(child.y()+child.widget().getHeight()>offset+height)position(child.y()+child.widget().getHeight()-height);}}
     @Override public void setFocused(boolean value){super.setFocused(value);if(focused!=null)focused.widget().setFocused(value);}
     @Override protected void renderWidget(DrawContext g,int mx,int my,float delta){var font=MinecraftClient.getInstance().textRenderer;g.fill(getX(),getY(),getRight(),getBottom(),0xFF181C21);
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
@@ -43,10 +43,10 @@ public final class CharacterCanvas extends ClickableWidget {
         }
         if(total>height){int h=Math.max(8,height*height/total),y=getY()+(height-h)*offset/Math.max(1,total-height);g.fill(getRight()-2,y,getRight(),y+h,RpgTheme.GOLD);}
     }
-    @Override public boolean mouseClicked(double x,double y,int button){if(!isMouseOver(x,y))return false;for(var child:controls){var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);if(w.isMouseOver(x,y)&&w.mouseClicked(x,y,button)){focusChild(child);return true;}}setFocused(true);return true;}
+    @Override public boolean mouseClicked(double x,double y,int button){if(!isMouseOver(x,y))return false;for(int i=controls.size()-1;i>=0;i--){var child=controls.get(i);var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);if(w.isMouseOver(x,y)){focusChild(child);if(w.mouseClicked(x,y,button))return true;}}setFocused(true);return true;}
     @Override public boolean mouseReleased(double x,double y,int button){return focused!=null&&focused.widget().mouseReleased(x,y,button);}
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){return focused!=null&&focused.widget().mouseDragged(x,y,button,dx,dy);}
-    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(!isMouseOver(x,y))return false;position(offset+(vertical>0?-20:20));return true;}
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown dropdown&&dropdown.isOpen())return dropdown.mouseScrolled(x,y,horizontal,vertical);position(offset+(vertical>0?-20:20));return true;}
     @Override public boolean charTyped(char c,int mods){return focused!=null&&focused.widget().charTyped(c,mods);}
     @Override public boolean keyPressed(int key,int scan,int mods){if(key==GLFW.GLFW_KEY_TAB&&!controls.isEmpty()){int i=focused==null?-1:controls.indexOf(focused);int next=i+((mods&GLFW.GLFW_MOD_SHIFT)!=0?-1:1);if(next<0||next>=controls.size())return false;focusChild(controls.get(next));return true;}if(focused!=null&&focused.widget().keyPressed(key,scan,mods))return true;if(key==GLFW.GLFW_KEY_PAGE_UP||key==GLFW.GLFW_KEY_PAGE_DOWN){position(offset+(key==GLFW.GLFW_KEY_PAGE_UP?-height:height));return true;}return false;}
     @Override protected void appendClickableNarrations(NarrationMessageBuilder b){if(focused!=null)focused.widget().appendNarrations(b);else b.put(NarrationPart.TITLE,Text.literal("Character workspace; Tab selects controls, wheel scrolls."));}

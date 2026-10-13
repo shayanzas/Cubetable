@@ -11,23 +11,31 @@ public final class CreatorWorkspace {
     private CreatorWorkspace() {}
     private static TextFieldWidget field(CharacterCanvas pane,TextRenderer font,CreatorDraftState state,String key,String label,int x,int y,int w,int limit){pane.label(label,x,y,w,RpgTheme.MUTED);var input=new TextFieldWidget(font,x,y+11,w,17,Text.literal(label));input.setMaxLength(limit);input.setText(state.fields.get(key));input.setChangedListener(v->state.fields.put(key,v));return pane.control(key,input);}
     public static void identity(CharacterCanvas pane,TextRenderer font,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom){
-        int w=pane.getWidth()-12,x=6;
-        field(pane,font,state,"name","Character name",x,2,w,80);
-        int fw=(w-8)/3;field(pane,font,state,"age","Age",x,34,fw,128);field(pane,font,state,"height","Height",x+fw+4,34,fw,128);field(pane,font,state,"alignment","Alignment",x+2*(fw+4),34,fw,128);
-        String value=state.fields.get("species"),base=CreatorFlow.baseRace(value);
-        var race=Srd2014Catalog.SPECIES.stream().filter(e->e.name().equals(base)).findFirst().orElse(Srd2014Catalog.SPECIES.getFirst());
-        boolean stacked=w<440;int left=stacked?w:(w-6)/2,right=stacked?w:w-left-6;
-        int gridTop=76,columns=Math.max(1,left/58),gridHeight=((9+columns-1)/columns)*44;
-        var grid=pane.control("races",new CreatorChoiceGrid(new UiLayout.Rect(x,gridTop,left,gridHeight),e->{state.fields.put("species",e.name());rebuild.run();}));grid.entries(Srd2014Catalog.SPECIES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),"")).toList(),Srd2014Catalog.SPECIES.stream().anyMatch(e->e.name().equals(base))?race.id():"");
-        int dx=stacked?x:x+left+6,dy=stacked?gridTop+gridHeight+32:gridTop;
-        pane.label("Preview: "+value,dx,dy,right,RpgTheme.GOLD);dy+=18;
-        boolean known=Srd2014Catalog.SPECIES.stream().anyMatch(e->e.name().equals(base));
-        var description=new FeatureReference.Entry(known?"srd51:race:"+race.id():"custom:race:reference",(known?race.name():value.isBlank()?"Race":value)+" overview",known?"D&D 5e SRD 5.1 (2014)":"Personal record",0,"","Reference","","","","","INFORMATIONAL",known?CreatorLore.details(CreatorFlow.Step.IDENTITY,race):"Custom race: recorded manually. Select a standard race or use Custom Race to edit this record.");feature(pane,description,dx,dy,right,inspect);dy+=21;
-        for(String sub:CreatorFlow.subraces(base)){String selected=CreatorFlow.recordedRace(race.name(),sub);pane.control("subrace:"+sub,new RpgButton(dx,dy,right,18,sub,"",()->{state.fields.put("species",selected);rebuild.run();}).selected(value.equals(selected)).hint("Inspect/save this subrace; traits remain reference only."));dy+=21;}
-        String sub=value.contains(" — ")?value.substring(value.indexOf(" — ")+3):CreatorFlow.subraces(base).contains(value)?value:"";
-        pane.label("Race traits · reference",dx,dy,right,RpgTheme.GOLD);dy+=17;
-        for(var entry:FeatureReference.raceTraits(base,sub)){feature(pane,entry,dx,dy,right,inspect);dy+=21;}
-        pane.control("customRace",new RpgButton(x,gridTop+gridHeight+5,left,18,"Custom Race","",custom));
+        int x=6,w=pane.getWidth()-12;
+        field(pane,font,state,"name","Character Name",x,0,w,80);
+        int fw=(w-8)/3;field(pane,font,state,"age","Age",x,30,fw,128);field(pane,font,state,"height","Height",x+fw+4,30,fw,128);
+        int alignmentX=x+2*(fw+4);pane.label("Alignment",alignmentX,30,fw,RpgTheme.MUTED);
+        var geometry=IdentityLayout.layout(pane.getWidth(),pane.getHeight(),font::getWidth);
+        String recorded=state.fields.get("species"),base=CreatorFlow.baseRace(recorded),sub=IdentityModel.subrace(recorded);
+        pane.control("races",new IdentityRaceGrid(geometry,base,race->{IdentityModel.race(state,race);rebuild.run();}));
+        pane.control("customRace",new RpgButton(geometry.grid().x(),geometry.grid().y()+geometry.grid().height()+6,geometry.grid().width(),18,"Custom Race","",custom));
+        int dx=geometry.information().x(),dy=geometry.information().y(),dw=geometry.information().width();
+        pane.label("Preview",dx,dy,dw,RpgTheme.GOLD);dy+=16;
+        pane.label(recorded.isBlank()?"Choose your race":recorded,dx,dy,dw,RpgTheme.TEXT);dy+=14;
+        String intro=recorded.isBlank()?"Choose a race to explore its heritage and traits.":IdentityModel.intro(base);
+        for(var line:font.getTextHandler().wrapLines(intro,dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.TEXT);dy+=12;}
+        dy+=5;for(var line:font.getTextHandler().wrapLines(IdentityModel.status(state),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
+        var variants=CreatorFlow.subraces(base);
+        if(!variants.isEmpty()){
+            dy+=8;pane.label("Subrace",dx,dy,dw,RpgTheme.GOLD);dy+=17;
+            pane.control("subrace:base",new RpgButton(dx,dy,dw,19,"Base "+base+" · manual","",()->{IdentityModel.subrace(state,"");rebuild.run();}).selected(sub.isEmpty()).hint("Keep the original base race. Base traits alone are an incomplete 2014 racial choice; choose a subrace or agree on a manual choice with your DM."));dy+=23;
+            for(String variant:variants){pane.control("subrace:"+variant,new RpgButton(dx,dy,dw,19,variant,"",()->{IdentityModel.subrace(state,variant);rebuild.run();}).selected(sub.equals(variant)).hint(variant+" · 2014 SRD choice. Its extra traits appear below; no bonus is granted automatically."));dy+=23;}
+        }
+        dy+=8;pane.label("Racial Traits",dx,dy,dw,RpgTheme.GOLD);dy+=17;
+        for(var trait:FeatureReference.raceTraits(base,sub)){pane.control(trait.id(),new RpgButton(dx,dy,dw,19,trait.name(),"",()->inspect.accept(trait)).hint(trait.tooltip()));dy+=23;}
+        if(!recorded.isBlank())for(var line:font.getTextHandler().wrapLines(IdentityModel.completeness(recorded),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
+        // Popup renders last and receives input first, so its nine choices overlay other controls safely.
+        pane.control("alignment",new AlignmentDropdown(alignmentX,41,fw,()->state.fields.get("alignment"),v->IdentityModel.alignment(state,v),()->new UiLayout.Rect(pane.getX(),pane.getY(),pane.getWidth(),pane.getHeight())));
     }
     public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom){
         int x=6,w=pane.getWidth()-12;boolean stacked=w<440;int left=stacked?w:(w-6)/2,right=stacked?w:w-left-6;
