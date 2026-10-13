@@ -17,7 +17,7 @@ public abstract class RpgScreen extends Screen {
     protected long generation;
     protected boolean busy;
     protected RpgScreen(String title,Screen parent) {super(Text.literal(title));this.parent=parent;}
-    @Override protected void init() {generation++;frame=UiLayout.frame(width,height,720);}
+    @Override protected void init() {generation++;frame=UiLayout.frame(width,height,maximumWidth());}
     @Override public void removed() {generation++;}
     @Override public void close() {client.setScreen(parent);}
     @Override public boolean shouldPause() {return false;}
@@ -43,6 +43,7 @@ public abstract class RpgScreen extends Screen {
         g.fill(frame.x()+12,frame.y()+29,frame.x()+frame.width()-12,frame.y()+30,RpgTheme.GOLD);
         RpgTheme.text(g,textRenderer,getTitle().getString(),frame.x()+12,frame.y()+12,frame.width()-24,RpgTheme.GOLD);
     }
+    protected int maximumWidth(){return 720;}
     protected int statusWidth() {return frame.width()-100;}
     protected void content(DrawContext g,int mx,int my,float delta) { }
     @Override public void render(DrawContext g,int mx,int my,float delta) {

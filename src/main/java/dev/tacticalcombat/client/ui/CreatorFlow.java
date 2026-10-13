@@ -15,13 +15,8 @@ public final class CreatorFlow {
     public record CatalogLayout(UiLayout.Rect name,UiLayout.Rect subraces,UiLayout.Rect search,UiLayout.Rect grid,UiLayout.Rect details,UiLayout.Rect choose,UiLayout.Rect custom,boolean tiny) {}
     private CreatorFlow() {}
     public static Layout layout(UiLayout.Rect frame) {
-        int x=frame.x()+12,y=frame.y()+36,w=frame.width()-24,bottom=frame.y()+frame.height()-38;
-        if(w<560) {
-            int columns=frame.height()<200?1:4,navHeight=frame.height()<200?16:48;
-            return new Layout(new UiLayout.Rect(x,y,w,navHeight),new UiLayout.Rect(x,y+navHeight+17,w,Math.max(28,bottom-y-navHeight-17)),new UiLayout.Rect(0,0,0,0),columns);
-        }
-        int side=104,summary=w>=670?132:0;
-        return new Layout(new UiLayout.Rect(x,y,side,bottom-y),new UiLayout.Rect(x+side+6,y,w-side-6-(summary==0?0:summary+6),bottom-y),new UiLayout.Rect(x+w-summary,y,summary,summary==0?0:bottom-y),1);
+        var shell=CharacterShell.layout(frame);
+        return new Layout(shell.rail(),shell.content(),shell.summary(),1);
     }
     public static Step errorStep(String section) {
         return switch(section){case "basics","identity"->Step.IDENTITY;case "combat","abilities"->Step.ABILITIES;case "proficiencies"->Step.PROFICIENCIES;case "inventory"->Step.EQUIPMENT;case "features"->Step.FEATURES;case "spellbook"->Step.SPELLS;case "progression"->Step.DETAILS;default->Step.REVIEW;};

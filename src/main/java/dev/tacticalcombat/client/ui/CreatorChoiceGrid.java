@@ -17,8 +17,8 @@ public final class CreatorChoiceGrid extends ClickableWidget {
     private int first,focus;
     private final Consumer<Entry> choose;
     public CreatorChoiceGrid(UiLayout.Rect r,Consumer<Entry> choose){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character choices"));this.choose=choose;}
-    private int columns(){return Math.max(2,width/76);}
-    private int rowHeight(){return Math.min(38,height);}
+    private int columns(){return Math.max(1,width/58);}
+    private int rowHeight(){return 44;}
     public int position(){return first;}
     public int focusedIndex(){return focus;}
     public void focusedIndex(int value){focus=Math.clamp(value,0,Math.max(0,entries.size()-1));}
@@ -30,8 +30,8 @@ public final class CreatorChoiceGrid extends ClickableWidget {
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
             for(int i=start;i<Math.min(entries.size(),start+columns*visibleRows());i++){var e=entries.get(i);int x=getX()+i%columns*w,y=getY()+(i-start)/columns*rowHeight();boolean highlight=e.id().equals(selected)||isFocused()&&i==focus;
                 RpgTheme.panel(g,x,y,w-3,rowHeight()-2,highlight?RpgTheme.HOVER:RpgTheme.PANEL,highlight);
-                if(!e.icon().isEmpty()&&rowHeight()>=35)CreatorIcons.draw(g,e.icon(),x+(w-22)/2,y+2,22);
-                RpgTheme.text(g,font,e.name(),x+4,y+(e.icon().isEmpty()||rowHeight()<35?(rowHeight()-9)/2:25),w-11,highlight?RpgTheme.GOLD:RpgTheme.TEXT);
+                if(!e.icon().isEmpty()&&rowHeight()>=35)CreatorIcons.draw(g,e.icon(),x+(w-3-28)/2,y+2,28);
+                RpgTheme.text(g,font,e.name(),x+4,y+(e.icon().isEmpty()||rowHeight()<35?(rowHeight()-9)/2:32),w-11,highlight?RpgTheme.GOLD:RpgTheme.TEXT);
             }
         }
         if(isMouseOver(mx,my)){int i=index(mx,my);if(i>=0&&i<entries.size())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(entries.get(i).name()));}
@@ -40,5 +40,5 @@ public final class CreatorChoiceGrid extends ClickableWidget {
     @Override public boolean mouseClicked(double x,double y,int button){int i=index(x,y);if(button!=0||!isMouseOver(x,y)||i<0||i>=entries.size())return false;focus=i;setFocused(true);choose.accept(entries.get(i));return true;}
     @Override public boolean mouseScrolled(double x,double y,double h,double v){if(!isMouseOver(x,y))return false;first=Math.clamp(first+(v>0?-1:1),0,Math.max(0,(entries.size()+columns()-1)/columns()-visibleRows()));return true;}
     @Override public boolean keyPressed(int key,int scan,int mods){if(!isFocused()||entries.isEmpty())return false;int d=switch(key){case GLFW.GLFW_KEY_LEFT->-1;case GLFW.GLFW_KEY_RIGHT->1;case GLFW.GLFW_KEY_UP->-columns();case GLFW.GLFW_KEY_DOWN->columns();default->0;};if(d!=0){focus=Math.clamp(focus+d,0,entries.size()-1);int row=focus/columns();if(row<first)first=row;if(row>=first+visibleRows())first=row-visibleRows()+1;return true;}if(key==GLFW.GLFW_KEY_ENTER||key==GLFW.GLFW_KEY_SPACE){choose.accept(entries.get(focus));return true;}return false;}
-    @Override protected void appendClickableNarrations(NarrationMessageBuilder b){b.put(NarrationPart.TITLE,Text.literal(entries.isEmpty()?"No matches":entries.get(focus).name()));b.put(NarrationPart.USAGE,Text.literal("Arrow keys browse, Enter inspects. Choose in the detail panel to save."));}
+    @Override protected void appendClickableNarrations(NarrationMessageBuilder b){b.put(NarrationPart.TITLE,Text.literal(entries.isEmpty()?"No matches":entries.get(focus).name()));b.put(NarrationPart.USAGE,Text.literal("Arrow keys browse, Enter previews. Save confirms your choice."));}
 }
