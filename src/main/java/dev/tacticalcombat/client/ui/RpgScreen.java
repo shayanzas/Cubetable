@@ -34,8 +34,8 @@ public abstract class RpgScreen extends Screen {
         long current=generation;busy=true;message="Loading…";messageColor=RpgTheme.MUTED;
         UiRequestQueue.enqueue(op,args,()->client!=null && client.currentScreen==this && generation==current,reply->{
             busy=false;
-            if(!reply.code().equals("OK")) {message=reply.code()+": "+reply.message();messageColor=RpgTheme.ERROR;}
-            try {result.accept(reply);} catch(RuntimeException invalid) {message="Invalid server response. Refresh to retry.";messageColor=RpgTheme.ERROR;}
+            if(!reply.code().equals("OK")) {message=reply.code().equals("RATE_LIMIT")?"The server is busy. Wait briefly, then refresh; your character and edits are retained.":reply.code()+": "+reply.message();messageColor=RpgTheme.ERROR;}
+            try {result.accept(reply);} catch(RuntimeException invalid) {org.slf4j.LoggerFactory.getLogger(RpgScreen.class).warn("Invalid UI response for {} ({})",op,reply.code(),invalid);message="Invalid server response. Refresh to retry.";messageColor=RpgTheme.ERROR;}
         });
     }
     protected void background(DrawContext g) {
@@ -47,8 +47,8 @@ public abstract class RpgScreen extends Screen {
     protected void content(DrawContext g,int mx,int my,float delta) { }
     @Override public void render(DrawContext g,int mx,int my,float delta) {
         background(g);content(g,mx,my,delta);super.render(g,mx,my,delta);
-        RpgTheme.text(g,textRenderer,(busy?"… ":"")+message,frame.x()+88,frame.y()+frame.height()-24,statusWidth(),messageColor);
-        if(new UiLayout.Rect(frame.x()+88,frame.y()+frame.height()-28,statusWidth(),20).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(message));
+        RpgTheme.text(g,textRenderer,(busy?"… ":"")+message,frame.x()+12,frame.y()+frame.height()-9,frame.width()-24,messageColor);
+        if(new UiLayout.Rect(frame.x()+12,frame.y()+frame.height()-10,frame.width()-24,10).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(message));
     }
     protected void paragraphs(DrawContext g,String text,int x,int y,int w,int maxHeight) {
         int bottom=y+maxHeight;for(var line:textRenderer.wrapLines(Text.literal(text),w)) {if(y+9>bottom) break;g.drawText(textRenderer,line,x,y,RpgTheme.MUTED,false);y+=12;}

@@ -56,4 +56,25 @@ public class HubGatewayGameTests implements FabricGameTest {
         } finally {CharacterService.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
         ctx.complete();
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void reconnectRestoresAuthorizedSelectionWithoutBinding(TestContext ctx)throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            f.repo.invite(f.dm,f.campaign,1,player.getUuid(),false);
+            UUID character=f.repo.submit(CharacterService.principal(player),f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());
+            check(send(player,1,"CAMPAIGN_SELECT",campaign(f.campaign,false)).code().equals("OK"),"select campaign");
+            var args=new JsonObject();args.addProperty("character",character.toString());args.addProperty("revision",1);
+            check(send(player,2,"CHARACTER_SELECT",args).code().equals("OK"),"select character");
+            CharacterService.forget(player.getUuid());UiNetworking.forget(player.getUuid());
+            var active=JsonParser.parseString(send(player,1,"ACTIVE",new JsonObject()).json()).getAsJsonObject();
+            check(active.get("campaign").getAsString().equals(f.campaign.toString())&&active.get("character").getAsString().equals(character.toString()),"reconnect restores authorized IDs");
+            check(f.repo.binding(character)==null&&!active.has("boundCharacter"),"reconnect does not physically bind");
+            f.repo.removeMember(f.dm,f.campaign,2,player.getUuid());
+            CharacterService.forget(player.getUuid());UiNetworking.forget(player.getUuid());
+            active=JsonParser.parseString(send(player,1,"ACTIVE",new JsonObject()).json()).getAsJsonObject();
+            check(!active.has("campaign")&&!active.has("character"),"revoked membership prevents restoration");
+        }finally{CharacterService.forget(player.getUuid());UiNetworking.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
+        ctx.complete();
+    }
+
 }

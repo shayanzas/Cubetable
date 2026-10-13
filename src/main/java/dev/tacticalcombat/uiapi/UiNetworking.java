@@ -18,6 +18,7 @@ public final class UiNetworking {
     private static LibraryRepository library;
     private static UiWorkflowStore workflows;
     private UiNetworking() {}
+    public static void forget(UUID player){SESSIONS.forget(player);SELECTED.remove(player);}
     public static void register() {
         PayloadTypeRegistry.playC2S().register(UiRequestPayload.ID,UiRequestPayload.CODEC);PayloadTypeRegistry.playS2C().register(UiReplyPayload.ID,UiReplyPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(UiRequestPayload.ID,(request,context)->{
@@ -27,7 +28,7 @@ public final class UiNetworking {
             catch(Exception e) {library=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI library unavailable; existing combat storage preserved",e);}});
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
-        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{SESSIONS.forget(handler.player.getUuid());SELECTED.remove(handler.player.getUuid());});
+        ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{forget(handler.player.getUuid());});
         ServerLifecycleEvents.SERVER_STOPPING.register(server->{library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
@@ -75,8 +76,8 @@ public final class UiNetworking {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
             case ACTIVE -> {
-                fields(a,"");try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }
-                UUID selected=SELECTED.get(p.getUuid());if(selected!=null) try {repo.visible(who,selected);out.addProperty("character",selected.toString());} catch(IllegalArgumentException revoked) {SELECTED.remove(p.getUuid());}
+                fields(a,"");var restored=CharacterService.restoreSelection(p);if(restored!=null&&restored.character()!=null)SELECTED.put(p.getUuid(),restored.character());try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }
+                UUID selected=SELECTED.get(p.getUuid());if(selected!=null) try {var c=repo.visible(who,selected);require(c.campaign().equals(CharacterService.selected(p)),"Selection campaign changed");require(repo.controller(selected).equals(p.getUuid())||repo.manages(who,c.campaign()),"Character control revoked");out.addProperty("character",selected.toString());} catch(IllegalArgumentException revoked) {SELECTED.remove(p.getUuid());}
                 var bound=CharacterService.bound(p);if(bound!=null) out.addProperty("boundCharacter",bound.id().toString());out.addProperty("inCombat",CombatManager.isInCombat(p));
             }
             case EVENTS -> {fields(a,"campaign cursor kind");UUID campaign=id(a,"campaign");var filter=a.get("kind").isJsonNull()?null:UiEvents.Kind.valueOf(string(a,"kind"));out=SheetSections.JSON.toJsonTree(UiEvents.SESSION.query(repo,who,campaign,number(a,"cursor"),filter)).getAsJsonObject();}
@@ -106,7 +107,7 @@ public final class UiNetworking {
             case CHARACTER_SELECT -> {
                 fields(a,"character revision");var c=repo.visible(who,id(a,"character"));require(c.revision()==revision(a),"Stale character revision");require(!CombatManager.isInCombat(p),"Character selection locked during combat");
                 require(Objects.equals(CharacterService.selected(p),c.campaign()),"Select the character's campaign first");require(repo.controller(c.id()).equals(p.getUuid()) || repo.manages(who,c.campaign()),"Character control permission denied");
-                SELECTED.put(p.getUuid(),c.id());out.addProperty("character",c.id().toString());out.addProperty("bindingChanged",false);
+                CharacterService.remember(p,c.campaign(),c.id());SELECTED.put(p.getUuid(),c.id());out.addProperty("character",c.id().toString());out.addProperty("bindingChanged",false);
             }
             case BIND -> {
                 fields(a,"character revision entity");UUID entity=id(a,"entity");LivingEntity target=null;

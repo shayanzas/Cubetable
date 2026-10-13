@@ -14,6 +14,7 @@ import java.io.IOException;
 /** Minecraft adapter; repository records and rules profiles contain no world or client objects. */
 public final class CharacterService {
     private static CharacterRepository repository;
+    private static SelectionStore selections;
     private static final Map<UUID,UUID> SELECTED=new HashMap<>();
     private static final Identifier HP=Identifier.of("tacticalcombat","character_hp");
     private static boolean failed;
@@ -26,6 +27,7 @@ public final class CharacterService {
         SELECTED.clear(); failed=false;
         try {
             repository=new CharacterRepository(storage);
+            try{selections=new SelectionStore(storage.resolveSibling("ui-selections.json"));}catch(IOException failure){selections=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("Selection restoration unavailable; campaign data preserved",failure);}
             if(repository.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("Recovered character storage from validated backup; latest save was unreadable");
             // Initial world entities may have loaded before SERVER_STARTED. Reconcile their saved modifiers too.
             for(var world:server.getWorlds()) for(var entity:world.iterateEntities())
@@ -40,7 +42,17 @@ public final class CharacterService {
     public static void select(ServerPlayerEntity p,UUID campaign) {
         if(!repository().member(principal(p),campaign)) throw new IllegalArgumentException("Campaign membership required");
         if(CombatManager.isInCombat(p)) throw new IllegalArgumentException("End the encounter before selecting a campaign");
-        SELECTED.put(p.getUuid(),campaign);
+        remember(p,campaign,null);SELECTED.put(p.getUuid(),campaign);
+    }
+    public static void remember(ServerPlayerEntity player,UUID campaign,UUID character) {
+        if(selections==null)return;
+        try{selections.put(player.getUuid(),campaign,character);}catch(IOException failure){throw new java.io.UncheckedIOException("Unable to save character selection",failure);}
+    }
+    public static SelectionStore.Selection restoreSelection(ServerPlayerEntity player)throws IOException {
+        if(selections==null)return null;
+        var selected=selections.eligible(repository(),principal(player),CombatManager.isInCombat(player));
+        if(selected!=null)SELECTED.put(player.getUuid(),selected.campaign());
+        return selected;
     }
     public static UUID selected(ServerPlayerEntity p) {
         UUID campaign=SELECTED.get(p.getUuid());

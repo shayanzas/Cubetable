@@ -13,6 +13,7 @@ import java.util.*;
 public final class CharacterWizardScreen extends RpgScreen {
     private final String character;
     private JsonObject draft;
+    private JsonObject validation;
     private WizardModel.Stage stage=WizardModel.Stage.METHOD;
     private RpgList stages;
     private UiLayout.Rect[] areas;
@@ -26,7 +27,7 @@ public final class CharacterWizardScreen extends RpgScreen {
         stageRows();buildActions();reload();
     }
     private void stageRows(){var states=WizardModel.statuses(draft);var rows=new ArrayList<HubState.Choice>();for(var s:WizardModel.Stage.values()){var status=states.get(s);rows.add(new HubState.Choice(Integer.toString(s.ordinal()),WizardModel.title(s),(status.complete()?"✓ ":"• ")+status.detail(),true,"Open stage",0));}stages.rows(rows);}
-    private void reload(){if(busy)return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){draft=r.data();fresh=true;message="Draft refreshed. All acknowledged section saves are persisted at revision "+revision(draft)+".";messageColor=RpgTheme.SUCCESS;stageRows();}else{fresh=false;message=r.code()+": "+r.message()+". Existing screen state retained.";}});}
+    private void reload(){if(busy)return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){draft=DraftReplies.snapshot(r.data(),character);fresh=true;message="Draft refreshed. All acknowledged section saves are persisted at revision "+revision(draft)+".";messageColor=RpgTheme.SUCCESS;stageRows();}else{fresh=false;message=r.code()+": "+r.message()+". Existing screen state retained.";}});}
     private void move(int d){int next=Math.clamp(stage.ordinal()+d,0,WizardModel.Stage.values().length-1);stage=WizardModel.Stage.values()[next];buildActions();}
     private void buildActions(){
         // Keep navigation widgets, recreate only stage action buttons by reinitializing safely without changing data.
@@ -47,7 +48,7 @@ public final class CharacterWizardScreen extends RpgScreen {
         }
     }
     private void action(int x,int y,int w,String name,String detail,Runnable task){var b=button(name,detail,x,y,w,24,task);b.hint(detail);if(task.toString().isEmpty())b.active=false;actionButtons.add(b);}
-    private void validate(){if(!fresh){message="Refresh the authoritative draft before validation.";return;}request(LIBRARY_VALIDATE,args("character",character),r->{if(r.code().equals("OK")){draft=r.data();message=ManagementState.validation(draft);messageColor=array(draft,"errors").isEmpty()?RpgTheme.SUCCESS:RpgTheme.ERROR;stageRows();}});}
+    private void validate(){if(!fresh){message="Refresh the authoritative draft before validation.";return;}request(LIBRARY_VALIDATE,args("character",character),r->{if(r.code().equals("OK")){validation=DraftReplies.validation(r.data());message=ManagementState.validation(validation);messageColor=array(validation,"errors").isEmpty()?RpgTheme.SUCCESS:RpgTheme.ERROR;stageRows();}});}
     @Override protected void content(DrawContext g,int mx,int my,float delta){
         RpgTheme.panel(g,areas[1].x(),areas[1].y(),areas[1].width(),areas[1].height(),RpgTheme.PANEL,false);RpgTheme.text(g,textRenderer,WizardModel.title(stage),areas[1].x()+8,areas[1].y()+9,areas[1].width()-16,RpgTheme.GOLD);
         String guidance=WizardModel.statuses(draft).get(stage).detail();paragraphs(g,guidance,areas[1].x()+8,areas[1].y()+22,areas[1].width()-16,20);

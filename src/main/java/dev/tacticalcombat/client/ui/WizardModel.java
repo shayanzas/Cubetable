@@ -26,7 +26,7 @@ public final class WizardModel {
         else for(int score:scores.values()) if(score<1 || score>30) throw new IllegalArgumentException("Manual scores must be within server bounds 1–30");
     }
     public static EnumMap<Stage,Status> statuses(JsonObject draft) {
-        var result=new EnumMap<Stage,Status>(Stage.class);var sheet=draft.getAsJsonObject("sheet");var identity=SheetSections.read(sheet,"identity");
+        var result=new EnumMap<Stage,Status>(Stage.class);if(draft==null||!draft.has("sheet")||!draft.get("sheet").isJsonObject()){for(var stage:Stage.values())result.put(stage,new Status(false,"Character snapshot unavailable; refresh the saved draft"));return result;}var sheet=draft.getAsJsonObject("sheet");var identity=SheetSections.read(sheet,"identity");
         String profile=ManagementState.text(draft,"profile"),mode=ManagementState.text(draft,"mode"),name=ManagementState.text(draft,"name");
         result.put(Stage.METHOD,new Status(!profile.isBlank(),mode+" · "+ManagementState.profile(profile)+(mode.equals("GUIDED")?" · guided rules incomplete":" · direct/manual records")));
         result.put(Stage.BASICS,new Status(!name.isBlank(),name.isBlank()?"Name required":"Canonical name saved"));
