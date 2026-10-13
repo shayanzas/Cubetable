@@ -16,7 +16,7 @@ public final class CharacterWizardScreen extends RpgScreen {
     private final String character;
     private JsonObject draft;
     private JsonObject validation;
-    private WizardModel.Stage stage=WizardModel.Stage.METHOD;
+    private WizardModel.Stage stage=WizardModel.Stage.BASICS;
     private RpgList stages,actions;
     private final List<RpgButton> stageTabs=new ArrayList<>();
     private final Map<String,Runnable> stageActions=new HashMap<>();
@@ -32,15 +32,15 @@ public final class CharacterWizardScreen extends RpgScreen {
     @Override protected void init(){
         super.init();clearChildren();busy=false;fresh=false;areas=WizardModel.layout(frame);
         stageTabs.clear();int columns=frame.width()<560?4:1;int tw=(areas[0].width()-(columns-1)*3)/columns;
-        for(var step:WizardModel.Stage.values()){int i=step.ordinal();var b=button(WizardModel.title(step),"",areas[0].x()+i%columns*(tw+3),areas[0].y()+i/columns*18,tw,17,()->{stage=step;buildActions();});b.hint(WizardModel.title(step));stageTabs.add(b);}
+        for(var step:WizardModel.Stage.values()){if(step==WizardModel.Stage.METHOD){stageTabs.add(null);continue;}int i=step.ordinal()-1;var b=button(WizardModel.title(step),"",areas[0].x()+i%columns*(tw+3),areas[0].y()+i/columns*18,tw,17,()->{stage=step;buildActions();});b.hint(WizardModel.title(step));stageTabs.add(b);}
         actions=addDrawableChild(new RpgList(areas[1].x()+6,areas[1].y()+(areas[1].height()<80?18:36),areas[1].width()-12,Math.max(12,areas[1].height()-(areas[1].height()<80?22:42)),30,c->{if(!busy&&fresh)stageActions.getOrDefault(c.id(),()->{}).run();}));
         footer();int navWidth=(frame.width()-108)/3;button("‹ Previous","",frame.x()+84,frame.y()+frame.height()-30,navWidth,20,()->move(-1));button("Next ›","",frame.x()+90+navWidth,frame.y()+frame.height()-30,navWidth,20,()->move(1));
         button("Save draft","",frame.x()+96+navWidth*2,frame.y()+frame.height()-30,navWidth,20,()->{if(nameDirty)saveName();else reload();}).hint("Confirms all server-acknowledged section saves; editors never save on every keystroke.");
         stageRows();buildActions();reload();
     }
-    private void stageRows(){var states=WizardModel.statuses(draft);for(var s:WizardModel.Stage.values()){var b=stageTabs.get(s.ordinal());b.selected(s==stage);b.hint(WizardModel.title(s)+" · "+states.get(s).detail());}}
+    private void stageRows(){var states=WizardModel.statuses(draft);for(var s:WizardModel.Stage.values()){var b=stageTabs.get(s.ordinal());if(b==null)continue;b.selected(s==stage);b.hint(WizardModel.title(s)+" · "+states.get(s).detail());}}
     private void reload(){if(busy)return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){draft=DraftReplies.snapshot(r.data(),character);fresh=true;message="Draft refreshed. All acknowledged section saves are persisted at revision "+revision(draft)+".";messageColor=RpgTheme.SUCCESS;stageRows();buildActions();}else{fresh=false;message=r.code()+": "+r.message()+". Existing screen state retained.";}});}
-    private void move(int d){int next=Math.clamp(stage.ordinal()+d,0,WizardModel.Stage.values().length-1);stage=WizardModel.Stage.values()[next];buildActions();}
+    private void move(int d){int next=Math.clamp(stage.ordinal()+d,1,WizardModel.Stage.values().length-1);stage=WizardModel.Stage.values()[next];buildActions();}
     private void buildActions(){
         // Keep navigation widgets, recreate only stage action buttons by reinitializing safely without changing data.
         initStageButtons();stageRows();
@@ -56,7 +56,7 @@ public final class CharacterWizardScreen extends RpgScreen {
             case EQUIPMENT->action(x,y,w,"Equipment and inventory","Structured manual records; never grants Minecraft items or recalculates combat",()->client.setScreen(new WizardRecordsScreen(this,draft,"inventory")));
             case FEATURES->action(x,y,w,"Features, feats and progression","Structured manual/informational records; no automatic feat or class feature",()->client.setScreen(new WizardRecordsScreen(this,draft,"features")));
             case SPELLS->action(x,y,w,"Custom spellbook","Search/filter-ready record list; verified standard catalog remains empty",()->client.setScreen(new WizardRecordsScreen(this,draft,"spellbook")));
-            case REVIEW->{if(validation!=null)for(var error:array(validation,"errors")){var e=error.getAsJsonObject();action(x,y,w,"Fix: "+text(e,"section"),text(e,"message"),()->{stage=WizardModel.validationStage(text(e,"section"));buildActions();});}action(x,y,w,"Validate supported fields","Structural validation only; does not prove complete D&D legality",this::validate);action(x,y+28,w,"Finish Character","Server validation, finalization, then optional independent campaign submission",this::finish);action(x,y+56,w,"Inspect saved source","Review exact persisted sheet and status",()->client.setScreen(new InfoScreen(this,text(draft,"name"),"Library source · "+text(draft,"stage"),draft.getAsJsonObject("sheet").toString())));}
+            case REVIEW->{if(validation!=null)for(var error:array(validation,"errors")){var e=error.getAsJsonObject();action(x,y,w,"Fix: "+text(e,"section"),text(e,"message"),()->{stage=WizardModel.validationStage(text(e,"section"));buildActions();});}action(x,y+28,w,"Finish Character","Server validation, finalization, then optional independent campaign submission",this::finish);action(x,y+56,w,"Inspect saved source","Review exact persisted sheet and status",()->client.setScreen(new InfoScreen(this,text(draft,"name"),"Library source · "+text(draft,"stage"),draft.getAsJsonObject("sheet").toString())));}
         }
         actions.rows(HubState.filter(choices,catalogSearch==null?"":stageQueries.getOrDefault(stage,"")));
     }

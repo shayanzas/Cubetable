@@ -26,7 +26,8 @@ public final class DestinationScreen extends RpgScreen {
             }
             case TABLETOP -> {
                 button("Local character sheets","Generic D20, Percentile & manual dice",x,y,w,34,()->CharacterSheetScreen.open(this));
-                addDrawableChild(new RpgTextBox(x,y+42,w,Math.max(38,frame.height()-118),"The existing resizable manual sheet supports local packs, dice and shared cards. Local sheets are independent of approved server characters. K opens sheets; H dismisses a shown card. Shared-card recall remains available through /tcard."));
+                button("Import local sheet into My Characters","Independent copy; existing local sheet is preserved",x,y+40,w,30,()->client.setScreen(new LocalLibraryImportScreen(this)));
+                addDrawableChild(new RpgTextBox(x,y+76,w,Math.max(20,frame.height()-152),"The existing resizable manual sheet supports local packs, dice and shared cards. Local sheets are independent of approved server characters. K opens sheets; H dismisses a shown card. Shared-card recall remains available through /tcard."));
             }
             case SETTINGS -> {
                 button("Minecraft options","GUI scale, accessibility & video settings",x,y,w,34,()->client.setScreen(new OptionsScreen(this,client.options)));
