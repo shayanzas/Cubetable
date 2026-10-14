@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "method": "36 unchanged non-class sprites; 12 approved class motifs with E alpha cleanup; connected-motif isolation without resampling; 2px transparent gutter",
+  "method": "36 unchanged non-class sprites; 11 class source cleanups; approved D Ranger retained exactly; whole connected-motif isolation; 2px transparent gutter",
   "sprites": {
     "barbarian": {
       "width": 677,
@@ -75,15 +75,15 @@
       ]
     },
     "ranger": {
-      "width": 665,
-      "height": 723,
-      "pixels": 151931,
-      "source": "class-cleanup-e-3.png",
+      "width": 1250,
+      "height": 1177,
+      "pixels": 396913,
+      "source": "ranger-d.png",
       "sourceBounds": [
         0,
-        19,
-        661,
-        719
+        57,
+        1246,
+        1173
       ]
     },
     "rogue": {

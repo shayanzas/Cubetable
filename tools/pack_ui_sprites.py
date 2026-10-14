@@ -131,3 +131,10 @@ if all((BASE/source).exists() for source,_ in e_sources):
  manifest['method']='36 unchanged non-class sprites; 12 approved class motifs with E alpha cleanup; connected-motif isolation without resampling; 2px transparent gutter'
  (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
  print('Packaged twelve E class cleanup motifs; 36 non-class sprites retained.')
+ # Ranger's approved D source has fewer isolated dark fragments than the trial
+ # E edit. Retain it exactly; do not trade away approved bow geometry/quality.
+ ranger=np.asarray(Image.open(BASE/'ranger-d.png').convert('RGBA'))
+ package_correction('ranger','ranger-d.png',ranger,ranger[:,:,3]>0)
+ manifest['method']='36 unchanged non-class sprites; 11 class source cleanups; approved D Ranger retained exactly; whole connected-motif isolation; 2px transparent gutter'
+ (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
+ print('Retained approved D Ranger exactly; rejected the noisier trial cleanup.')
