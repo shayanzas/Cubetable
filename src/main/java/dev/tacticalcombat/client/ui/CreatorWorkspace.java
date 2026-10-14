@@ -21,7 +21,8 @@ public final class CreatorWorkspace {
         pane.control("customRace",new RpgButton(geometry.grid().x(),geometry.grid().y()+geometry.grid().height()+6,geometry.grid().width(),18,"Custom Race","",custom));
         int dx=geometry.information().x(),dy=geometry.information().y(),dw=geometry.information().width();
         pane.label("Preview",dx,dy,dw,RpgTheme.GOLD);dy+=16;
-        pane.label(recorded.isBlank()?"Choose your race":recorded,dx,dy,dw,RpgTheme.TEXT);dy+=14;
+        if(recorded.isBlank()){pane.wrapped("Select a race to view its description, subrace options, and racial traits.",dx,dy,dw,RpgTheme.TEXT);}else{
+        pane.label(recorded,dx,dy,dw,RpgTheme.TEXT);dy+=14;
         String intro=recorded.isBlank()?"Choose a race to explore its heritage and traits.":IdentityModel.intro(base);
         for(var line:font.getTextHandler().wrapLines(intro,dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.TEXT);dy+=12;}
         dy+=5;for(var line:font.getTextHandler().wrapLines(IdentityModel.status(state),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
@@ -35,6 +36,7 @@ public final class CreatorWorkspace {
         dy+=8;pane.label("Racial Traits",dx,dy,dw,RpgTheme.GOLD);dy+=17;
         for(var trait:FeatureReference.raceTraits(base,sub)){pane.control(trait.id(),new RpgButton(dx,dy,dw,19,trait.name(),"",()->inspect.accept(trait)).hint(trait.tooltip()));dy+=23;}
         if(!recorded.isBlank())for(var line:font.getTextHandler().wrapLines(IdentityModel.completeness(recorded),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
+        }
         // Popup renders last and receives input first, so its nine choices overlay other controls safely.
         pane.control("alignment",new AlignmentDropdown(alignmentX,41,fw,()->state.fields.get("alignment"),v->IdentityModel.alignment(state,v),()->new UiLayout.Rect(pane.getX(),pane.getY(),pane.getWidth(),pane.getHeight())));
     }
@@ -46,12 +48,12 @@ public final class CreatorWorkspace {
         pane.control("customClass",new RpgButton(x,gridHeight+8,left,18,"Custom Class","",custom));
         int dx=stacked?x:x+left+6,y=stacked?gridHeight+36:2;
         String current=state.fields.get("characterClass");if(!current.isBlank()&&!current.equals(selected.name())){pane.label("Custom Class: "+current,dx,y,right,RpgTheme.GOLD);pane.label("Recorded manually; select a standard class to inspect its features.",dx,y+18,right,RpgTheme.MUTED);return;}
-        pane.label("Preview: "+selected.name(),dx,y,right,RpgTheme.GOLD);y+=18;
+        pane.label("Preview: "+selected.name(),dx,y,right,RpgTheme.GOLD);y+=16;String savedClass=ManagementState.text(dev.tacticalcombat.uiapi.SheetSections.read(state.snapshot().getAsJsonObject("sheet"),"identity"),"characterClass");pane.label(current.equals(savedClass)?"Saved selection":"Unsaved selection · Save to confirm",dx,y,right,RpgTheme.MUTED);y+=18;
         String overview=FeatureReference.classIntro(selected.id());pane.wrapped(overview,dx,y,right,RpgTheme.TEXT);y+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(overview,right,net.minecraft.text.Style.EMPTY).size()*12+8;
         String[] summary=selected.summary().split(" · ");pane.label("Hit Die: "+summary[0],dx,y,right,RpgTheme.TEXT);y+=14;pane.label("Primary: "+(summary.length>1?summary[1]:"See SRD"),dx,y,right,RpgTheme.TEXT);y+=17;
         pane.label("Proficiencies",dx,y,right,RpgTheme.GOLD);y+=15;
         String prof=FeatureReference.classProficiencies(selected.id())+"\nSaves: "+selected.guidance().split(" · ")[0].replace(" saves","");
-        for(String line:prof.split("\n")){pane.control("prof:"+line,new RpgButton(dx,y,right,18,line,"",()->inspect.accept(new FeatureReference.Entry("srd51:"+selected.id()+":proficiencies","Proficiencies", "D&D 5e SRD 5.1 (2014)",1,"","Recorded/manual","","","",prof,"INFORMATIONAL",prof))).hint(line));y+=21;}
+        for(String line:prof.split("\n")){int lines=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(line,right-14,net.minecraft.text.Style.EMPTY).size();int height=lines*12+10;pane.panel("",dx,y,right,height);pane.wrapped(line,dx+7,y+5,right-14,RpgTheme.TEXT);y+=height+4;}
         String skills="Choose "+Srd2014Catalog.classSkillCount(selected.name())+" skills";pane.control("skills",new RpgButton(dx,y,right,18,skills,"",proficiencies).hint("Open the interactive class-specific Proficiencies page."));y+=25;
         int level=-1;for(var entry:FeatureReference.classFeatures(selected.id())){if(entry.level()!=level){level=entry.level();pane.label("Level "+level,dx,y,right,RpgTheme.GOLD);y+=16;}feature(pane,entry,dx,y,right,inspect);y+=21;}
     }

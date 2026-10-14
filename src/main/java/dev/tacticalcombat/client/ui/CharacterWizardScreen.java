@@ -29,17 +29,17 @@ public final class CharacterWizardScreen extends RpgScreen {
     @Override protected int maximumWidth(){return 980;}
     @Override protected void init(){remember();super.init();layout=CharacterShell.layout(frame);pane=null;sheet=null;busy=false;fresh=false;
         rail=addDrawableChild(new SectionRail(layout.rail(),Arrays.stream(CreatorFlow.Step.values()).map(s->new SectionRail.Item(s.name(),s.title)).toList(),s->go(CreatorFlow.Step.valueOf(s)),28));
-        footer();int y=frame.y()+frame.height()-30,w=(frame.width()-108)/3;
-        saveButton=button("Save","",frame.x()+84,y,w,20,()->{if(step==CreatorFlow.Step.REVIEW&&validation!=null&&!array(validation,"errors").isEmpty())go(CreatorFlow.errorStep(text(array(validation,"errors").get(0).getAsJsonObject(),"section")));else saveCurrent(this::build);});
-        nextButton=button(step==CreatorFlow.Step.REVIEW?"Finish":"Continue","",frame.x()+90+w,y,w,20,()->{if(step==CreatorFlow.Step.REVIEW)finish();else go(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]);});
-        button("Refresh","",frame.x()+96+2*w,y,w,20,this::reload);build();reload();
+        footer();
+        saveButton=footerAction("Save",0,()->{if(step==CreatorFlow.Step.REVIEW&&validation!=null&&!array(validation,"errors").isEmpty())go(CreatorFlow.errorStep(text(array(validation,"errors").get(0).getAsJsonObject(),"section")));else saveCurrent(this::build);});
+        nextButton=footerAction(step==CreatorFlow.Step.REVIEW?"Finish":"Continue",1,()->{if(step==CreatorFlow.Step.REVIEW)finish();else go(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]);});
+        footerAction("Refresh",2,this::reload);build();reload();
     }
     private void remember(){if(pane!=null){positions.put(displayed,pane.position());focus.put(displayed,pane.focusedKey());cursors.put(displayed,pane.cursors());}if(sheet!=null)positions.put(displayed,sheet.position());}
     private void build(){remember();if(pane!=null)remove(pane);if(sheet!=null)remove(sheet);sheet=null;displayed=step;rail.selected(step.name());if(saveButton!=null)saveButton.setMessage(net.minecraft.text.Text.literal(step==CreatorFlow.Step.REVIEW&&validation!=null&&!array(validation,"errors").isEmpty()?"Fix issue":"Save"));if(nextButton!=null)nextButton.setMessage(net.minecraft.text.Text.literal(step==CreatorFlow.Step.REVIEW?"Finish":"Continue"));pane=addDrawableChild(new CharacterCanvas(layout.content()));
         switch(step){
             case IDENTITY->CreatorWorkspace.identity(pane,textRenderer,state,this::inspect,this::build,()->custom("species","Race / subrace"));
             case CLASS->CreatorWorkspace.clazz(pane,state,this::inspect,this::build,()->custom("characterClass","Class"),()->go(CreatorFlow.Step.PROFICIENCIES));
-            case ABILITIES->{if(text(state.snapshot(),"profile").equals("srd_5_1")){AbilityWorkspace.build(pane,textRenderer,state,this::build,busy);pane.liveLabel(()->AbilityWorkspace.status(state),6,21,pane.getWidth()-12,RpgTheme.MUTED);}else pane.label("Imported profile: preserve its existing ability representation.",6,6,pane.getWidth()-12,RpgTheme.MUTED);}
+            case ABILITIES->{if(text(state.snapshot(),"profile").equals("srd_5_1")){AbilityWorkspace.build(pane,textRenderer,state,this::build,busy);}else pane.label("Imported profile: preserve its existing ability representation.",6,6,pane.getWidth()-12,RpgTheme.MUTED);}
             case REVIEW->CharacterSheetUi.build(pane,state.snapshot(),true,null,validation,null);
             default->pane.label("Loading "+step.title+" workspace…",6,6,pane.getWidth()-12,RpgTheme.MUTED);
         }

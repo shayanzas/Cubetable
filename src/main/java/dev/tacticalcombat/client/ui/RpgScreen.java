@@ -32,8 +32,11 @@ public abstract class RpgScreen extends Screen {
     @Override public boolean mouseClicked(double x,double y,int button){boolean handled=super.mouseClicked(x,y,button);if(getFocused()!=null&&!children().contains(getFocused())){setFocused(null);for(var child:children())if(child instanceof CharacterCanvas canvas&&!canvas.focusedKey().isEmpty()){setFocused(canvas);break;}}return handled;}
     protected void wizardRail(CreatorFlow.Step step,java.util.function.BooleanSupplier canLeave){if(parent instanceof CharacterWizardScreen wizard&&guidedFrame!=null){var rail=addDrawableChild(new SectionRail(WizardChildLayout.rail(guidedFrame),java.util.Arrays.stream(CreatorFlow.Step.values()).map(v->new SectionRail.Item(v.name(),v.title)).toList(),key->{var next=CreatorFlow.Step.valueOf(key);if(next==step)return;if(busy)return;if(!canLeave.getAsBoolean()){message="Save these edits before changing creator tabs.";return;}wizard.navigateFromChild(next);},28));rail.selected(step.name());}}
     protected void returnFromWizard(CreatorFlow.Step step){if(parent instanceof CharacterWizardScreen wizard)wizard.navigateFromChild(CreatorFlow.Step.values()[Math.max(0,step.ordinal()-1)]);else client.setScreen(parent);}
+    protected UiLayout.Rect footerFrame(){return guidedFrame==null?frame:guidedFrame;}
+    protected RpgButton footerAction(String title,int slot,Runnable action){var r=CreatorFooter.action(footerFrame(),slot);return button(title,"",r.x(),r.y(),r.width(),r.height(),action).hint(title);}
+    protected void creatorContinue(CreatorFlow.Step step,java.util.function.BooleanSupplier canLeave){if(parent instanceof CharacterWizardScreen wizard)footerAction("Continue",1,()->{if(busy)return;if(!canLeave.getAsBoolean()){message="Save these edits before continuing.";return;}wizard.navigateFromChild(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]);});}
     protected void footer() {
-        button("Back","",frame.x()+12,frame.y()+frame.height()-30,66,20,this::close).hint("Return to the previous screen (Escape)");
+        var r=CreatorFooter.back(footerFrame());button("Back","",r.x(),r.y(),r.width(),r.height(),this::close).hint("Return to the previous screen (Escape)");
     }
     protected void request(UiApiService.Operation op,JsonObject args,Consumer<UiApiService.Reply> result) {
         long current=generation;busy=true;message="Loading…";messageColor=RpgTheme.MUTED;
@@ -53,8 +56,8 @@ public abstract class RpgScreen extends Screen {
     protected void content(DrawContext g,int mx,int my,float delta) { }
     @Override public void render(DrawContext g,int mx,int my,float delta) {
         background(g);content(g,mx,my,delta);super.render(g,mx,my,delta);
-        RpgTheme.text(g,textRenderer,(busy?"… ":"")+message,frame.x()+12,frame.y()+frame.height()-9,frame.width()-24,messageColor);
-        if(new UiLayout.Rect(frame.x()+12,frame.y()+frame.height()-10,frame.width()-24,10).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(message));
+        RpgTheme.text(g,textRenderer,(busy?"… ":"")+message,footerFrame().x()+12,footerFrame().y()+footerFrame().height()-9,footerFrame().width()-24,messageColor);
+        if(new UiLayout.Rect(footerFrame().x()+12,footerFrame().y()+footerFrame().height()-10,footerFrame().width()-24,10).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(message));
     }
     protected void paragraphs(DrawContext g,String text,int x,int y,int w,int maxHeight) {
         int bottom=y+maxHeight;for(var line:textRenderer.wrapLines(Text.literal(text),w)) {if(y+9>bottom) break;g.drawText(textRenderer,line,x,y,RpgTheme.MUTED,false);y+=12;}

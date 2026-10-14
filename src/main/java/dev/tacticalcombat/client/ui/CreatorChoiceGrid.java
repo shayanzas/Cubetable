@@ -26,12 +26,13 @@ public final class CreatorChoiceGrid extends ClickableWidget {
     public void focusedIndex(int value){focus=Math.clamp(value,0,Math.max(0,entries.size()-1));}
     public void position(int first){this.first=Math.max(0,first);}
     private int visibleRows(){return Math.max(1,height/rowHeight());}
-    public void entries(List<Entry> values,String selected){this.entries=List.copyOf(values);this.selected=selected;first=Math.clamp(first,0,Math.max(0,(entries.size()+columns()-1)/columns()-visibleRows()));focus=Math.clamp(focus,0,Math.max(0,entries.size()-1));}
+    public void entries(List<Entry> values,String selected){this.entries=List.copyOf(values);this.selected=selected;first=Math.clamp(first,0,Math.max(0,(entries.size()+columns()-1)/columns()-visibleRows()));focus=Math.clamp(focus,0,Math.max(0,entries.size()-1));for(int i=0;i<entries.size();i++)if(entries.get(i).id().equals(selected)){focus=i;break;}}
+    public boolean selectedIndex(int index){return index>=0&&index<entries.size()&&entries.get(index).id().equals(selected);}
     private int index(double x,double y){return (first+(int)((y-getY())/rowHeight()))*columns()+Math.clamp((int)((x-getX())/(width/columns())),0,columns()-1);}
     @Override protected void renderWidget(DrawContext g,int mx,int my,float delta){var font=MinecraftClient.getInstance().textRenderer;int columns=columns(),w=width/columns(),start=first*columns();
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
-            for(int i=start;i<Math.min(entries.size(),start+columns*visibleRows());i++){var e=entries.get(i);int x=getX()+i%columns*w,y=getY()+(i-start)/columns*rowHeight();boolean highlight=e.id().equals(selected)||isFocused()&&i==focus;
-                RpgTheme.panel(g,x,y,w-3,rowHeight()-2,highlight?RpgTheme.HOVER:RpgTheme.PANEL,highlight);
+            for(int i=start;i<Math.min(entries.size(),start+columns*visibleRows());i++){var e=entries.get(i);int x=getX()+i%columns*w,y=getY()+(i-start)/columns*rowHeight();boolean highlight=selectedIndex(i),hover=isMouseOver(mx,my)&&index(mx,my)==i;
+                RpgTheme.panel(g,x,y,w-3,rowHeight()-2,highlight||hover?RpgTheme.HOVER:RpgTheme.PANEL,highlight);if(isFocused()&&i==focus&&!highlight)g.drawBorder(x+2,y+2,w-7,rowHeight()-6,RpgTheme.FOCUS);
                 if(!e.icon().isEmpty()&&rowHeight()>=35){int drawSize=Math.min(iconSize,Math.max(8,w-9));CreatorIcons.draw(g,e.icon(),x+(w-3-drawSize)/2,y+4+(iconSize-drawSize)/2,drawSize);}
                 String title=font.trimToWidth(e.name(),w-9);g.drawText(font,title,x+(w-3-font.getWidth(title))/2,y+(e.icon().isEmpty()?(rowHeight()-9)/2:iconSize+9),highlight?RpgTheme.GOLD:RpgTheme.TEXT,false);
             }

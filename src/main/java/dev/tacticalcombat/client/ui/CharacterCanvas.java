@@ -12,6 +12,9 @@ import org.lwjgl.glfw.GLFW;
 public final class CharacterCanvas extends ClickableWidget {
     private record Child(String key,ClickableWidget widget,int x,int y) {}
     private record Caption(java.util.function.Supplier<String> text,int x,int y,int width,int color) {}
+    private record Hint(int x,int y,int width,int height,String text) {}
+    private final List<Hint> hints=new ArrayList<>();
+    public void tooltip(int x,int y,int width,int height,String text){hints.add(new Hint(x,y,width,height,text));}
     private record Glyph(String key,int x,int y,int size) {}
     private record Progress(int x,int y,int width,double fraction) {}
     private final List<Progress> progress=new ArrayList<>();
@@ -49,6 +52,7 @@ public final class CharacterCanvas extends ClickableWidget {
             for(var bar:progress){int y=getY()+bar.y()-offset;g.fill(getX()+bar.x(),y,getX()+bar.x()+bar.width(),y+4,0xFF343A43);g.fill(getX()+bar.x(),y,getX()+bar.x()+(int)(bar.width()*bar.fraction()),y+4,RpgTheme.GOLD);}
             for(var icon:glyphs)CreatorIcons.draw(g,icon.key(),getX()+icon.x(),getY()+icon.y()-offset,icon.size());
             for(var c:captions){int y=getY()+c.y()-offset;if(y+12>=getY()&&y<getBottom()){RpgTheme.text(g,font,c.text().get(),getX()+c.x(),y,c.width(),c.color());if(isMouseOver(mx,my)&&my>=y&&my<y+12&&mx>=getX()+c.x()&&mx<getX()+c.x()+c.width())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(c.text().get()));}}
+            for(var hint:hints)if(isMouseOver(mx,my)&&new UiLayout.Rect(getX()+hint.x(),getY()+hint.y()-offset,hint.width(),hint.height()).contains(mx,my))MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(hint.text()));
             for(var child:controls){var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);w.visible=w.getBottom()>getY()&&w.getY()<getBottom();if(w.visible)w.render(g,isMouseOver(mx,my)?mx:-1000,isMouseOver(mx,my)?my:-1000,delta);}
         }
         if(total>height){int h=Math.max(8,height*height/total),y=getY()+(height-h)*offset/Math.max(1,total-height);g.fill(getRight()-2,y,getRight(),y+h,RpgTheme.GOLD);}

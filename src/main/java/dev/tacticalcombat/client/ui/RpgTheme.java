@@ -5,7 +5,7 @@ import net.minecraft.client.font.TextRenderer;
 
 /** Original procedural panels, native-size Minecraft text, no borrowed artwork or font transforms. */
 public final class RpgTheme {
-    public static final int BACKGROUND=0xFF111419,PANEL=0xFF20242A,HOVER=0xFF2C323A,EDGE=0xFF505057,GOLD=0xFFE3BE73,TEXT=0xFFF0EDE7,MUTED=0xFFB2B7BE,ERROR=0xFFFF9A91,SUCCESS=0xFFA8D5AC;
+    public static final int BACKGROUND=0xFF111419,PANEL=0xFF20242A,HOVER=0xFF2C323A,EDGE=0xFF505057,FOCUS=0xFFB7D5E8,GOLD=0xFFE3BE73,TEXT=0xFFF0EDE7,MUTED=0xFFB2B7BE,ERROR=0xFFFF9A91,SUCCESS=0xFFA8D5AC;
     private RpgTheme() {}
     public static void panel(DrawContext g,int x,int y,int w,int h,int color,boolean highlighted) {
         g.fill(x,y,x+w,y+h,highlighted?GOLD:EDGE);g.fill(x+1,y+1,x+w-1,y+h-1,color);

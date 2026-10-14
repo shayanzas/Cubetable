@@ -17,7 +17,7 @@ public final class WizardRecordsScreen extends ManagementScreen {
     public WizardRecordsScreen(Screen parent,JsonObject draft,String section,DashboardSource source) {super(title(section),parent);character=text(draft,"id");this.draft=draft.deepCopy();this.section=section;this.source=source;}
     private static String title(String s) {return switch(s){case "inventory"->"Equipment and inventory records";case "features"->"Features and feats";case "spellbook"->"Custom spellbook";default->throw new IllegalArgumentException("Unknown section");};}
     private CreatorFlow.Step creatorStep(){return section.equals("features")?CreatorFlow.Step.FEATURES:section.equals("spellbook")?CreatorFlow.Step.SPELLS:CreatorFlow.Step.EQUIPMENT;}
-    @Override protected void controls(){wizardRail(creatorStep(),()->true);}
+    @Override protected void controls(){wizardRail(creatorStep(),()->true);creatorContinue(creatorStep(),()->fresh);footerAction("Refresh",2,this::refresh);}
     @Override public void close(){if(busy)return;if(parent instanceof CharacterWizardScreen)returnFromWizard(creatorStep());else super.close();}
     @Override protected void refresh(){clearRows();read(source.read(),source.readArgs(),data->{draft=data;display();});}
     private void display(){
