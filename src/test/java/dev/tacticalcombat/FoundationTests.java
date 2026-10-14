@@ -99,6 +99,7 @@ public final class FoundationTests {
         dev.tacticalcombat.client.ui.CharacterSheetCheckpointTests.run();
         dev.tacticalcombat.client.ui.CharacterCheckpointCTests.run();
         dev.tacticalcombat.client.ui.CheckpointCPresentationTests.run();
+        dev.tacticalcombat.client.ui.CheckpointDPresentationTests.run();
         dev.tacticalcombat.client.ui.DashboardUiTests.run();
         dev.tacticalcombat.client.ui.HudUiTests.run();
         dev.tacticalcombat.character.UiStabilizationTests.run();
