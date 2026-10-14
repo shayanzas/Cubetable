@@ -15,7 +15,7 @@ public final class WizardModel {
     public static String title(Stage s) {return switch(s) {
         case METHOD->"1 · Method";case BASICS->"2 · Basics";case SPECIES->"3 · Species";case CLASS->"4 · Class";case BACKGROUND->"5 · Background";
         case ABILITIES->"6 · Abilities";case PROFICIENCIES->"7 · Proficiencies";case EQUIPMENT->"8 · Equipment";case FEATURES->"9 · Features";case SPELLS->"10 · Spells";case REVIEW->"11 · Review";};}
-    public static Stage validationStage(String section){return switch(section){case "basics","identity"->Stage.BASICS;case "combat","abilities"->Stage.ABILITIES;case "proficiencies"->Stage.PROFICIENCIES;case "inventory"->Stage.EQUIPMENT;case "features","progression"->Stage.FEATURES;case "spellbook"->Stage.SPELLS;default->Stage.REVIEW;};}
+    public static Stage validationStage(String section){return switch(section){case "basics","identity"->Stage.BASICS;case "class"->Stage.CLASS;case "combat","abilities"->Stage.ABILITIES;case "proficiencies"->Stage.PROFICIENCIES;case "inventory"->Stage.EQUIPMENT;case "features","progression"->Stage.FEATURES;case "spellbook"->Stage.SPELLS;default->Stage.REVIEW;};}
     public static int modifier(int score) {return Math.floorDiv(score-10,2);}
     public static int pointCost(int score) {var result=POINT_COST.get(score);if(result==null) throw new IllegalArgumentException("Point-buy scores must be 8–15");return result;}
     public static int pointRemaining(Map<String,Integer> scores) {return 27-scores.values().stream().mapToInt(WizardModel::pointCost).sum();}

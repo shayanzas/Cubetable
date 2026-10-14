@@ -20,7 +20,7 @@ public final class CreatorFlow {
     }
     public static Map<Step,WizardModel.Status> statuses(com.google.gson.JsonObject draft){var old=WizardModel.statuses(draft);var out=new EnumMap<Step,WizardModel.Status>(Step.class);for(var step:Step.values()){var stage=switch(step){case IDENTITY->WizardModel.Stage.SPECIES;case CLASS->WizardModel.Stage.CLASS;case ABILITIES->WizardModel.Stage.ABILITIES;case PROFICIENCIES->WizardModel.Stage.PROFICIENCIES;case EQUIPMENT->WizardModel.Stage.EQUIPMENT;case FEATURES->WizardModel.Stage.FEATURES;case SPELLS->WizardModel.Stage.SPELLS;case DETAILS,REVIEW->WizardModel.Stage.REVIEW;};var status=old.get(stage);if(step==Step.IDENTITY)status=new WizardModel.Status(old.get(WizardModel.Stage.BASICS).complete()&&status.complete(),status.detail());if(step==Step.DETAILS)status=new WizardModel.Status(true,"Optional story");out.put(step,status);}return out;}
     public static Step errorStep(String section) {
-        return switch(section){case "basics","identity"->Step.IDENTITY;case "combat","abilities"->Step.ABILITIES;case "proficiencies"->Step.PROFICIENCIES;case "inventory"->Step.EQUIPMENT;case "features"->Step.FEATURES;case "spellbook"->Step.SPELLS;case "progression"->Step.DETAILS;default->Step.REVIEW;};
+        return switch(section){case "basics","identity"->Step.IDENTITY;case "class"->Step.CLASS;case "combat","abilities"->Step.ABILITIES;case "proficiencies"->Step.PROFICIENCIES;case "inventory"->Step.EQUIPMENT;case "features"->Step.FEATURES;case "spellbook"->Step.SPELLS;case "progression"->Step.DETAILS;default->Step.REVIEW;};
     }
     public static CatalogLayout catalogLayout(UiLayout.Rect content,Step step,boolean subraces) {
         int x=content.x()+6,y=content.y()+5,w=content.width()-12,h=content.height()-10,top=y;
