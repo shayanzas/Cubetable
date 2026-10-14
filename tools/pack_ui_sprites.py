@@ -104,3 +104,30 @@ if (BASE / 'class-corrections-d.png').exists():
  manifest['method']='38 original motifs; four retained Checkpoint C repairs; six Checkpoint D class repairs; lossless RGBA isolation; 2px transparent gutter'
  (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
  print('Packaged six Checkpoint D class repairs; retained the four good C repairs and 38 originals.')
+
+# E alpha cleanup sources preserve the approved motifs. Isolate by connected
+# principal motif rather than cutting at nominal cells: Ranger's lower tip and
+# Wizard's book extend over their grid midpoint, and must never be cropped off.
+e_sources=[('class-cleanup-e-1.png',['barbarian','bard','cleric','monk']),
+           ('class-cleanup-e-2.png',['druid','fighter','rogue','warlock']),
+           ('class-cleanup-e-3.png',['ranger','paladin','sorcerer','wizard'])]
+if all((BASE/source).exists() for source,_ in e_sources):
+ for source,names in e_sources:
+  rgba=np.asarray(Image.open(BASE/source).convert('RGBA'))
+  labels,_=ndimage.label(rgba[:,:,3]>128,np.ones((3,3)))
+  counts=np.bincount(labels.ravel());principal=np.argsort(counts[1:])[-4:]+1
+  main=np.zeros(labels.shape,dtype=np.int32);motifs={}
+  for label in principal:
+   yy,xx=np.where(labels==label);index=int(xx.mean()>=rgba.shape[1]/2)+2*int(yy.mean()>=rgba.shape[0]/2)
+   assert index not in motifs,'Inspect connected principal motifs before packing'
+   motifs[index]=int(label);main[labels==label]=label
+  assert len(motifs)==4
+  nearest=ndimage.distance_transform_edt(main==0,return_distances=False,return_indices=True)
+  assignment=main[tuple(nearest)];retained=0
+  for index,name in enumerate(names):
+   mask=(assignment==motifs[index])&(rgba[:,:,3]>0)
+   package_correction(name,source,rgba,mask);retained+=int(mask.sum())
+  assert retained==int((rgba[:,:,3]>0).sum()),'Every cleaned source pixel belongs to one motif'
+ manifest['method']='36 unchanged non-class sprites; 12 approved class motifs with E alpha cleanup; connected-motif isolation without resampling; 2px transparent gutter'
+ (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
+ print('Packaged twelve E class cleanup motifs; 36 non-class sprites retained.')

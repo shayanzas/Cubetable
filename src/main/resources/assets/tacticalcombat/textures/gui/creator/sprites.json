@@ -1,125 +1,125 @@
 {
   "schema": 1,
-  "method": "38 original motifs; four retained Checkpoint C repairs; six Checkpoint D class repairs; lossless RGBA isolation; 2px transparent gutter",
+  "method": "36 unchanged non-class sprites; 12 approved class motifs with E alpha cleanup; connected-motif isolation without resampling; 2px transparent gutter",
   "sprites": {
     "barbarian": {
-      "width": 631,
-      "height": 622,
-      "pixels": 187172,
-      "source": "class-corrections-c.png",
+      "width": 677,
+      "height": 676,
+      "pixels": 182547,
+      "source": "class-cleanup-e-1.png",
       "sourceBounds": [
         0,
-        9,
-        627,
-        618
+        2,
+        673,
+        672
       ]
     },
     "bard": {
-      "width": 611,
-      "height": 631,
-      "pixels": 193738,
-      "source": "class-corrections-c.png",
+      "width": 612,
+      "height": 604,
+      "pixels": 191206,
+      "source": "class-cleanup-e-1.png",
       "sourceBounds": [
-        627,
-        0,
-        607,
-        627
+        620,
+        47,
+        608,
+        600
       ]
     },
     "cleric": {
-      "width": 631,
-      "height": 631,
-      "pixels": 149977,
-      "source": "class-corrections-c.png",
+      "width": 621,
+      "height": 623,
+      "pixels": 150837,
+      "source": "class-cleanup-e-1.png",
       "sourceBounds": [
         0,
-        627,
-        627,
-        627
+        635,
+        617,
+        619
       ]
     },
     "druid": {
-      "width": 631,
-      "height": 622,
-      "pixels": 199828,
-      "source": "class-corrections-d.png",
+      "width": 653,
+      "height": 667,
+      "pixels": 183686,
+      "source": "class-cleanup-e-2.png",
       "sourceBounds": [
         0,
-        9,
-        627,
-        618
+        4,
+        649,
+        663
       ]
     },
     "fighter": {
-      "width": 628,
-      "height": 612,
-      "pixels": 165857,
-      "source": "class-corrections-d.png",
+      "width": 586,
+      "height": 607,
+      "pixels": 153761,
+      "source": "class-cleanup-e-2.png",
       "sourceBounds": [
-        627,
-        19,
-        624,
-        608
+        636,
+        32,
+        582,
+        603
       ]
     },
     "monk": {
-      "width": 628,
-      "height": 631,
-      "pixels": 194722,
-      "source": "class-corrections-c.png",
+      "width": 682,
+      "height": 627,
+      "pixels": 188648,
+      "source": "class-cleanup-e-1.png",
       "sourceBounds": [
-        627,
-        627,
-        624,
-        627
+        556,
+        631,
+        678,
+        623
       ]
     },
     "ranger": {
-      "width": 1250,
-      "height": 1177,
-      "pixels": 396913,
-      "source": "ranger-d.png",
+      "width": 665,
+      "height": 723,
+      "pixels": 151931,
+      "source": "class-cleanup-e-3.png",
       "sourceBounds": [
         0,
-        57,
-        1246,
-        1173
+        19,
+        661,
+        719
       ]
     },
     "rogue": {
-      "width": 631,
-      "height": 631,
-      "pixels": 199700,
-      "source": "class-corrections-d.png",
+      "width": 606,
+      "height": 580,
+      "pixels": 191528,
+      "source": "class-cleanup-e-2.png",
       "sourceBounds": [
-        0,
-        627,
-        627,
-        627
+        43,
+        654,
+        602,
+        576
       ]
     },
     "warlock": {
-      "width": 615,
-      "height": 631,
-      "pixels": 193659,
-      "source": "class-corrections-d.png",
+      "width": 585,
+      "height": 597,
+      "pixels": 186897,
+      "source": "class-cleanup-e-2.png",
       "sourceBounds": [
-        627,
-        627,
-        611,
-        627
+        642,
+        635,
+        581,
+        593
       ]
     },
     "wizard": {
-      "width": 891,
-      "height": 874,
-      "pixels": 383266,
-      "source": "wizard-source-d.png",
+      "width": 686,
+      "height": 616,
+      "pixels": 212961,
+      "source": "class-cleanup-e-3.png",
       "sourceBounds": [
-        0,
-        17,
-        887,
-        870
+        556,
+        620,
+        682,
+        612
       ]
     },
     "str": {
@@ -555,27 +555,27 @@
       ]
     },
     "paladin": {
-      "width": 891,
-      "height": 882,
-      "pixels": 357578,
-      "source": "class-extra.png",
+      "width": 624,
+      "height": 642,
+      "pixels": 189356,
+      "source": "class-cleanup-e-3.png",
       "sourceBounds": [
-        0,
+        620,
         9,
-        887,
-        878
+        620,
+        638
       ]
     },
     "sorcerer": {
-      "width": 890,
-      "height": 876,
-      "pixels": 303288,
-      "source": "class-extra.png",
+      "width": 627,
+      "height": 588,
+      "pixels": 186317,
+      "source": "class-cleanup-e-3.png",
       "sourceBounds": [
-        887,
-        15,
-        886,
-        872
+        0,
+        642,
+        623,
+        584
       ]
     }
   }
