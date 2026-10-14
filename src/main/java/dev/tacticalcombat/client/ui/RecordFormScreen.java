@@ -13,6 +13,8 @@ import java.util.function.*;
 public final class RecordFormScreen extends RpgScreen {
     public record Field(String key,String label,String initial,int limit) {}
     private final List<Field> fields;
+    private String saveLabel="Save changes";
+    public RecordFormScreen saveLabel(String label){saveLabel=label;return this;}
     private final Map<String,TextFieldWidget> inputs=new HashMap<>();
     private String focusKey="";private int cursor;
     private final Map<String,String> values=new LinkedHashMap<>();
@@ -49,7 +51,7 @@ public final class RecordFormScreen extends RpgScreen {
         button("Previous page","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;
         button("Reload","",x+(w-12)/3+6,bottom,(w-12)/3,20,this::reload).hint("Fetch the latest revision without discarding staged text. Review concurrent changes before saving.");
         button("Next page","",x+2*((w-12)/3+6),bottom,(w-12)/3,20,()->{if(!busy && (page+1)*n<fields.size()) {page++;init();}}).active=(page+1)*n<fields.size();
-        footer();button("Save changes","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
+        footer();button(saveLabel,"",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
         reload();
     }
     private void reload() {

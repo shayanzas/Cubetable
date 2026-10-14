@@ -11,6 +11,26 @@ import java.util.*;
 import static dev.tacticalcombat.combat.SrdEncounterGameTests.*;
 public class UiFoundationGameTests implements FabricGameTest {
     @GameTest(templateName=EMPTY_STRUCTURE)
+    public void guidedClassChoicesAreValidatedAtAuthenticatedGateway(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            var create=new JsonObject();create.addProperty("profile",RulesProfiles.SRD);create.addProperty("mode","GUIDED");create.add("sheet",JsonNull.INSTANCE);
+            var response=UiNetworking.handle(player,new UiRequestPayload(1,"LIBRARY_CREATE",create.toString()));check(response.code().equals("OK"),"guided creation accepted");var draft=JsonParser.parseString(response.json()).getAsJsonObject();var sheet=draft.getAsJsonObject("sheet");check(CreationRules.enrolled(sheet),"server enrolls guided validation");
+            var identity=SheetSections.read(sheet,"identity");identity.addProperty("species","Human");identity.addProperty("characterClass","Rogue");var update=new JsonObject();update.add("character",draft.get("id"));update.add("revision",draft.get("revision"));update.addProperty("section","identity");update.add("data",identity);response=UiNetworking.handle(player,new UiRequestPayload(2,"LIBRARY_UPDATE",update.toString()));check(response.code().equals("OK"),"class selection acknowledged");draft=JsonParser.parseString(response.json()).getAsJsonObject();
+            update.add("revision",draft.get("revision"));update.addProperty("section","creation");var choices=SheetSections.JSON.toJsonTree(new CreationRules.Choices(List.of("Acrobatics","Athletics","Deception","Insight","Stealth"),List.of("Acrobatics","Athletics"),"MANUAL")).getAsJsonObject();update.add("data",choices);check(!UiNetworking.handle(player,new UiRequestPayload(3,"LIBRARY_UPDATE",update.toString())).code().equals("OK"),"forged fifth Rogue choice rejected by server");choices.getAsJsonArray("skills").remove(4);response=UiNetworking.handle(player,new UiRequestPayload(4,"LIBRARY_UPDATE",update.toString()));check(response.code().equals("OK"),"valid class choices acknowledged");draft=JsonParser.parseString(response.json()).getAsJsonObject();var p=SheetSections.read(draft.getAsJsonObject("sheet"),"proficiencies");check(p.getAsJsonArray("skills").size()==4&&p.getAsJsonArray("saves").asList().stream().map(JsonElement::getAsString).collect(java.util.stream.Collectors.toSet()).equals(Set.of("dex","int")),"ack contains four choices and mandatory Rogue saves");
+        } finally {UiNetworking.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void campaignInspirationAwardsRequireDmAtAuthenticatedGateway(TestContext ctx) throws Exception {
+        var player=ctx.createMockCreativeServerPlayerInWorld();
+        try(var f=new Fixture(ctx)) {
+            var p=CharacterService.principal(player);f.repo.invite(f.dm,f.campaign,1,p.id(),false);var id=f.repo.submit(p,f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,id,1);f.repo.bind(f.dm,id,2,p.id(),p.id());var combat=f.repo.srdSnapshot(p.id(),f.campaign);
+            var request=new JsonObject();request.addProperty("character",id.toString());request.addProperty("manualRevision",0);request.add("change",SheetSections.JSON.toJsonTree(new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,3)));check(!UiNetworking.handle(player,new UiRequestPayload(1,"MANUAL_COUNTER",request.toString())).code().equals("OK"),"player cannot award campaign Inspiration");check(f.repo.manualRevision(id)==0,"rejected award leaves revision untouched");f.repo.track(f.dm,id,0,new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,3));request.addProperty("manualRevision",1);request.add("change",SheetSections.JSON.toJsonTree(new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,2)));var reply=UiNetworking.handle(player,new UiRequestPayload(2,"MANUAL_COUNTER",request.toString()));check(reply.code().equals("OK"),"current controller may decrease awarded manual count");check(SheetSections.read(JsonParser.parseString(reply.json()).getAsJsonObject().getAsJsonObject("sheet"),"trackers").get("inspiration").getAsInt()==2,"count acknowledged accurately");check(f.repo.srdSnapshot(p.id(),f.campaign).equals(combat),"inspiration bookkeeping preserves complete combat snapshot");check(UiNetworking.handle(player,new UiRequestPayload(2,"MANUAL_COUNTER",request.toString())).code().equals("ALREADY_PROCESSED"),"manual decrease cannot replay");
+        } finally {UiNetworking.forget(player.getUuid());CharacterService.forget(player.getUuid());ctx.getWorld().getServer().getPlayerManager().remove(player);}
+        ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
     public void uiGatewayChecksAuthenticatedPermissionReplayAndBounds(TestContext ctx) throws Exception {
         var player=ctx.createMockCreativeServerPlayerInWorld();
         try(var f=new Fixture(ctx)) {
