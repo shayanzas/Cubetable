@@ -15,13 +15,14 @@ public final class SectionRail extends ClickableWidget {
     private final List<Item> items;
     private final Consumer<String> choose;
     private int first,selected;
-    private static final int ROW=16;
-    public SectionRail(UiLayout.Rect r,List<Item> items,Consumer<String> choose){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character sections"));this.items=List.copyOf(items);this.choose=choose;}
+    private final int ROW;
+    public SectionRail(UiLayout.Rect r,List<Item> items,Consumer<String> choose){this(r,items,choose,16);}
+    public SectionRail(UiLayout.Rect r,List<Item> items,Consumer<String> choose,int rowHeight){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character sections"));this.items=List.copyOf(items);this.choose=choose;this.ROW=rowHeight;}
     public void selected(String id){for(int i=0;i<items.size();i++)if(items.get(i).id().equals(id)){selected=i;if(i<first)first=i;if(i>=first+capacity())first=i-capacity()+1;}}
     private int capacity(){return Math.max(1,height/ROW);}
     @Override protected void renderWidget(DrawContext g,int mx,int my,float delta){var font=MinecraftClient.getInstance().textRenderer;g.fill(getX(),getY(),getRight(),getBottom(),0xFF15191E);
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
-            for(int i=first;i<Math.min(items.size(),first+capacity());i++){int y=getY()+(i-first)*ROW;boolean active=i==selected;if(active){g.fill(getX(),y,getRight(),y+ROW-1,0xFF32302A);g.fill(getX(),y,getX()+2,y+ROW-1,RpgTheme.GOLD);}RpgTheme.text(g,font,items.get(i).label(),getX()+6,y+4,width-10,active?RpgTheme.GOLD:RpgTheme.MUTED);}
+            for(int i=first;i<Math.min(items.size(),first+capacity());i++){int y=getY()+(i-first)*ROW;boolean active=i==selected;if(active){g.fill(getX(),y,getRight(),y+ROW-1,0xFF32302A);g.fill(getX(),y,getX()+2,y+ROW-1,RpgTheme.GOLD);}if(ROW<24)RpgTheme.text(g,font,items.get(i).label(),getX()+6,y+4,width-10,active?RpgTheme.GOLD:RpgTheme.MUTED);else{var lines=font.wrapLines(Text.literal(items.get(i).label()),width-10);for(int line=0;line<Math.min(2,lines.size());line++)g.drawText(font,lines.get(line),getX()+6,y+4+line*10,active?RpgTheme.GOLD:RpgTheme.MUTED,false);}}
         }
         if(isMouseOver(mx,my)){int i=first+(my-getY())/ROW;if(i>=0&&i<items.size())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(items.get(i).label()));}
     }

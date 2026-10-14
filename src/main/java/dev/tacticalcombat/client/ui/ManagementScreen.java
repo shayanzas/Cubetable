@@ -43,7 +43,7 @@ public abstract class ManagementScreen extends RpgScreen {
         actions.getOrDefault(choice.id(),()->{}).run();
     }
     protected void read(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> result) {
-        request(op,args,r->{if(r.code().equals("OK")) {fresh=true;message="Server state refreshed.";messageColor=RpgTheme.MUTED;result.accept(r.data());}else {fresh=false;if(!r.code().equals("RATE_LIMIT")){clearRows();if(list!=null)list.rows(List.of());}message=r.code().equals("RATE_LIMIT")?"The server is busy. Wait briefly and refresh; existing character data is retained.":r.code()+": "+r.message()+" Refresh before retrying.";}});
+        request(op,args,r->{if(r.code().equals("OK")) {fresh=true;message="Server state refreshed.";messageColor=RpgTheme.MUTED;try{result.accept(r.data());}catch(RuntimeException invalid){fresh=false;throw invalid;}}else {fresh=false;if(!r.code().equals("RATE_LIMIT")){clearRows();if(list!=null)list.rows(List.of());}message=r.code().equals("RATE_LIMIT")?"The server is busy. Wait briefly and refresh; existing character data is retained.":r.code()+": "+r.message()+" Refresh before retrying.";}});
     }
     protected void mutate(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> result) {
         if(busy || !fresh) {message="Refresh authoritative state before changing it.";return;}
@@ -51,7 +51,7 @@ public abstract class ManagementScreen extends RpgScreen {
         boolean creates=op==UiApiService.Operation.LIBRARY_CREATE || op==UiApiService.Operation.LIBRARY_DUPLICATE;
         if(creates) ambiguousCreation=true; // Retained even when resize/close invalidates the acknowledgment callback.
         fresh=false;clearRows();request(op,args,r->{
-            if(r.code().equals("OK")) {if(creates) ambiguousCreation=false;fresh=true;message="Server confirmed the change.";messageColor=RpgTheme.SUCCESS;result.accept(r.data());}
+            if(r.code().equals("OK")) {if(creates) ambiguousCreation=false;fresh=true;message="Server confirmed the change.";messageColor=RpgTheme.SUCCESS;try{result.accept(r.data());}catch(RuntimeException invalid){fresh=false;throw invalid;}}
             else {if(creates && !r.code().equals("TIMEOUT") && !r.code().equals("INVALID_REPLY")) ambiguousCreation=false;message=r.code()+": "+r.message()+" Refresh/reconcile before retrying; a timeout may have committed.";messageColor=RpgTheme.ERROR;}
         });
     }

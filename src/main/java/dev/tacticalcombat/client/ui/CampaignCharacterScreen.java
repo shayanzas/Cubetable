@@ -36,6 +36,8 @@ public final class CampaignCharacterScreen extends ManagementScreen {
         var sheet=character.getAsJsonObject("sheet");var origin=dev.tacticalcombat.uiapi.UiApiService.origin(sheet);if(origin!=null) {
             row("Source library character","Independent source; opening requires source ownership",text(character,"owner").equals(self()),"Only source owner can open their private library",()->{String library=text(origin,"library");client.setScreen(parent instanceof LibraryCharacterScreen source && source.recordId().equals(library)?parent:new LibraryCharacterScreen(this,library));});
         }
+        row("Rest requests","Request or review rest; recovery remains subject to existing policy",true,"",()->client.setScreen(new RestScreen(this,text(character,"campaign"))));
+        row("Recent activity","Permission-filtered campaign history",true,"",()->client.setScreen(new RecentActivityScreen(this,text(character,"campaign"))));
         info("Editing / control limits","Character Details owns supported edits. Physical binding and player control require separate DM actions. Live takeover and remote NPC delegation remain unavailable.");
     }
     private void approval(boolean approve) {long expected=revision(character);confirm(approve?"Approve character?":"Revoke approval?",approve?"Approve the current server character revision. This does not bind it or establish complete guided D&D build legality.":"Revoke approval and mark generic changes requested. There is no persistent written review conversation.",()->mutate(approve?CHARACTER_APPROVE:CHARACTER_REVOKE,args("character",id,"revision",expected),d->refresh()));}
