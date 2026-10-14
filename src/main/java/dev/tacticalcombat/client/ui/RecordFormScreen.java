@@ -52,7 +52,7 @@ public final class RecordFormScreen extends RpgScreen {
         button("Previous page","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;
         button("Reload","",x+(w-12)/3+6,bottom,(w-12)/3,20,this::reload).hint("Fetch the latest revision without discarding staged text. Review concurrent changes before saving.");
         button("Next page","",x+2*((w-12)/3+6),bottom,(w-12)/3,20,()->{if(!busy && (page+1)*n<fields.size()) {page++;init();}}).active=(page+1)*n<fields.size();
-        footer();footerAction(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE?"Save Draft":saveLabel,0,()->{continueAfterSave=false;save();});if(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE)footerAction("Save & Continue",1,()->{continueAfterSave=true;save();});
+        footer();footerAction(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE?"Save Draft":saveLabel,0,()->{continueAfterSave=false;save();});if(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE)footerAction("Next",1,()->{continueAfterSave=true;save();});
         reload();
     }
     private void reload() {
@@ -66,7 +66,7 @@ public final class RecordFormScreen extends RpgScreen {
         if(ambiguousCreation) {message="Campaign creation may have committed. Return to Campaigns and reconcile its list before starting another creation.";return;}
         if(busy || !fresh) {message="Reload and reconcile before saving. Unsaved text is retained.";return;}
         if(reviewRequired) {
-            String reviewed=snapshot.toString();client.setScreen(new RpgConfirmationScreen(this,"Reconcile concurrent edits?","The server revision changed. Compare the latest server sheet with your staged fields below. Confirm explicitly applies the staged section to this reviewed server version; Cancel preserves your text.\n\nStaged fields:\n"+values+"\n\nLatest server sheet:\n"+(snapshot.has("sheet")?snapshot.get("sheet").toString():snapshot.toString()),()->confirmedSnapshot=reviewed));return;
+            String reviewed=snapshot.toString();client.setScreen(new RpgConfirmationScreen(this,"Reconcile concurrent edits?","The server revision changed. Compare the latest server sheet with your staged fields below. Confirm explicitly applies the staged section to this reviewed server version; Cancel preserves your text.\n\nStaged fields:\n"+values+"\n\nLatest server sheet:\n"+(snapshot.has("sheet")?snapshot.get("sheet").toString():snapshot.toString()),()->confirmedSnapshot=reviewed).onCancel(()->{confirmedSnapshot=null;continueAfterSave=false;message="Save cancelled. Staged text retained.";}));return;
         }
         performSave();
     }

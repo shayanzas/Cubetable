@@ -41,7 +41,7 @@ public final class CreatorFlow {
         return recorded;
     }
     public static List<String> subraces(String race) {
-        return switch(race){case "Elf"->List.of("High Elf");case "Dwarf"->List.of("Hill Dwarf");case "Halfling"->List.of("Lightfoot Halfling");case "Gnome"->List.of("Rock Gnome");default->List.of();};
+        return dev.tacticalcombat.uiapi.GuidedRaceRules.SUBRACES.getOrDefault(race,List.of());
     }
     public static String recordedRace(String race,String subrace) {
         if(subrace.isEmpty())return race;

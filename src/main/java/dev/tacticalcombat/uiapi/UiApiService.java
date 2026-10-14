@@ -35,7 +35,7 @@ public final class UiApiService {
                 case LIBRARY_CREATE -> {
                     fields(a,"profile mode sheet");String profile=string(a,"profile");String sheet=a.get("sheet").isJsonNull()?SrdAuthoring.template().toString():string(a,"sheet");
                     if(a.get("sheet").isJsonNull()) require(profile.equals(RulesProfiles.SRD),"Supply a manual pack sheet for this profile");
-                    if(a.get("sheet").isJsonNull()&&string(a,"mode").equals("GUIDED")) {var guided=JsonParser.parseString(sheet).getAsJsonObject();var choices=SheetSections.raw(guided,"creation");choices.addProperty("abilityMethod","POINT_BUY");var combat=SrdAuthoring.data(guided);for(String key:CreationRules.ABILITIES)combat.getAsJsonObject("abilities").addProperty(key,8);var rows=new JsonArray();rows.add(combat);guided.getAsJsonObject("collections").add("srd_combat",rows);sheet=SheetSections.update(guided,"creation",choices).toString();}
+                    if(a.get("sheet").isJsonNull()&&string(a,"mode").equals("GUIDED")) {var guided=JsonParser.parseString(sheet).getAsJsonObject();var choices=SheetSections.raw(guided,"creation");choices.addProperty("abilityMethod","POINT_BUY");var combat=SrdAuthoring.data(guided);for(String key:CreationRules.ABILITIES)combat.getAsJsonObject("abilities").addProperty(key,8);var rows=new JsonArray();rows.add(combat);guided.getAsJsonObject("collections").add("srd_combat",rows);guided=SheetSections.update(guided,"creation",choices);GuidedRaceRules.enroll(guided);sheet=guided.toString();}
                     out=draft(library.create(p,profile,SheetSections.Mode.valueOf(string(a,"mode")),sheet),true);
                 }
                 case LIBRARY_GET -> {

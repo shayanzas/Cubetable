@@ -10,7 +10,8 @@ import net.minecraft.text.Text;
 public final class RpgButton extends PressableWidget {
     private final Runnable action;
     private String detail;
-    private boolean selected,round,wrapped;
+    private boolean selected,round,wrapped,primary;
+    public RpgButton primary(boolean value){primary=value;return this;}
     public RpgButton wrappedTitle(){wrapped=true;return this;}
     public RpgButton round(){round=true;return this;}
     public static boolean markerPixel(int x,int y,int size,boolean filled){int dx=2*x+1-size,dy=2*y+1-size,r=Math.max(4,size-6),d=dx*dx+dy*dy;return d<=r*r&&(filled||d>(r-2)*(r-2));}
@@ -28,8 +29,8 @@ public final class RpgButton extends PressableWidget {
     @Override public void onPress() {if(active) action.run();}
     @Override protected void renderWidget(DrawContext g,int mx,int my,float delta) {
         var font=MinecraftClient.getInstance().textRenderer;boolean hover=isHovered() || isFocused() || selected;
-        RpgTheme.panel(g,getX(),getY(),width,height,bodyColor(active,hover),selected);if(active&&isFocused()&&(!selected||round))g.drawBorder(getX()+2,getY()+2,width-4,height-4,round?RpgTheme.GOLD:RpgTheme.FOCUS);
-        int color=selected?RpgTheme.GOLD:active?RpgTheme.TEXT:disabledColor();
+        RpgTheme.panel(g,getX(),getY(),width,height,bodyColor(active,hover),selected||primary);if(active&&isFocused()&&(!selected||round))g.drawBorder(getX()+2,getY()+2,width-4,height-4,round?RpgTheme.GOLD:RpgTheme.FOCUS);
+        int color=selected||primary&&active?RpgTheme.GOLD:active?RpgTheme.TEXT:disabledColor();
         if(round){int size=Math.min(width,height),ox=getX()+(width-size)/2,oy=getY()+(height-size)/2;drawMarker(g,ox,oy,size,selected,selected?RpgTheme.GOLD:color);return;}
 
         if(wrapped&&height>=30){var lines=font.wrapLines(getMessage(),Math.max(1,width-8));int y=getY()+(height-lines.size()*10)/2;for(var line:lines){g.drawText(font,line,getX()+(width-font.getWidth(line))/2,y,color,false);y+=10;}return;}

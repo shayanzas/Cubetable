@@ -29,7 +29,7 @@ public final class CreatorWorkspace {
         var variants=CreatorFlow.subraces(base);
         if(!variants.isEmpty()){
             dy+=8;pane.label("Subrace",dx,dy,dw,RpgTheme.GOLD);dy+=17;
-            pane.control("subrace:base",new RpgButton(dx,dy,dw,19,"Base "+base+" — No Subrace","",()->{IdentityModel.subrace(state,"");rebuild.run();}).selected(sub.isEmpty()).hint("Keep the original base race. Base traits alone are an incomplete 2014 racial choice; choose a subrace or agree on a manual choice with your DM."));dy+=23;
+
             for(String variant:variants){pane.control("subrace:"+variant,new RpgButton(dx,dy,dw,19,variant,"",()->{IdentityModel.subrace(state,variant);rebuild.run();}).selected(sub.equals(variant)).hint(variant+" · 2014 SRD choice. Its extra traits appear below; no bonus is granted automatically."));dy+=23;}
         }
         if(!IdentityModel.subraceIntro(sub).isBlank()){String description=IdentityModel.subraceIntro(sub);pane.wrapped(description,dx,dy,dw,RpgTheme.TEXT);dy+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(description,dw,net.minecraft.text.Style.EMPTY).size()*12+5;}

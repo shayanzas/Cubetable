@@ -12,6 +12,9 @@ import org.lwjgl.glfw.GLFW;
 public final class CharacterCanvas extends ClickableWidget {
     private record Child(String key,ClickableWidget widget,int x,int y) {}
     private record Caption(java.util.function.Supplier<String> text,int x,int y,int width,int color,boolean bold) {}
+    private record DerivedValue(java.util.function.Supplier<String> text,int x,int y,int width,int height,float scale) {}
+    private final List<DerivedValue> derivedValues=new ArrayList<>();
+    public void derivedValue(java.util.function.Supplier<String> text,int x,int y,int width,int height,float scale){derivedValues.add(new DerivedValue(text,x,y,width,height,scale));total=Math.max(total,y+height);}
     private record Hint(int x,int y,int width,int height,String text) {}
     private final List<Hint> hints=new ArrayList<>();
     public void tooltip(int x,int y,int width,int height,String text){hints.add(new Hint(x,y,width,height,text));}
@@ -57,6 +60,7 @@ public final class CharacterCanvas extends ClickableWidget {
             for(var icon:glyphs)CreatorIcons.draw(g,icon.key(),getX()+icon.x(),getY()+icon.y()-offset,icon.size());
             for(var marker:markers)RpgButton.drawMarker(g,getX()+marker.x(),getY()+marker.y()-offset,marker.size(),marker.filled(),marker.filled()?RpgTheme.GOLD:RpgTheme.MUTED);
             for(var c:captions){int y=getY()+c.y()-offset;if(y+12>=getY()&&y<getBottom()){if(c.bold()){String label=font.getTextHandler().trimToWidth(c.text().get(),c.width(),net.minecraft.text.Style.EMPTY.withBold(true));g.drawText(font,Text.literal(label).formatted(net.minecraft.util.Formatting.BOLD),getX()+c.x(),y,c.color(),false);}else RpgTheme.text(g,font,c.text().get(),getX()+c.x(),y,c.width(),c.color());if(isMouseOver(mx,my)&&my>=y&&my<y+12&&mx>=getX()+c.x()&&mx<getX()+c.x()+c.width())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(c.text().get()));}}
+            for(var value:derivedValues){String label=value.text().get();var text=Text.literal(label).formatted(net.minecraft.util.Formatting.BOLD);float scale=Math.min(value.scale(),Math.min((float)(value.width()-4)/Math.max(1,font.getWidth(text)),(float)(value.height()-2)/9));g.getMatrices().push();try{g.getMatrices().translate(getX()+value.x()+(value.width()-font.getWidth(text)*scale)/2f,getY()+value.y()-offset+(value.height()-9*scale)/2f,0);g.getMatrices().scale(scale,scale,1);g.drawText(font,text,0,0,RpgTheme.GOLD,false);}finally{g.getMatrices().pop();}}
             for(var hint:hints)if(isMouseOver(mx,my)&&new UiLayout.Rect(getX()+hint.x(),getY()+hint.y()-offset,hint.width(),hint.height()).contains(mx,my))MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(hint.text()));
             for(var child:controls){var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);w.visible=w.getBottom()>getY()&&w.getY()<getBottom();if(w.visible)w.render(g,isMouseOver(mx,my)?mx:-1000,isMouseOver(mx,my)?my:-1000,delta);}
         }
