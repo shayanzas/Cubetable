@@ -8,7 +8,7 @@ Implementation commits:
 - `d1409a5` — creator navigation/focus, six ability rows, proficiency controls, subrace descriptions and corrected class artwork.
 - `acaa232` — compact shared sheet/review, inline currency, deterministic catalog actions and authenticated UI GameTests.
 
-The report follows in a documentation commit. The final delivery message identifies the complete branch tip and confirms its remote hash after pushing.
+Documentation commit: `341575f`. Commit `fcbd067` also fixes review validation becoming stale after correcting choices: review takes errors from the current saved snapshot, refreshes after a save when needed, and routes missing-class errors directly to Class. The final delivery message identifies the complete branch tip including updated artifact metadata and confirms its remote hash after pushing.
 
 ## Implemented behavior and evidence
 
@@ -30,13 +30,13 @@ The report follows in a documentation commit. The final delivery message identif
 ## Tests and artifact
 
 - Java **21.0.12.1**; supported Gradle wrapper, Minecraft **1.21.1**, Fabric Loader **0.16.9**, Fabric API **0.116.1+1.21.1**. Dependency declarations and lock/toolchain settings were not downgraded.
-- Full `build`: **4,473 assertions across 24 foundation suites**, **0 failures**. The two C suites contributed **307 server/rules checks** and **53 presentation/data checks**. The Gradle `test` task is not counted as a separate Java test suite.
+- Full `build`: **4,476 assertions across 24 foundation suites**, **0 failures**. The two C suites contributed **307 server/rules checks** and **56 presentation/data checks**. The Gradle `test` task is not counted as a separate Java test suite.
 - `runGametest`: **111 required tests, 111 passed, 0 failures/errors**, confirmed from `build/gametest-results.xml`. Two new cases exercise the authenticated class-choice and Inspiration gateways. The existing active-intent bookkeeping test now uses death-save bookkeeping; DM-only Inspiration awards have their own test.
-- Final package build reran the full foundation suites after the last client refinements. The final GameTest run used the same server rules/authority implementation; subsequent changes were client focus/render/layout refinements and additional assertion coverage.
+- Final `build runGametest` passed after the last review-validation correction; reported counts and the JAR come from that final source.
 - Release archive integrity checked; no development GameTest classes are packaged.
-- Artifact: `build/libs/tactical-combat-0.1.0.jar` (**9,704,275 bytes**).
-- SHA-256: `e7a02ffe37ea12816a9046bb5a12766fd4e539ec93bdaeaf8800f80cb4223423`.
-- Logs: `/tmp/checkpoint-c-final-validation.log` (build + GameTests), `/tmp/checkpoint-c-release-build.log` (final package/foundation checks).
+- Artifact: `build/libs/tactical-combat-0.1.0.jar` (**9,704,518 bytes**).
+- SHA-256: `63cc81794c749ee6ddb81b0150055169cf6c51d30d8bd199e9f7979d83b5e5d0`.
+- Logs: `/tmp/checkpoint-c-review-final-validation.log` (final build, foundation checks and GameTests).
 
 The original approved `icons.png` and `class-extra.png` hashes are unchanged. **43 existing sprites remain unchanged**. Ranger is rebuilt as a conventional curved bow, straight string and horizontal arrow; Barbarian, Bard, Cleric and Monk have cleaned source motifs without neighboring color debris. Every sprite retains explicit source bounds, transparent gutters, aspect fitting and nearest-neighbor texture metadata. Source artwork was inspected; **its actual Minecraft size, sharpness and apparent balance are not visually accepted yet**. No replacement race art was added.
 
