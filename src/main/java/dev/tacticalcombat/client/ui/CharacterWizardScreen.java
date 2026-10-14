@@ -28,7 +28,7 @@ public final class CharacterWizardScreen extends RpgScreen {
     public CharacterWizardScreen(Screen parent,JsonObject snapshot){super("Create Character",parent);character=text(snapshot,"id");state=new CreatorDraftState(DraftReplies.snapshot(snapshot,character));}
     @Override protected int maximumWidth(){return 980;}
     @Override protected void init(){remember();super.init();layout=CharacterShell.layout(frame);pane=null;sheet=null;busy=false;fresh=false;
-        rail=addDrawableChild(new SectionRail(layout.rail(),Arrays.stream(CreatorFlow.Step.values()).map(s->new SectionRail.Item(s.name(),s.title)).toList(),s->go(CreatorFlow.Step.valueOf(s))));
+        rail=addDrawableChild(new SectionRail(layout.rail(),Arrays.stream(CreatorFlow.Step.values()).map(s->new SectionRail.Item(s.name(),s.title)).toList(),s->go(CreatorFlow.Step.valueOf(s)),28));
         footer();int y=frame.y()+frame.height()-30,w=(frame.width()-108)/3;
         saveButton=button("Save","",frame.x()+84,y,w,20,()->{if(step==CreatorFlow.Step.REVIEW&&validation!=null&&!array(validation,"errors").isEmpty())go(CreatorFlow.errorStep(text(array(validation,"errors").get(0).getAsJsonObject(),"section")));else saveCurrent(this::build);});
         nextButton=button(step==CreatorFlow.Step.REVIEW?"Finish":"Continue","",frame.x()+90+w,y,w,20,()->{if(step==CreatorFlow.Step.REVIEW)finish();else go(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]);});
@@ -38,16 +38,17 @@ public final class CharacterWizardScreen extends RpgScreen {
     private void build(){remember();if(pane!=null)remove(pane);if(sheet!=null)remove(sheet);sheet=null;displayed=step;rail.selected(step.name());if(saveButton!=null)saveButton.setMessage(net.minecraft.text.Text.literal(step==CreatorFlow.Step.REVIEW&&validation!=null&&!array(validation,"errors").isEmpty()?"Fix issue":"Save"));if(nextButton!=null)nextButton.setMessage(net.minecraft.text.Text.literal(step==CreatorFlow.Step.REVIEW?"Finish":"Continue"));pane=addDrawableChild(new CharacterCanvas(layout.content()));
         switch(step){
             case IDENTITY->CreatorWorkspace.identity(pane,textRenderer,state,this::inspect,this::build,()->custom("species","Race / subrace"));
-            case CLASS->CreatorWorkspace.clazz(pane,state,this::inspect,this::build,()->custom("characterClass","Class"));
+            case CLASS->CreatorWorkspace.clazz(pane,state,this::inspect,this::build,()->custom("characterClass","Class"),()->go(CreatorFlow.Step.PROFICIENCIES));
             case ABILITIES->{if(text(state.snapshot(),"profile").equals("srd_5_1")){AbilityWorkspace.build(pane,textRenderer,state,this::build,busy);pane.liveLabel(()->AbilityWorkspace.status(state),6,21,pane.getWidth()-12,RpgTheme.MUTED);}else pane.label("Imported profile: preserve its existing ability representation.",6,6,pane.getWidth()-12,RpgTheme.MUTED);}
             case REVIEW->CharacterSheetUi.build(pane,state.snapshot(),true,null,validation,null);
-            default->{var sections=CreatorSheet.sections(state.snapshot(),validation);remove(pane);pane=null;sheet=addDrawableChild(new CreatorSheetView(layout.content(),sections));sheet.position(positions.getOrDefault(step,0));}
+            default->pane.label("Loading "+step.title+" workspace…",6,6,pane.getWidth()-12,RpgTheme.MUTED);
         }
         if(pane!=null){pane.cursors(cursors.getOrDefault(step,Map.of()));pane.position(positions.getOrDefault(step,0));String key=focus.getOrDefault(step,"");if(!key.isEmpty()){pane.focus(key);setInitialFocus(pane);}}
     }
     private void inspect(FeatureReference.Entry e){client.setScreen(new FeatureInspectScreen(this,e));}
     private void custom(String field,String title){saveCurrent(()->client.setScreen(WizardEditors.customIdentity(this,state.snapshot(),field,title)));}
-    private void reload(){if(busy)return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){state.accept(DraftReplies.snapshot(r.data(),character),false);fresh=true;message=state.dirty()?"Unsaved edits retained. Save to confirm.":"Saved character loaded.";build();}else{fresh=false;message=r.message()+" Edits retained; refresh before saving.";}});}
+    private void reload(){if(busy)return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){state.accept(DraftReplies.snapshot(r.data(),character),false);fresh=true;if(resumed==null&&step!=CreatorFlow.Step.IDENTITY&&step!=CreatorFlow.Step.CLASS&&step!=CreatorFlow.Step.ABILITIES&&step!=CreatorFlow.Step.REVIEW)resumed=()->go(step);message=state.dirty()?"Unsaved edits retained. Save to confirm.":"Saved character loaded.";build();}else{fresh=false;message=r.message()+" Edits retained; refresh before saving.";}});}
+    public void navigateFromChild(CreatorFlow.Step next){step=next;resumed=()->go(next);client.setScreen(this);}
     private void go(CreatorFlow.Step next){saveCurrent(()->{remember();step=next;build();Screen editor=switch(next){case PROFICIENCIES->new ProficiencyPickerScreen(this,state.snapshot());case EQUIPMENT->new InventoryWorkspace(this,state.snapshot(),new DashboardSource(true,character));case FEATURES->new WizardRecordsScreen(this,state.snapshot(),"features");case SPELLS->new WizardRecordsScreen(this,state.snapshot(),"spellbook");case DETAILS->new CharacterDetailsScreen(this,state.snapshot());default->null;};if(editor!=null)client.setScreen(editor);});}
     private void saveCurrent(Runnable after){
         if(busy||!fresh){message="Refresh the saved character before saving.";return;}
@@ -56,7 +57,8 @@ public final class CharacterWizardScreen extends RpgScreen {
         if(!state.fields.get("name").equals(CreatorDraftState.savedField(snapshot,"name"))){save("basics",args("name",state.fields.get("name")),()->saveCurrent(after));return;}
         if(List.of("species","age","height","alignment").stream().anyMatch(k->!state.fields.get(k).equals(CreatorDraftState.savedField(snapshot,k)))){save("identity",state.identityData(List.of("species","age","height","alignment")),()->saveCurrent(after));return;}
         if(state.classDirty()){save("identity",state.identityData(List.of("characterClass")),()->saveCurrent(after));return;}
-        if(state.scoresDirty()){try{var data=SrdAuthoring.data(snapshot.getAsJsonObject("sheet"));var scores=new JsonObject();state.scoreValues().forEach(scores::addProperty);data.add("abilities",scores);save("combat",data,()->saveCurrent(after));}catch(RuntimeException invalid){message=invalid.getMessage();messageColor=RpgTheme.ERROR;}return;}
+        if(state.scoresDirty()){try{var scores=new JsonObject();state.scoreValues().forEach(scores::addProperty);save("abilityAllocation",args("abilities",scores,"method",state.method.name()),()->saveCurrent(after));}catch(RuntimeException invalid){message=invalid.getMessage();messageColor=RpgTheme.ERROR;}return;}
+        if(text(snapshot,"profile").equals("srd_5_1")&&!dev.tacticalcombat.uiapi.CreationRules.enrolled(snapshot.getAsJsonObject("sheet"))){save("creation",dev.tacticalcombat.uiapi.SheetSections.raw(snapshot.getAsJsonObject("sheet"),"creation"),()->saveCurrent(after));return;}
         after.run();
     }
     private void save(String section,JsonObject data,Runnable after){request(LIBRARY_UPDATE,args("character",character,"revision",revision(state.snapshot()),"section",section,"data",data),r->{if(r.code().equals("OK")){state.accept(DraftReplies.snapshot(r.data(),character),true);validation=null;message="Saved.";build();after.run();}else{fresh=false;message=r.message()+" Edits retained. Refresh and review before retrying.";}});}

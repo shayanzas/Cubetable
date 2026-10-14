@@ -32,7 +32,7 @@ public final class CreatorChoiceGrid extends ClickableWidget {
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
             for(int i=start;i<Math.min(entries.size(),start+columns*visibleRows());i++){var e=entries.get(i);int x=getX()+i%columns*w,y=getY()+(i-start)/columns*rowHeight();boolean highlight=e.id().equals(selected)||isFocused()&&i==focus;
                 RpgTheme.panel(g,x,y,w-3,rowHeight()-2,highlight?RpgTheme.HOVER:RpgTheme.PANEL,highlight);
-                if(!e.icon().isEmpty()&&rowHeight()>=35)CreatorIcons.draw(g,e.icon(),x+(w-3-iconSize)/2,y+4,iconSize);
+                if(!e.icon().isEmpty()&&rowHeight()>=35){int drawSize=Math.min(iconSize,Math.max(8,w-9));CreatorIcons.draw(g,e.icon(),x+(w-3-drawSize)/2,y+4+(iconSize-drawSize)/2,drawSize);}
                 String title=font.trimToWidth(e.name(),w-9);g.drawText(font,title,x+(w-3-font.getWidth(title))/2,y+(e.icon().isEmpty()?(rowHeight()-9)/2:iconSize+9),highlight?RpgTheme.GOLD:RpgTheme.TEXT,false);
             }
         }

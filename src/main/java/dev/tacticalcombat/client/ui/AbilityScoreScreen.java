@@ -1,53 +1,24 @@
 package dev.tacticalcombat.client.ui;
 
 import com.google.gson.*;
-import dev.tacticalcombat.rules.srd.*;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.TextFieldWidget;
-import net.minecraft.text.Text;
 import java.util.*;
 import static dev.tacticalcombat.client.ui.ManagementState.*;
 import static dev.tacticalcombat.uiapi.UiApiService.Operation.*;
 
+/** Dashboard entry uses the same allocation workspace and atomic server contract as the creator. */
 public final class AbilityScoreScreen extends RpgScreen {
-    private static final List<String> KEYS=List.of("str","dex","con","int","wis","cha");
     private final String character;
-    private JsonObject snapshot,baseline;
-    private final Map<String,String> values=new LinkedHashMap<>();
-    private WizardModel.ScoreMethod method=WizardModel.ScoreMethod.STANDARD_ARRAY;
-    private boolean dirty,fresh,saving,reviewRequired;
-    private String confirmedSnapshot;
-    private final Map<String,TextFieldWidget> inputs=new HashMap<>();
-    private String focusedKey="";private int focusedCursor;
-    public AbilityScoreScreen(Screen parent,JsonObject draft) {super("Ability scores · SRD 5.1 (2014)",parent);character=text(draft,"id");baseline=draft.deepCopy();var data=SrdAuthoring.data(draft.getAsJsonObject("sheet"));for(String k:KEYS) values.put(k,data.getAsJsonObject("abilities").get(k).getAsString());}
-    @Override protected void init() {
-        for(var e:inputs.entrySet())if(e.getValue().isFocused()){focusedKey=e.getKey();focusedCursor=e.getValue().getCursor();}inputs.clear();
-        super.init();clearChildren();busy=false;fresh=false;int x=frame.x()+12,w=frame.width()-24;
-        int methodW=(w-18)/4;WizardModel.ScoreMethod[] methods=WizardModel.ScoreMethod.values();for(int i=0;i<4;i++) {var m=methods[i];var b=button(switch(m){case STANDARD_ARRAY->"Standard";case POINT_BUY->"Point Buy";case MANUAL->"Manual";case EXTERNAL_ROLLS->"External rolls";},"",x+i*(methodW+6),frame.y()+36,methodW,20,()->{method=m;if(m==WizardModel.ScoreMethod.STANDARD_ARRAY) applyStandard();dirty=true;updateMessage();init();});b.selected(method==m);b.hint(m==WizardModel.ScoreMethod.EXTERNAL_ROLLS?"Enter externally rolled scores. Server-verified ability generation is not implemented.":m==WizardModel.ScoreMethod.STANDARD_ARRAY?"Assign 15, 14, 13, 12, 10 and 8 exactly once.":m==WizardModel.ScoreMethod.POINT_BUY?"27 points; scores must be 8–15.":"Enter effective scores, within server bounds.");}
-        int columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+(frame.height()<200?71:76),stride=frame.height()<200?33:46;
-        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*stride;var input=addDrawableChild(new TextFieldWidget(textRenderer,fx+20,fy,fieldW-40,20,Text.literal(key)));input.setMaxLength(2);input.setText(values.get(key));input.setChangedListener(v->{values.put(key,v);dirty=true;updateMessage();});inputs.put(key,input);if(key.equals(focusedKey)){setInitialFocus(input);input.setCursor(focusedCursor,false);}
-            button("−","",fx,fy,18,20,()->adjust(key,-1,input));button("+","",fx+fieldW-18,fy,18,20,()->adjust(key,1,input));}
-        footer();button("Reload","",frame.x()+frame.width()-202,frame.y()+frame.height()-30,76,20,this::reload);button("Save scores","",frame.x()+frame.width()-120,frame.y()+frame.height()-30,108,20,this::save);
-        reload();updateMessage();
-    }
-    private void adjust(String key,int delta,TextFieldWidget input){try{int current=Integer.parseInt(values.get(key));int min=method==WizardModel.ScoreMethod.POINT_BUY?8:1,max=method==WizardModel.ScoreMethod.POINT_BUY?15:30;input.setText(Integer.toString(Math.clamp(current+delta,min,max)));}catch(NumberFormatException ignored){message="Enter a whole score first.";}}
-    private void applyStandard() {for(int i=0;i<KEYS.size();i++) values.put(KEYS.get(i),Integer.toString(WizardModel.STANDARD_ARRAY.get(i)));}
-    private Map<String,Integer> scores() {var scores=new LinkedHashMap<String,Integer>();for(String k:KEYS) try {scores.put(k,Integer.parseInt(values.get(k)));}catch(RuntimeException e) {throw new IllegalArgumentException("All six scores must be whole numbers");}return scores;}
-    private void updateMessage() {try {var s=scores();WizardModel.validateScores(method,s);message=method==WizardModel.ScoreMethod.POINT_BUY?WizardModel.pointRemaining(s)+" of 27 points remain.":method==WizardModel.ScoreMethod.EXTERNAL_ROLLS?"Enter values rolled outside this wizard. No client roll is trusted.":"Valid "+method.name().toLowerCase(Locale.ROOT).replace('_',' ')+" values.";messageColor=RpgTheme.SUCCESS;}catch(RuntimeException e) {message=e.getMessage();messageColor=RpgTheme.ERROR;}}
-    private void reload() {if(busy) return;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")) {snapshot=r.data();fresh=true;reviewRequired=ManagementState.needsEditReview(baseline,snapshot);updateMessage();if(reviewRequired) message+=" Server revision changed; Save requires explicit comparison.";}else {fresh=false;message=r.code()+": "+r.message()+" Entered scores retained.";}});}
-    private void save() {
-        if(saving || busy || !fresh) {message="Reload authoritative state before saving; entered scores are retained.";return;}Map<String,Integer> scores;try {scores=scores();WizardModel.validateScores(method,scores);}catch(RuntimeException e){message=e.getMessage();messageColor=RpgTheme.ERROR;return;}
-        if(reviewRequired) {String reviewed=snapshot.toString();client.setScreen(new RpgConfirmationScreen(this,"Reconcile score edit?","The library draft changed since this editor opened. Confirm applies these six effective scores to the newest server revision. Other combat fields remain as currently stored.\n\n"+scores,()->confirmedSnapshot=reviewed));return;}
-        var next=snapshot.getAsJsonObject("sheet").deepCopy();var abilities=SrdAuthoring.data(next).getAsJsonObject("abilities");scores.forEach(abilities::addProperty);try {SrdCharacterCodec.parseSheet(next.toString());}catch(RuntimeException invalid){message=invalid.getMessage();return;}
-        saving=true;request(LIBRARY_UPDATE,args("character",character,"revision",revision(snapshot),"section","combat","data",SrdAuthoring.data(next)),r->{saving=false;if(r.code().equals("OK")){dirty=false;client.setScreen(parent);}else {fresh=false;message=r.code()+": "+r.message()+" Scores retained; reload and reconcile.";}});
-    }
-    @Override public void tick(){super.tick();if(confirmedSnapshot!=null&&!busy){String reviewed=confirmedSnapshot;confirmedSnapshot=null;if(fresh&&snapshot.toString().equals(reviewed)){baseline=snapshot.deepCopy();reviewRequired=false;save();}else{message="Server changed again or refresh failed. Compare again before saving.";reviewRequired=true;}}}
-    @Override protected void content(DrawContext g,int mx,int my,float delta) {
-        int x=frame.x()+12,w=frame.width()-24,columns=3,fieldW=(w-(columns-1)*6)/columns,top=frame.y()+(frame.height()<200?59:64),stride=frame.height()<200?33:46;
-        for(int i=0;i<KEYS.size();i++) {String key=KEYS.get(i);int fx=x+(i%columns)*(fieldW+6),fy=top+(i/columns)*stride;int score;try{score=Integer.parseInt(values.get(key));}catch(Exception e){score=10;}RpgTheme.panel(g,fx-2,fy-3,fieldW+4,stride-3,RpgTheme.PANEL,false);CreatorIcons.draw(g,key,fx,fy,12);RpgTheme.text(g,textRenderer,key.toUpperCase(Locale.ROOT)+" "+String.format("%+d",WizardModel.modifier(score)),fx+16,fy,fieldW-16,RpgTheme.GOLD);}
-        paragraphs(g,"These are effective scores. Race bonuses are not applied for you. External rolls are unverified; features and equipment do not rewrite these scores.",x,top+(KEYS.size()+columns-1)/columns*stride+6,w,Math.max(0,frame.height()-40-(64+(KEYS.size()+columns-1)/columns*stride+6)));
-    }
-    @Override protected int statusWidth(){return frame.width()-300;}
-    @Override public void close(){if(saving){message="Save pending; wait for acknowledgment.";return;}if(dirty) client.setScreen(new RpgConfirmationScreen(this,"Discard score edits?","Entered values have not been persisted.",()->client.setScreen(parent)));else super.close();}
+    private final CreatorDraftState state;
+    private CharacterCanvas pane;
+    private boolean fresh;
+    private Runnable resumed;
+    public AbilityScoreScreen(Screen parent,JsonObject draft){super("Ability Points",parent);character=text(draft,"id");state=new CreatorDraftState(DraftReplies.snapshot(draft,character));}
+    @Override protected int maximumWidth(){return 980;}
+    @Override protected void init(){super.init();clearChildren();pane=null;busy=false;fresh=false;footer();button("Refresh","",frame.x()+frame.width()-204,frame.y()+frame.height()-30,90,20,this::reload);button("Save Scores","",frame.x()+frame.width()-108,frame.y()+frame.height()-30,96,20,this::save);build();reload();}
+    private void build(){int offset=pane==null?0:pane.position();String focus=pane==null?"":pane.focusedKey();var cursors=pane==null?Map.<String,Integer>of():pane.cursors();if(pane!=null)remove(pane);pane=addDrawableChild(new CharacterCanvas(new UiLayout.Rect(frame.x()+12,frame.y()+36,frame.width()-24,Math.max(24,frame.height()-74))));AbilityWorkspace.build(pane,textRenderer,state,this::build,busy);pane.liveLabel(()->AbilityWorkspace.status(state),6,21,pane.getWidth()-12,RpgTheme.MUTED);pane.position(offset);pane.cursors(cursors);if(!focus.isEmpty()){pane.focus(focus);setInitialFocus(pane);}}
+    private void reload(){if(busy)return;fresh=false;request(LIBRARY_GET,args("character",character),r->{if(r.code().equals("OK")){state.accept(DraftReplies.snapshot(r.data(),character),false);fresh=true;build();message=state.scoresDirty()?"Unsaved scores retained.":"Saved scores and method loaded.";}else message=r.message()+" Entered scores retained.";});}
+    private void save(){if(!fresh||busy)return;if(state.reviewRequired()){long expected=revision(state.snapshot());client.setScreen(new RpgConfirmationScreen(this,"Review changed scores?","Server data changed. Keep these scores after reviewing the latest character?",()->{if(revision(state.snapshot())==expected){state.reviewed();resumed=this::save;}}));return;}try{var scores=new JsonObject();state.scoreValues().forEach(scores::addProperty);fresh=false;request(LIBRARY_UPDATE,args("character",character,"revision",revision(state.snapshot()),"section","abilityAllocation","data",args("abilities",scores,"method",state.method.name())),r->{if(r.code().equals("OK")){state.accept(DraftReplies.snapshot(r.data(),character),true);fresh=true;if(state.scoresDirty()){message="Sent scores saved; newer entries remain unsaved.";build();}else client.setScreen(parent);}else message=r.message()+" Scores retained; refresh before retrying.";});}catch(RuntimeException invalid){message=invalid.getMessage();messageColor=RpgTheme.ERROR;}}
+    @Override public void tick(){super.tick();if(resumed!=null&&!busy&&fresh){var next=resumed;resumed=null;next.run();}}
+    @Override public void close(){if(busy)return;if(state.scoresDirty())client.setScreen(new RpgConfirmationScreen(this,"Discard score edits?","Saved scores remain unchanged.",()->client.setScreen(parent)));else super.close();}
 }

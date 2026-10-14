@@ -1,41 +1,41 @@
 {
   "schema": 1,
-  "method": "original RGBA pixels; alpha-component bounds; 2px transparent gutter",
+  "method": "43 original motifs; four cleaned class motifs and rebuilt Ranger; lossless RGBA isolation; 2px transparent gutter",
   "sprites": {
     "barbarian": {
-      "width": 164,
-      "height": 210,
-      "pixels": 19784,
-      "source": "icons.png",
+      "width": 631,
+      "height": 622,
+      "pixels": 187172,
+      "source": "class-corrections-c.png",
       "sourceBounds": [
         0,
-        31,
-        160,
-        206
+        9,
+        627,
+        618
       ]
     },
     "bard": {
-      "width": 168,
-      "height": 224,
-      "pixels": 19659,
-      "source": "icons.png",
+      "width": 611,
+      "height": 631,
+      "pixels": 193738,
+      "source": "class-corrections-c.png",
       "sourceBounds": [
-        144,
-        17,
-        164,
-        220
+        627,
+        0,
+        607,
+        627
       ]
     },
     "cleric": {
-      "width": 155,
-      "height": 229,
-      "pixels": 17338,
-      "source": "icons.png",
+      "width": 631,
+      "height": 631,
+      "pixels": 149977,
+      "source": "class-corrections-c.png",
       "sourceBounds": [
-        278,
         0,
-        151,
-        225
+        627,
+        627,
+        627
       ]
     },
     "druid": {
@@ -63,27 +63,27 @@
       ]
     },
     "monk": {
-      "width": 158,
-      "height": 224,
-      "pixels": 22613,
-      "source": "icons.png",
+      "width": 628,
+      "height": 631,
+      "pixels": 194722,
+      "source": "class-corrections-c.png",
       "sourceBounds": [
-        713,
-        17,
-        154,
-        220
+        627,
+        627,
+        624,
+        627
       ]
     },
     "ranger": {
-      "width": 176,
-      "height": 226,
-      "pixels": 23085,
-      "source": "icons.png",
+      "width": 1220,
+      "height": 1241,
+      "pixels": 433058,
+      "source": "ranger-c.png",
       "sourceBounds": [
-        858,
+        0,
         17,
-        172,
-        222
+        1216,
+        1237
       ]
     },
     "rogue": {

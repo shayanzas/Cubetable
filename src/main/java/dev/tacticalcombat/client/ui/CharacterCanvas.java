@@ -37,7 +37,7 @@ public final class CharacterCanvas extends ClickableWidget {
     public Map<String,Integer> cursors(){var result=new HashMap<String,Integer>();for(var c:controls)if(c.widget() instanceof net.minecraft.client.gui.widget.TextFieldWidget f)result.put(c.key(),f.getCursor());return result;}
     public void cursors(Map<String,Integer> saved){for(var c:controls)if(c.widget() instanceof net.minecraft.client.gui.widget.TextFieldWidget f&&saved.containsKey(c.key()))f.setCursor(Math.min(saved.get(c.key()),f.getText().length()),false);}
     public int position(){return offset;}
-    public void position(int value){offset=Math.clamp(value,0,Math.max(0,total-height));}
+    public void position(int value){int next=Math.clamp(value,0,Math.max(0,total-height));if(next!=offset)dismissPopup();offset=next;}
     public String focusedKey(){return focused==null?"":focused.key();}
     public void focus(String key){for(var child:controls)if(child.key().equals(key)){focusChild(child);return;}}
     private void focusChild(Child child){if(focused!=null&&focused!=child)focused.widget().setFocused(false);focused=child;if(child!=null){child.widget().setFocused(true);if(child.y()<offset)position(child.y());else if(child.y()+child.widget().getHeight()>offset+height)position(child.y()+child.widget().getHeight()-height);}}

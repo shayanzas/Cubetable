@@ -13,19 +13,21 @@ public final class CreatorDraftState {
     public final Map<String,String> fields=new LinkedHashMap<>(),scores=new LinkedHashMap<>();
     public WizardModel.ScoreMethod method=WizardModel.ScoreMethod.MANUAL;
     private JsonObject snapshot,baseline;
-    public CreatorDraftState(JsonObject initial){snapshot=initial.deepCopy();baseline=initial.deepCopy();for(String f:FIELDS)fields.put(f,savedField(initial,f));for(String k:ABILITIES)scores.put(k,savedScore(initial,k));}
+    private WizardModel.ScoreMethod savedMethod;
+    public CreatorDraftState(JsonObject initial){method=WizardModel.ScoreMethod.valueOf(SheetSections.read(initial.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=method;snapshot=initial.deepCopy();baseline=initial.deepCopy();for(String f:FIELDS)fields.put(f,savedField(initial,f));for(String k:ABILITIES)scores.put(k,savedScore(initial,k));}
     public JsonObject snapshot(){return snapshot.deepCopy();}
     public void accept(JsonObject next,boolean ownAcknowledgement){
         for(String f:FIELDS)if(fields.get(f).equals(savedField(snapshot,f)))fields.put(f,savedField(next,f));
         for(String k:ABILITIES)if(scores.get(k).equals(savedScore(snapshot,k)))scores.put(k,savedScore(next,k));
+        if(method==savedMethod)method=WizardModel.ScoreMethod.valueOf(SheetSections.read(next.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=WizardModel.ScoreMethod.valueOf(SheetSections.read(next.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());
         snapshot=next.deepCopy();if(ownAcknowledgement||!dirty())baseline=snapshot.deepCopy();
     }
     public boolean reviewRequired(){return dirty()&&ManagementState.needsEditReview(baseline,snapshot);}
     public void reviewed(){baseline=snapshot.deepCopy();}
-    public boolean dirty(){return FIELDS.stream().anyMatch(f->!fields.get(f).equals(savedField(snapshot,f)))||ABILITIES.stream().anyMatch(k->!scores.get(k).equals(savedScore(snapshot,k)));}
+    public boolean dirty(){return method!=savedMethod||FIELDS.stream().anyMatch(f->!fields.get(f).equals(savedField(snapshot,f)))||ABILITIES.stream().anyMatch(k->!scores.get(k).equals(savedScore(snapshot,k)));}
     public boolean identityDirty(){return List.of("name","species","age","height","alignment").stream().anyMatch(f->!fields.get(f).equals(savedField(snapshot,f)));}
     public boolean classDirty(){return !fields.get("characterClass").equals(savedField(snapshot,"characterClass"));}
-    public boolean scoresDirty(){return ABILITIES.stream().anyMatch(k->!scores.get(k).equals(savedScore(snapshot,k)));}
+    public boolean scoresDirty(){return method!=savedMethod||ABILITIES.stream().anyMatch(k->!scores.get(k).equals(savedScore(snapshot,k)));}
     public JsonObject identityData(List<String> keys){var data=SheetSections.read(snapshot.getAsJsonObject("sheet"),"identity");for(String f:keys)data.addProperty(f,fields.get(f));return data;}
     public Map<String,Integer> scoreValues(){var result=new LinkedHashMap<String,Integer>();try{for(String k:ABILITIES)result.put(k,Integer.parseInt(scores.get(k)));}catch(RuntimeException invalid){throw new IllegalArgumentException("Enter six whole scores.");}WizardModel.validateScores(method,result);return result;}
     public void standardArray(){method=WizardModel.ScoreMethod.STANDARD_ARRAY;for(int i=0;i<ABILITIES.size();i++)scores.put(ABILITIES.get(i),WizardModel.STANDARD_ARRAY.get(i).toString());}

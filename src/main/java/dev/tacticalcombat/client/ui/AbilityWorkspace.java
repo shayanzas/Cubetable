@@ -2,36 +2,23 @@ package dev.tacticalcombat.client.ui;
 
 import java.util.*;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
-/** Same-tab score controls; unchanged effective-score/server contract. */
+/** Six allocation rows; persisted method and score constraints are also enforced by the server. */
 public final class AbilityWorkspace {
     public static final Map<String,String> NAMES=Map.of("str","Strength","dex","Dexterity","con","Constitution","int","Intelligence","wis","Wisdom","cha","Charisma");
     public record Layout(int columns,int stride,int top) {}
-    public static Layout layout(int width){return new Layout(width>=440?3:width>=180?2:1,34,32);}
+    public static Layout layout(int width){return new Layout(1,32,40);}
+    public static Layout layout(int width,int height){return new Layout(1,width<220?42:Math.clamp((height-88)/6,28,46),40);}
     private AbilityWorkspace() {}
-    public static void build(CharacterCanvas pane,TextRenderer font,CreatorDraftState state,Runnable rebuild,boolean pending) {
-        int w=pane.getWidth()-12,x=6,bw=(w-8)/3;
-        String[] labels={"Standard array","Point buy","Manual / external"};
-        WizardModel.ScoreMethod[] modes={WizardModel.ScoreMethod.STANDARD_ARRAY,WizardModel.ScoreMethod.POINT_BUY,WizardModel.ScoreMethod.MANUAL};
-        for(int i=0;i<3;i++){var mode=modes[i];var b=new RpgButton(x+i*(bw+4),2,bw,18,labels[i],"",()->{if(pending)return;if(mode==WizardModel.ScoreMethod.STANDARD_ARRAY)state.standardArray();else state.method=mode;rebuild.run();});b.selected(state.method==mode||mode==WizardModel.ScoreMethod.MANUAL&&state.method==WizardModel.ScoreMethod.EXTERNAL_ROLLS).hint(labels[i]);pane.control("mode:"+i,b);}
-        var geometry=layout(w);int cols=geometry.columns(),cw=(w-(cols-1)*6)/cols;
-        for(int i=0;i<CreatorDraftState.ABILITIES.size();i++){
-            String key=CreatorDraftState.ABILITIES.get(i);int fx=x+i%cols*(cw+6),y=geometry.top()+i/cols*geometry.stride();
-            pane.panel("",fx-1,y-2,cw+2,33);pane.icon(key,fx,y,12);pane.label(NAMES.get(key),fx+14,y,cw-14,RpgTheme.GOLD);
-            int inputWidth=Math.min(40,Math.max(18,cw-64)),bx=fx+(cw-inputWidth-64)/2;var field=new TextFieldWidget(font,bx+18,y+12,inputWidth,17,Text.literal(NAMES.get(key)));field.setMaxLength(2);field.setText(state.scores.get(key));field.setChangedListener(v->state.scores.put(key,v));pane.control(key,field);
-            pane.control("minus:"+key,new RpgButton(bx,y+12,16,17,"−","",()->adjust(state,key,-1,field,pending)).accessible("Decrease "+NAMES.get(key)));
-            pane.control("plus:"+key,new RpgButton(bx+20+inputWidth,y+12,16,17,"+","",()->adjust(state,key,1,field,pending)).accessible("Increase "+NAMES.get(key)));
-            pane.liveLabel(()->modifier(state.scores.get(key)),bx+40+inputWidth,y+15,24,RpgTheme.TEXT);
-        }
-        int bottom=geometry.top()+((6+cols-1)/cols)*geometry.stride()+3;
-        pane.label("In-game ability rolls unavailable on this server",x,bottom,w,RpgTheme.MUTED);
-        pane.label("No racial increases are applied. Saved combat scores are effective values.",x,bottom+24,w,RpgTheme.MUTED);
-        pane.label("Point buy plans base scores. Enter racial adjustments manually only in Manual mode.",x,bottom+38,w,RpgTheme.MUTED);
-        String saved=CreatorDraftState.ABILITIES.stream().map(k->k.toUpperCase(Locale.ROOT)+" "+CreatorDraftState.savedScore(state.snapshot(),k)).reduce((a,b)->a+" · "+b).orElse("");pane.label("Saved effective: "+saved,x,bottom+52,w,RpgTheme.MUTED);
+    public static void build(CharacterCanvas pane,TextRenderer font,CreatorDraftState state,Runnable rebuild,boolean pending){int x=6,w=pane.getWidth()-12,bw=(w-8)/3;String[] labels={"Standard Array","27-point Buy","Manual / External"};var modes=List.of(WizardModel.ScoreMethod.STANDARD_ARRAY,WizardModel.ScoreMethod.POINT_BUY,WizardModel.ScoreMethod.MANUAL);
+        for(int i=0;i<3;i++){var mode=modes.get(i);pane.control("mode:"+i,new RpgButton(x+i*(bw+4),2,bw,18,labels[i],"",()->{if(pending)return;if(mode==WizardModel.ScoreMethod.STANDARD_ARRAY)state.standardArray();else if(mode==WizardModel.ScoreMethod.POINT_BUY){state.method=mode;for(String key:CreatorDraftState.ABILITIES)state.scores.put(key,"8");}else state.method=mode;rebuild.run();}).selected(state.method==mode||mode==WizardModel.ScoreMethod.MANUAL&&state.method==WizardModel.ScoreMethod.EXTERNAL_ROLLS).hint(labels[i]));}
+        var geometry=layout(w,pane.getHeight());boolean tiny=w<220;int labelW=Math.max(32,w-138),scoreX=tiny?x+26:x+labelW+24;
+        for(int i=0;i<6;i++){String key=CreatorDraftState.ABILITIES.get(i);int y=geometry.top()+i*geometry.stride(),h=geometry.stride()-4;pane.panel("",x,y,w,h);pane.icon(key,x+5,tiny?y+3:y+(h-16)/2,tiny?12:16);pane.label(w<280?key.toUpperCase(Locale.ROOT):NAMES.get(key),x+25,tiny?y+4:y+(h-9)/2,tiny?w-30:labelW-26,RpgTheme.GOLD);int controlY=tiny?y+17:y+2,controlH=tiny?19:h-4,inputW=tiny?32:36;var field=new CenteredScoreField(font,scoreX,controlY,inputW,controlH,Text.literal(NAMES.get(key)));field.setText(state.scores.get(key));field.setChangedListener(v->state.scores.put(key,v));field.setEditable(!pending&&state.method!=WizardModel.ScoreMethod.STANDARD_ARRAY);pane.control(key,field);
+            var minus=pane.control("minus:"+key,new RpgButton(scoreX-22,controlY,20,controlH,"−","",()->adjust(state,key,-1,field,pending,rebuild)).accessible("Decrease "+NAMES.get(key)).hint(state.method==WizardModel.ScoreMethod.STANDARD_ARRAY?"Swap this array value with the preceding ability":"Decrease score"));var plus=pane.control("plus:"+key,new RpgButton(scoreX+inputW+2,controlY,20,controlH,"+","",()->adjust(state,key,1,field,pending,rebuild)).accessible("Increase "+NAMES.get(key)).hint(state.method==WizardModel.ScoreMethod.STANDARD_ARRAY?"Swap this array value with the next ability":"Increase score"));minus.active=plus.active=!pending;pane.liveLabel(()->modifier(state.scores.get(key)),scoreX+inputW+26,controlY+(controlH-9)/2,24,RpgTheme.TEXT);}
+        int bottom=geometry.top()+6*geometry.stride()+4;pane.wrapped("Base allocations: racial increases are NOT automatic. Apply them explicitly in Manual / External mode. In-game generation is unavailable.",x,bottom,w,RpgTheme.MUTED);
     }
-    public static String status(CreatorDraftState state){try{var values=state.scoreValues();return state.method==WizardModel.ScoreMethod.POINT_BUY?WizardModel.pointRemaining(values)+" / 27 points remaining":(state.method==WizardModel.ScoreMethod.MANUAL||state.method==WizardModel.ScoreMethod.EXTERNAL_ROLLS?"Manual/external · unverified · ":"")+"Scores valid · racial increases not automatic";}catch(RuntimeException invalid){return invalid.getMessage();}}
-    private static String modifier(String value){try{int m=WizardModel.modifier(Integer.parseInt(value));return (m>=0?"+":"")+m;}catch(RuntimeException invalid){return "—";}}
-    private static void adjust(CreatorDraftState state,String key,int delta,TextFieldWidget field,boolean pending){if(pending)return;try{int value=Integer.parseInt(state.scores.get(key));int lo=state.method==WizardModel.ScoreMethod.POINT_BUY?8:1,hi=state.method==WizardModel.ScoreMethod.POINT_BUY?15:30;field.setText(Integer.toString(Math.clamp(value+delta,lo,hi)));}catch(NumberFormatException ignored){}}
+    public static String status(CreatorDraftState state){try{var values=state.scoreValues();return state.method==WizardModel.ScoreMethod.POINT_BUY?WizardModel.pointRemaining(values)+" / 27 points remaining · spend all before Finish":state.method==WizardModel.ScoreMethod.STANDARD_ARRAY?"15 · 14 · 13 · 12 · 10 · 8 — swap arrows assign each once":"Manual / External · effective scores · unverified rolls";}catch(RuntimeException invalid){return invalid.getMessage();}}
+    private static String modifier(String v){try{int m=WizardModel.modifier(Integer.parseInt(v));return (m>=0?"+":"")+m;}catch(RuntimeException invalid){return "—";}}
+    private static void adjust(CreatorDraftState state,String key,int delta,CenteredScoreField field,boolean pending,Runnable rebuild){if(pending)return;if(state.method==WizardModel.ScoreMethod.STANDARD_ARRAY){int index=CreatorDraftState.ABILITIES.indexOf(key);String other=CreatorDraftState.ABILITIES.get(Math.floorMod(index+delta,6)),value=state.scores.get(key);state.scores.put(key,state.scores.get(other));state.scores.put(other,value);rebuild.run();return;}try{int value=Integer.parseInt(state.scores.get(key)),lo=state.method==WizardModel.ScoreMethod.POINT_BUY?8:1,hi=state.method==WizardModel.ScoreMethod.POINT_BUY?15:30,next=Math.clamp(value+delta,lo,hi);if(state.method==WizardModel.ScoreMethod.POINT_BUY){if(delta>0){var scores=new LinkedHashMap<>(state.scoreValues());scores.put(key,next);if(WizardModel.pointRemaining(scores)<0)return;}}field.setText(Integer.toString(next));}catch(RuntimeException ignored){}}
 }

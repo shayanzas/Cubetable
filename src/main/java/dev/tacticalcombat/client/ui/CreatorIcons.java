@@ -7,7 +7,7 @@ import java.util.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 
-/** Individually isolated ORIGINAL sprites: no guessed atlas cells, padding or bleed. */
+/** Individually isolated sprites with explicit source provenance, uniform slots and nearest-neighbor texture sampling. */
 public final class CreatorIcons {
     public record Sprite(int x,int y,int width,int height) {}
     public static final Map<String,Sprite> REGIONS;

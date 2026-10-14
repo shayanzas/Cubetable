@@ -12,12 +12,13 @@ import java.util.function.Consumer;
 public abstract class RpgScreen extends Screen {
     protected final Screen parent;
     protected UiLayout.Rect frame;
+    private UiLayout.Rect guidedFrame;
     protected String message="";
     protected int messageColor=RpgTheme.MUTED;
     protected long generation;
     protected boolean busy;
     protected RpgScreen(String title,Screen parent) {super(Text.literal(title));this.parent=parent;}
-    @Override protected void init() {generation++;frame=UiLayout.frame(width,height,maximumWidth());}
+    @Override protected void init() {generation++;frame=UiLayout.frame(width,height,parent instanceof CharacterWizardScreen?980:maximumWidth());guidedFrame=parent instanceof CharacterWizardScreen?frame:null;if(guidedFrame!=null)frame=WizardChildLayout.content(guidedFrame);}
     @Override public void removed() {generation++;}
     @Override public void close() {client.setScreen(parent);}
     @Override public boolean shouldPause() {return false;}
@@ -27,6 +28,10 @@ public abstract class RpgScreen extends Screen {
         var field=addDrawableChild(new TextFieldWidget(textRenderer,x,y,w,20,Text.literal("Search this page")));
         field.setMaxLength(80);field.setText(value);field.setPlaceholder(Text.literal("Search this page…"));field.setChangedListener(listener);return field;
     }
+    @Override public void setFocused(net.minecraft.client.gui.Element element){if(getFocused()!=element)super.setFocused(element);}
+    @Override public boolean mouseClicked(double x,double y,int button){boolean handled=super.mouseClicked(x,y,button);if(getFocused()!=null&&!children().contains(getFocused())){setFocused(null);for(var child:children())if(child instanceof CharacterCanvas canvas&&!canvas.focusedKey().isEmpty()){setFocused(canvas);break;}}return handled;}
+    protected void wizardRail(CreatorFlow.Step step,java.util.function.BooleanSupplier canLeave){if(parent instanceof CharacterWizardScreen wizard&&guidedFrame!=null){var rail=addDrawableChild(new SectionRail(WizardChildLayout.rail(guidedFrame),java.util.Arrays.stream(CreatorFlow.Step.values()).map(v->new SectionRail.Item(v.name(),v.title)).toList(),key->{var next=CreatorFlow.Step.valueOf(key);if(next==step)return;if(busy)return;if(!canLeave.getAsBoolean()){message="Save these edits before changing creator tabs.";return;}wizard.navigateFromChild(next);},28));rail.selected(step.name());}}
+    protected void returnFromWizard(CreatorFlow.Step step){if(parent instanceof CharacterWizardScreen wizard)wizard.navigateFromChild(CreatorFlow.Step.values()[Math.max(0,step.ordinal()-1)]);else client.setScreen(parent);}
     protected void footer() {
         button("Back","",frame.x()+12,frame.y()+frame.height()-30,66,20,this::close).hint("Return to the previous screen (Escape)");
     }
@@ -39,7 +44,7 @@ public abstract class RpgScreen extends Screen {
         });
     }
     protected void background(DrawContext g) {
-        g.fill(0,0,width,height,RpgTheme.BACKGROUND);RpgTheme.panel(g,frame.x(),frame.y(),frame.width(),frame.height(),0xFF191D23,false);
+        g.fill(0,0,width,height,RpgTheme.BACKGROUND);var box=guidedFrame==null?frame:guidedFrame;RpgTheme.panel(g,box.x(),box.y(),box.width(),box.height(),0xFF191D23,false);
         g.fill(frame.x()+12,frame.y()+29,frame.x()+frame.width()-12,frame.y()+30,RpgTheme.GOLD);
         RpgTheme.text(g,textRenderer,getTitle().getString(),frame.x()+12,frame.y()+12,frame.width()-24,RpgTheme.GOLD);
     }

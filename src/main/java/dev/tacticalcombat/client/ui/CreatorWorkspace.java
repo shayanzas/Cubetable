@@ -31,17 +31,18 @@ public final class CreatorWorkspace {
             pane.control("subrace:base",new RpgButton(dx,dy,dw,19,"Base "+base+" · manual","",()->{IdentityModel.subrace(state,"");rebuild.run();}).selected(sub.isEmpty()).hint("Keep the original base race. Base traits alone are an incomplete 2014 racial choice; choose a subrace or agree on a manual choice with your DM."));dy+=23;
             for(String variant:variants){pane.control("subrace:"+variant,new RpgButton(dx,dy,dw,19,variant,"",()->{IdentityModel.subrace(state,variant);rebuild.run();}).selected(sub.equals(variant)).hint(variant+" · 2014 SRD choice. Its extra traits appear below; no bonus is granted automatically."));dy+=23;}
         }
+        if(!IdentityModel.subraceIntro(sub).isBlank()){String description=IdentityModel.subraceIntro(sub);pane.wrapped(description,dx,dy,dw,RpgTheme.TEXT);dy+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(description,dw,net.minecraft.text.Style.EMPTY).size()*12+5;}
         dy+=8;pane.label("Racial Traits",dx,dy,dw,RpgTheme.GOLD);dy+=17;
         for(var trait:FeatureReference.raceTraits(base,sub)){pane.control(trait.id(),new RpgButton(dx,dy,dw,19,trait.name(),"",()->inspect.accept(trait)).hint(trait.tooltip()));dy+=23;}
         if(!recorded.isBlank())for(var line:font.getTextHandler().wrapLines(IdentityModel.completeness(recorded),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
         // Popup renders last and receives input first, so its nine choices overlay other controls safely.
         pane.control("alignment",new AlignmentDropdown(alignmentX,41,fw,()->state.fields.get("alignment"),v->IdentityModel.alignment(state,v),()->new UiLayout.Rect(pane.getX(),pane.getY(),pane.getWidth(),pane.getHeight())));
     }
-    public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom){
-        int x=6,w=pane.getWidth()-12;boolean stacked=w<440;int left=stacked?w:(w-6)/2,right=stacked?w:w-left-6;
-        int columns=Math.max(1,left/84),gridHeight=((12+columns-1)/columns)*62;
+    public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom,Runnable proficiencies){
+        int x=6,w=pane.getWidth()-12;boolean stacked=w<600;int left=stacked?w:Math.max(320,w*55/100),right=stacked?w:w-left-6;
+        int columns=4,cellWidth=Math.max(36,left/4),gridHeight=3*62;
         var selected=Srd2014Catalog.CLASSES.stream().filter(c->c.name().equals(state.fields.get("characterClass"))).findFirst().orElse(Srd2014Catalog.CLASSES.getFirst());
-        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->{state.fields.put("characterClass",e.name());rebuild.run();},84,62,40));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
+        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->{state.fields.put("characterClass",e.name());rebuild.run();},cellWidth,62,40));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
         pane.control("customClass",new RpgButton(x,gridHeight+8,left,18,"Custom Class","",custom));
         int dx=stacked?x:x+left+6,y=stacked?gridHeight+36:2;
         String current=state.fields.get("characterClass");if(!current.isBlank()&&!current.equals(selected.name())){pane.label("Custom Class: "+current,dx,y,right,RpgTheme.GOLD);pane.label("Recorded manually; select a standard class to inspect its features.",dx,y+18,right,RpgTheme.MUTED);return;}
@@ -51,7 +52,7 @@ public final class CreatorWorkspace {
         pane.label("Proficiencies",dx,y,right,RpgTheme.GOLD);y+=15;
         String prof=FeatureReference.classProficiencies(selected.id())+"\nSaves: "+selected.guidance().split(" · ")[0].replace(" saves","");
         for(String line:prof.split("\n")){pane.control("prof:"+line,new RpgButton(dx,y,right,18,line,"",()->inspect.accept(new FeatureReference.Entry("srd51:"+selected.id()+":proficiencies","Proficiencies", "D&D 5e SRD 5.1 (2014)",1,"","Recorded/manual","","","",prof,"INFORMATIONAL",prof))).hint(line));y+=21;}
-        String skills="Choose "+Srd2014Catalog.classSkillCount(selected.name())+" skills";pane.control("skills",new RpgButton(dx,y,right,18,skills,"",()->inspect.accept(new FeatureReference.Entry("srd51:"+selected.id()+":skills",skills,"D&D 5e SRD 5.1 (2014)",1,"","Recorded/manual","","","","","INFORMATIONAL",String.join(", ",new TreeSet<>(Srd2014Catalog.classSkills(selected.name())))+". Choices are recorded in Proficiencies; no bonus is granted automatically."))));y+=25;
+        String skills="Choose "+Srd2014Catalog.classSkillCount(selected.name())+" skills";pane.control("skills",new RpgButton(dx,y,right,18,skills,"",proficiencies).hint("Open the interactive class-specific Proficiencies page."));y+=25;
         int level=-1;for(var entry:FeatureReference.classFeatures(selected.id())){if(entry.level()!=level){level=entry.level();pane.label("Level "+level,dx,y,right,RpgTheme.GOLD);y+=16;}feature(pane,entry,dx,y,right,inspect);y+=21;}
     }
     public static void feature(CharacterCanvas pane,FeatureReference.Entry entry,int x,int y,int width,java.util.function.Consumer<FeatureReference.Entry> inspect){pane.control(entry.id(),new RpgButton(x,y,width,18,entry.name(),"",()->inspect.accept(entry)).icon("features").hint(entry.tooltip()));}

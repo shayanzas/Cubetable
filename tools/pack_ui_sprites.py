@@ -61,3 +61,26 @@ for index,name in enumerate(['paladin','sorcerer']):
 for name in manifest['sprites']:(OUT/(name+'.png.mcmeta')).write_text('{"texture":{"blur":false,"clamp":true}}\n')
 (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print(f'Packed {len(manifest["sprites"])} unchanged sprite motifs; retained {retained} atlas pixels.')
+
+# Checkpoint C: approved originals remain the source of 43 sprites. Four cleaned
+# motifs and a rebuilt Ranger have explicit new source images, never race art.
+correction_file = BASE / 'class-corrections-c.png'
+if correction_file.exists():
+ corrected = np.asarray(Image.open(correction_file).convert('RGBA'))
+ def package_correction(name, source, rgba, mask):
+  yy,xx=np.where(mask);x0,y0,x1,y1=int(xx.min()),int(yy.min()),int(xx.max()+1),int(yy.max()+1)
+  crop=rgba[y0:y1,x0:x1].copy();crop[~mask[y0:y1,x0:x1]]=0
+  output=np.zeros((crop.shape[0]+4,crop.shape[1]+4,4),dtype=np.uint8);output[2:-2,2:-2]=crop
+  Image.fromarray(output).save(OUT/(name+'.png'))
+  manifest['sprites'][name]={'width':output.shape[1],'height':output.shape[0],'pixels':int(mask.sum()),'source':source,'sourceBounds':[x0,y0,x1-x0,y1-y0]}
+ assert corrected.shape[0] == corrected.shape[1] and corrected.shape[0] % 2 == 0
+ half=corrected.shape[0]//2
+ for index,name in enumerate(['barbarian','bard','cleric','monk']):
+  mask=np.zeros(corrected.shape[:2],dtype=bool);x=index%2*half;y=index//2*half
+  mask[y:y+half,x:x+half]=corrected[y:y+half,x:x+half,3]>0
+  package_correction(name,correction_file.name,corrected,mask)
+ ranger=np.asarray(Image.open(BASE/'ranger-c.png').convert('RGBA'))
+ package_correction('ranger','ranger-c.png',ranger,ranger[:,:,3]>0)
+ manifest['method']='43 original motifs; four cleaned class motifs and rebuilt Ranger; lossless RGBA isolation; 2px transparent gutter'
+ (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
+ print('Packaged five Checkpoint C class corrections; 43 original sprites retained.')
