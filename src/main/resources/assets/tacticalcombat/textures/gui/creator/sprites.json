@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "method": "36 unchanged non-class sprites; 11 class source cleanups; approved D Ranger retained exactly; whole connected-motif isolation; 2px transparent gutter",
+  "method": "36 unchanged non-class sprites; 11 lossless F detached-dark-pixel cleanups at unchanged E bounds/scale; approved D Ranger exact; 2px transparent gutter",
   "sprites": {
     "barbarian": {
       "width": 677,
       "height": 676,
-      "pixels": 182547,
-      "source": "class-cleanup-e-1.png",
+      "pixels": 182125,
+      "source": "class-cleanup-f-1.png",
       "sourceBounds": [
         0,
         2,
@@ -17,8 +17,8 @@
     "bard": {
       "width": 612,
       "height": 604,
-      "pixels": 191206,
-      "source": "class-cleanup-e-1.png",
+      "pixels": 191012,
+      "source": "class-cleanup-f-1.png",
       "sourceBounds": [
         620,
         47,
@@ -29,8 +29,8 @@
     "cleric": {
       "width": 621,
       "height": 623,
-      "pixels": 150837,
-      "source": "class-cleanup-e-1.png",
+      "pixels": 150606,
+      "source": "class-cleanup-f-1.png",
       "sourceBounds": [
         0,
         635,
@@ -41,8 +41,8 @@
     "druid": {
       "width": 653,
       "height": 667,
-      "pixels": 183686,
-      "source": "class-cleanup-e-2.png",
+      "pixels": 183579,
+      "source": "class-cleanup-f-2.png",
       "sourceBounds": [
         0,
         4,
@@ -53,8 +53,8 @@
     "fighter": {
       "width": 586,
       "height": 607,
-      "pixels": 153761,
-      "source": "class-cleanup-e-2.png",
+      "pixels": 153632,
+      "source": "class-cleanup-f-2.png",
       "sourceBounds": [
         636,
         32,
@@ -65,8 +65,8 @@
     "monk": {
       "width": 682,
       "height": 627,
-      "pixels": 188648,
-      "source": "class-cleanup-e-1.png",
+      "pixels": 188378,
+      "source": "class-cleanup-f-1.png",
       "sourceBounds": [
         556,
         631,
@@ -89,8 +89,8 @@
     "rogue": {
       "width": 606,
       "height": 580,
-      "pixels": 191528,
-      "source": "class-cleanup-e-2.png",
+      "pixels": 191407,
+      "source": "class-cleanup-f-2.png",
       "sourceBounds": [
         43,
         654,
@@ -101,8 +101,8 @@
     "warlock": {
       "width": 585,
       "height": 597,
-      "pixels": 186897,
-      "source": "class-cleanup-e-2.png",
+      "pixels": 186820,
+      "source": "class-cleanup-f-2.png",
       "sourceBounds": [
         642,
         635,
@@ -113,8 +113,8 @@
     "wizard": {
       "width": 686,
       "height": 616,
-      "pixels": 212961,
-      "source": "class-cleanup-e-3.png",
+      "pixels": 212669,
+      "source": "class-cleanup-f-3.png",
       "sourceBounds": [
         556,
         620,
@@ -557,8 +557,8 @@
     "paladin": {
       "width": 624,
       "height": 642,
-      "pixels": 189356,
-      "source": "class-cleanup-e-3.png",
+      "pixels": 188860,
+      "source": "class-cleanup-f-3.png",
       "sourceBounds": [
         620,
         9,
@@ -569,8 +569,8 @@
     "sorcerer": {
       "width": 627,
       "height": 588,
-      "pixels": 186317,
-      "source": "class-cleanup-e-3.png",
+      "pixels": 186043,
+      "source": "class-cleanup-f-3.png",
       "sourceBounds": [
         0,
         642,

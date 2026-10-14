@@ -138,3 +138,34 @@ if all((BASE/source).exists() for source,_ in e_sources):
  manifest['method']='36 unchanged non-class sprites; 11 class source cleanups; approved D Ranger retained exactly; whole connected-motif isolation; 2px transparent gutter'
  (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
  print('Retained approved D Ranger exactly; rejected the noisier trial cleanup.')
+
+# F: lossless removal of explicitly authorized detached dark specks. Preserve
+# E bounds/gutters exactly so the approved displayed scale cannot change.
+f_sources=[('class-cleanup-f-1.png',['barbarian','bard','cleric','monk']),
+           ('class-cleanup-f-2.png',['druid','fighter','rogue','warlock']),
+           ('class-cleanup-f-3.png',['ranger','paladin','sorcerer','wizard'])]
+if all((BASE/source).exists() for source,_ in f_sources):
+ for source,names in f_sources:
+  rgba=np.asarray(Image.open(BASE/source).convert('RGBA'))
+  labels,_=ndimage.label(rgba[:,:,3]>128,np.ones((3,3)))
+  counts=np.bincount(labels.ravel());principal=np.argsort(counts[1:])[-4:]+1
+  main=np.zeros(labels.shape,dtype=np.int32);motifs={}
+  for label in principal:
+   yy,xx=np.where(labels==label);index=int(xx.mean()>=rgba.shape[1]/2)+2*int(yy.mean()>=rgba.shape[0]/2)
+   assert index not in motifs
+   motifs[index]=int(label);main[labels==label]=label
+  nearest=ndimage.distance_transform_edt(main==0,return_distances=False,return_indices=True)
+  assignment=main[tuple(nearest)]
+  for index,name in enumerate(names):
+   if name=='ranger':continue
+   mask=(assignment==motifs[index])&(rgba[:,:,3]>0)
+   info=manifest['sprites'][name];x,y,w,h=info['sourceBounds']
+   crop=rgba[y:y+h,x:x+w].copy();crop[~mask[y:y+h,x:x+w]]=0
+   output=np.zeros((info['height'],info['width'],4),dtype=np.uint8)
+   assert output.shape==(h+4,w+4,4)
+   output[2:-2,2:-2]=crop
+   Image.fromarray(output).save(OUT/(name+'.png'))
+   info['source']=source;info['pixels']=int(mask.sum())
+ manifest['method']='36 unchanged non-class sprites; 11 lossless F detached-dark-pixel cleanups at unchanged E bounds/scale; approved D Ranger exact; 2px transparent gutter'
+ (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
+ print('Packaged conservative F pixel cleanups without changing any retained RGBA pixel or sprite scale; Ranger unchanged.')

@@ -1,0 +1,53 @@
+{
+  "method": "8-connected alpha components <=8px; max RGB <=48; every pixel >=4px from colored artwork; Ranger excluded; other RGBA pixels exact",
+  "icons": {
+    "barbarian": {
+      "componentsRemoved": 237,
+      "pixelsRemoved": 422
+    },
+    "bard": {
+      "componentsRemoved": 101,
+      "pixelsRemoved": 194
+    },
+    "cleric": {
+      "componentsRemoved": 128,
+      "pixelsRemoved": 231
+    },
+    "monk": {
+      "componentsRemoved": 172,
+      "pixelsRemoved": 270
+    },
+    "druid": {
+      "componentsRemoved": 64,
+      "pixelsRemoved": 107
+    },
+    "fighter": {
+      "componentsRemoved": 67,
+      "pixelsRemoved": 129
+    },
+    "rogue": {
+      "componentsRemoved": 66,
+      "pixelsRemoved": 121
+    },
+    "warlock": {
+      "componentsRemoved": 47,
+      "pixelsRemoved": 77
+    },
+    "ranger": {
+      "componentsRemoved": 0,
+      "pixelsRemoved": 0
+    },
+    "paladin": {
+      "componentsRemoved": 299,
+      "pixelsRemoved": 496
+    },
+    "sorcerer": {
+      "componentsRemoved": 160,
+      "pixelsRemoved": 274
+    },
+    "wizard": {
+      "componentsRemoved": 201,
+      "pixelsRemoved": 292
+    }
+  }
+}
