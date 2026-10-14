@@ -45,7 +45,7 @@ public final class CreatorFlow {
     }
     public static String recordedRace(String race,String subrace) {
         if(subrace.isEmpty())return race;
-        if(!subraces(race).contains(subrace))throw new IllegalArgumentException("Choose a supported subrace or use Custom details");
+        if(!subraces(race).contains(subrace)&&!(subrace.equals("Base Traits")&&!subraces(race).isEmpty()))throw new IllegalArgumentException("Choose a supported subrace or use Custom details");
         return race+" — "+subrace;
     }
 }

@@ -12,6 +12,7 @@ public final class CreatorDraftState {
     public static final List<String> ABILITIES=List.of("str","dex","con","int","wis","cha");
     public final Map<String,String> fields=new LinkedHashMap<>(),scores=new LinkedHashMap<>();
     public WizardModel.ScoreMethod method=WizardModel.ScoreMethod.MANUAL;
+    public boolean classAllocationReset;
     private JsonObject snapshot,baseline;
     private WizardModel.ScoreMethod savedMethod;
     public CreatorDraftState(JsonObject initial){method=WizardModel.ScoreMethod.valueOf(SheetSections.read(initial.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=method;snapshot=initial.deepCopy();baseline=initial.deepCopy();for(String f:FIELDS)fields.put(f,savedField(initial,f));for(String k:ABILITIES)scores.put(k,savedScore(initial,k));}
@@ -23,6 +24,7 @@ public final class CreatorDraftState {
         if(method==savedMethod)method=WizardModel.ScoreMethod.valueOf(SheetSections.read(next.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=WizardModel.ScoreMethod.valueOf(SheetSections.read(next.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());
         snapshot=next.deepCopy();if(ownAcknowledgement||!dirty())baseline=snapshot.deepCopy();
     }
+    public void acceptClassChange(JsonObject next){accept(next,true);fields.put("characterClass",savedField(next,"characterClass"));method=WizardModel.ScoreMethod.valueOf(SheetSections.read(next.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=method;for(String key:ABILITIES)scores.put(key,savedScore(next,key));classAllocationReset=true;}
     public boolean reviewRequired(){return dirty()&&ManagementState.needsEditReview(baseline,snapshot);}
     public void reviewed(){baseline=snapshot.deepCopy();}
     public boolean dirty(){return method!=savedMethod||FIELDS.stream().anyMatch(f->!fields.get(f).equals(savedField(snapshot,f)))||ABILITIES.stream().anyMatch(k->!scores.get(k).equals(savedScore(snapshot,k)));}

@@ -39,13 +39,15 @@ public final class ProficiencyPickerScreen extends RpgScreen {
             y+=((options.size()+columns-1)/columns)*25+8;
         }
         pane.boldLabel("Tools & Languages",x,y,w,RpgTheme.GOLD);y+=18;
-        if(clazz.equals("Rogue")){pane.wrapped("Rogue is your class. Thief is a subclass at level 3. Thieves' tools are a class tool proficiency and an eligible Expertise choice.",x,y,w,RpgTheme.MUTED);y+=textRenderer.getTextHandler().wrapLines("Rogue is your class. Thief is a subclass at level 3. Thieves' tools are a class tool proficiency and an eligible Expertise choice.",w,net.minecraft.text.Style.EMPTY).size()*12+6;}
-        for(String category:List.of("tools","languages")){String recorded=(category.equals("tools")?"Tools: ":"Languages: ")+String.join(", ",DashboardModel.strings(effective,category));pane.wrapped(recorded,x,y,w,RpgTheme.TEXT);y+=textRenderer.getTextHandler().wrapLines(recorded,w,net.minecraft.text.Style.EMPTY).size()*12+5;}
+        if(clazz.equals("Rogue")){pane.boldLabel("Thieves' Tools — Proficient",x,y,w,RpgTheme.GOLD);pane.tooltip(x,y,w,16,"Rogue tool proficiency. May be chosen for Rogue Expertise instead of one trained skill; retained independent grants remain separate.");y+=22;}
+
+        for(String category:List.of("tools","languages")){var entries=DashboardModel.strings(effective,category).stream().filter(v->!(clazz.equals("Rogue")&&category.equals("tools")&&v.equalsIgnoreCase("Thieves' tools"))).toList();if(category.equals("tools")&&clazz.equals("Rogue")&&entries.isEmpty())continue;String recorded=(category.equals("tools")?"Tools: ":"Languages: ")+String.join(", ",entries);pane.wrapped(recorded,x,y,w,RpgTheme.TEXT);y+=textRenderer.getTextHandler().wrapLines(recorded,w,net.minecraft.text.Style.EMPTY).size()*12+5;}
         pane.wrapped("Recorded historical, species and custom grants are retained; additional automatic choices are deferred.",x,y,w,RpgTheme.MUTED);y+=textRenderer.getTextHandler().wrapLines("Recorded historical, species and custom grants are retained; additional automatic choices are deferred.",w,net.minecraft.text.Style.EMPTY).size()*12+8;
         if(!standard){var manual=pane.control("manual:grants",new RpgButton(x,y,w,19,"Record Custom Grants — DM Review","",()->save(()->client.setScreen(DashboardEditors.proficiencies(this,snapshot,source)))));manual.active=fresh&&!busy;y+=26;}
         for(String warning:CreationRules.warnings(sheet)){pane.wrapped(warning,x,y,w,RpgTheme.MUTED);y+=textRenderer.getTextHandler().wrapLines(warning,w,net.minecraft.text.Style.EMPTY).size()*12+4;}
         for(String error:CreationRules.choiceErrors(sheet,false)){pane.wrapped(error,x,y,w,RpgTheme.ERROR);y+=textRenderer.getTextHandler().wrapLines(error,w,net.minecraft.text.Style.EMPTY).size()*12+4;}
-        y+=8;pane.boldLabel("Saving Throws",x,y,w,RpgTheme.GOLD);y+=20;var saves=ProficiencyModel.checks(view,true);for(int i=0;i<saves.size();i++){var c=saves.get(i);int sx=x+i%columns*(cw+8),sy=y+i/columns*24;String label=c.name()+" "+signed(c.total());if(c.proficient())pane.boldLabel(label,sx,sy,cw,RpgTheme.GOLD);else pane.label(label,sx,sy,cw,RpgTheme.TEXT);pane.tooltip(sx,sy,cw,20,c.breakdown()+"\n"+(CreationRules.saves(clazz).contains(c.ability())?"Granted by "+clazz:"Recorded grants retained"));}
+        y+=8;CreationSavingThrows.build(pane,view,x,y,w);
+
         pane.position(offset);if(!focus.isEmpty()){pane.focus(focus);setInitialFocus(pane);}
     }
     private void save(){save(()->{});}

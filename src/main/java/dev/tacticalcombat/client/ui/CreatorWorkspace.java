@@ -30,6 +30,7 @@ public final class CreatorWorkspace {
         if(!variants.isEmpty()){
             dy+=8;pane.label("Subrace",dx,dy,dw,RpgTheme.GOLD);dy+=17;
 
+            pane.control("subrace:base",new RpgButton(dx,dy,dw,19,base+" — Base Traits","",()->{IdentityModel.subrace(state,"Base Traits");rebuild.run();}).selected(sub.equals("Base Traits")).hint("Intentional base-only selection. Saves as a draft with parent traits only; standard guided Finish requires a supported subrace. No subrace traits are substituted."));dy+=23;
             for(String variant:variants){pane.control("subrace:"+variant,new RpgButton(dx,dy,dw,19,variant,"",()->{IdentityModel.subrace(state,variant);rebuild.run();}).selected(sub.equals(variant)).hint(variant+" · 2014 SRD choice. Its extra traits appear below; no bonus is granted automatically."));dy+=23;}
         }
         if(!IdentityModel.subraceIntro(sub).isBlank()){String description=IdentityModel.subraceIntro(sub);pane.wrapped(description,dx,dy,dw,RpgTheme.TEXT);dy+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(description,dw,net.minecraft.text.Style.EMPTY).size()*12+5;}
@@ -40,11 +41,11 @@ public final class CreatorWorkspace {
         // Popup renders last and receives input first, so its nine choices overlay other controls safely.
         pane.control("alignment",new AlignmentDropdown(alignmentX,41,fw,()->state.fields.get("alignment"),v->IdentityModel.alignment(state,v),()->new UiLayout.Rect(pane.getX(),pane.getY(),pane.getWidth(),pane.getHeight())));
     }
-    public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom,Runnable proficiencies){
+    public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom,Runnable proficiencies,java.util.function.Consumer<String> chooseClass){
         int x=6,w=pane.getWidth()-12;boolean stacked=w<600;int left=stacked?w:Math.max(320,w*55/100),right=stacked?w:w-left-6;
         int columns=4,cellWidth=Math.max(36,left/4),gridHeight=3*62;
         var selected=Srd2014Catalog.CLASSES.stream().filter(c->c.name().equals(state.fields.get("characterClass"))).findFirst().orElse(Srd2014Catalog.CLASSES.getFirst());
-        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->{state.fields.put("characterClass",e.name());rebuild.run();},cellWidth,62,40));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
+        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->chooseClass.accept(e.name()),cellWidth,62,40));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
         pane.control("customClass",new RpgButton(x,gridHeight+8,left,18,"Custom Class","",custom));
         int dx=stacked?x:x+left+6,y=stacked?gridHeight+36:2;
         String current=state.fields.get("characterClass");if(!current.isBlank()&&!current.equals(selected.name())){pane.label("Custom Class: "+current,dx,y,right,RpgTheme.GOLD);pane.label("Recorded manually; select a standard class to inspect its features.",dx,y+18,right,RpgTheme.MUTED);return;}
