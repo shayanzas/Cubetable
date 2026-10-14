@@ -15,6 +15,7 @@ public final class FeatureReference {
     private static final JsonObject ROOT;
     static {try(var in=FeatureReference.class.getResourceAsStream("/assets/tacticalcombat/ui/feature-reference-v1.json")){if(in==null)throw new IllegalStateException("Missing feature reference");ROOT=JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8)).getAsJsonObject();if(ROOT.get("schema").getAsInt()!=1)throw new IllegalStateException("Unsupported feature reference");}catch(IOException error){throw new ExceptionInInitializerError(error);}}
     private FeatureReference() {}
+    public static String classIntro(String id){var c=ROOT.getAsJsonObject("classes").getAsJsonObject(id);return c==null?"A personal class choice. Discuss its abilities with your DM.":text(c,"description");}
     public static List<Entry> classFeatures(String id){var c=ROOT.getAsJsonObject("classes").getAsJsonObject(id);return c==null?List.of():entries(c.getAsJsonArray("features"));}
     public static String classProficiencies(String id){var c=ROOT.getAsJsonObject("classes").getAsJsonObject(id);return c==null?"Custom class": "Armor: "+text(c,"armor")+"\nWeapons: "+text(c,"weapons");}
     public static List<Entry> raceTraits(String race,String subrace){var c=ROOT.getAsJsonObject("races").getAsJsonObject(race);if(c==null)return List.of();var list=new ArrayList<>(entries(c.getAsJsonArray("features")));var subs=c.getAsJsonObject("subraces");if(subs.has(subrace))list.addAll(entries(subs.getAsJsonArray(subrace)));return List.copyOf(list);}

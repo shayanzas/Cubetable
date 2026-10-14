@@ -39,17 +39,17 @@ public final class CreatorWorkspace {
     }
     public static void clazz(CharacterCanvas pane,CreatorDraftState state,java.util.function.Consumer<FeatureReference.Entry> inspect,Runnable rebuild,Runnable custom){
         int x=6,w=pane.getWidth()-12;boolean stacked=w<440;int left=stacked?w:(w-6)/2,right=stacked?w:w-left-6;
-        int columns=Math.max(1,left/58),gridHeight=((12+columns-1)/columns)*44;
+        int columns=Math.max(1,left/84),gridHeight=((12+columns-1)/columns)*62;
         var selected=Srd2014Catalog.CLASSES.stream().filter(c->c.name().equals(state.fields.get("characterClass"))).findFirst().orElse(Srd2014Catalog.CLASSES.getFirst());
-        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->{state.fields.put("characterClass",e.name());rebuild.run();}));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
+        var grid=pane.control("classes",new CreatorChoiceGrid(new UiLayout.Rect(x,2,left,gridHeight),e->{state.fields.put("characterClass",e.name());rebuild.run();},84,62,40));grid.entries(Srd2014Catalog.CLASSES.stream().map(e->new CreatorChoiceGrid.Entry(e.id(),e.name(),e.id())).toList(),Srd2014Catalog.CLASSES.stream().anyMatch(c->c.name().equals(state.fields.get("characterClass")))?selected.id():"");
         pane.control("customClass",new RpgButton(x,gridHeight+8,left,18,"Custom Class","",custom));
         int dx=stacked?x:x+left+6,y=stacked?gridHeight+36:2;
         String current=state.fields.get("characterClass");if(!current.isBlank()&&!current.equals(selected.name())){pane.label("Custom Class: "+current,dx,y,right,RpgTheme.GOLD);pane.label("Recorded manually; select a standard class to inspect its features.",dx,y+18,right,RpgTheme.MUTED);return;}
         pane.label("Preview: "+selected.name(),dx,y,right,RpgTheme.GOLD);y+=18;
-        feature(pane,new FeatureReference.Entry("srd51:class:"+selected.id()+":overview",selected.name()+" overview","D&D 5e SRD 5.1 (2014)",1,"","Reference","","","","","INFORMATIONAL",selected.summary()+". "+selected.guidance()),dx,y,right,inspect);y+=21;
+        String overview=FeatureReference.classIntro(selected.id());pane.wrapped(overview,dx,y,right,RpgTheme.TEXT);y+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(overview,right,net.minecraft.text.Style.EMPTY).size()*12+8;
         String[] summary=selected.summary().split(" · ");pane.label("Hit Die: "+summary[0],dx,y,right,RpgTheme.TEXT);y+=14;pane.label("Primary: "+(summary.length>1?summary[1]:"See SRD"),dx,y,right,RpgTheme.TEXT);y+=17;
         pane.label("Proficiencies",dx,y,right,RpgTheme.GOLD);y+=15;
-        String prof=FeatureReference.classProficiencies(selected.id())+"\nSaves: "+selected.guidance().split(" · ")[0];
+        String prof=FeatureReference.classProficiencies(selected.id())+"\nSaves: "+selected.guidance().split(" · ")[0].replace(" saves","");
         for(String line:prof.split("\n")){pane.control("prof:"+line,new RpgButton(dx,y,right,18,line,"",()->inspect.accept(new FeatureReference.Entry("srd51:"+selected.id()+":proficiencies","Proficiencies", "D&D 5e SRD 5.1 (2014)",1,"","Recorded/manual","","","",prof,"INFORMATIONAL",prof))).hint(line));y+=21;}
         String skills="Choose "+Srd2014Catalog.classSkillCount(selected.name())+" skills";pane.control("skills",new RpgButton(dx,y,right,18,skills,"",()->inspect.accept(new FeatureReference.Entry("srd51:"+selected.id()+":skills",skills,"D&D 5e SRD 5.1 (2014)",1,"","Recorded/manual","","","","","INFORMATIONAL",String.join(", ",new TreeSet<>(Srd2014Catalog.classSkills(selected.name())))+". Choices are recorded in Proficiencies; no bonus is granted automatically."))));y+=25;
         int level=-1;for(var entry:FeatureReference.classFeatures(selected.id())){if(entry.level()!=level){level=entry.level();pane.label("Level "+level,dx,y,right,RpgTheme.GOLD);y+=16;}feature(pane,entry,dx,y,right,inspect);y+=21;}

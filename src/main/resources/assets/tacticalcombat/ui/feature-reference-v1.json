@@ -1068,7 +1068,8 @@
           "status": "INFORMATIONAL",
           "description": "Choose to frenzy when raging. Starting the following turn, make one melee weapon attack as a bonus action each turn for the rage duration. When the rage ends, suffer one level of exhaustion."
         }
-      ]
+      ],
+      "description": "A fierce warrior who channels primal fury and meets danger with endurance."
     },
     "fighter": {
       "armor": "All armor, shields",
@@ -1144,7 +1145,8 @@
           "status": "INFORMATIONAL",
           "description": "Weapon attacks score a critical hit on a roll of 19 or 20."
         }
-      ]
+      ],
+      "description": "A disciplined master of weapons and battlefield technique."
     },
     "bard": {
       "armor": "Light",
@@ -1234,7 +1236,8 @@
           "status": "INFORMATIONAL",
           "description": "Choose two skill proficiencies; double proficiency bonus for checks using them."
         }
-      ]
+      ],
+      "description": "A versatile performer who weaves magic through music, stories and inspiration."
     },
     "cleric": {
       "armor": "Light, medium, shields",
@@ -1310,7 +1313,8 @@
           "status": "INFORMATIONAL",
           "description": "Life domain: use an action to distribute HP equal to five times cleric level among creatures within 30 feet, up to half their maximum HP; no undead/constructs."
         }
-      ]
+      ],
+      "description": "A divine spellcaster whose faith shapes a calling to protect, heal or confront danger."
     },
     "druid": {
       "armor": "Light, medium, shields; no metal armor/shields",
@@ -1372,7 +1376,8 @@
           "status": "INFORMATIONAL",
           "description": "SRD Circle of the Land: bonus cantrip, Natural Recovery, later circle spells."
         }
-      ]
+      ],
+      "description": "A guardian of the natural world, drawing magic from nature and its changing forms."
     },
     "monk": {
       "armor": "None",
@@ -1462,7 +1467,8 @@
           "status": "INFORMATIONAL",
           "description": "Use a reaction to reduce ranged weapon attack damage by 1d10 + Dexterity modifier + monk level; additional catch/throw rules remain manual."
         }
-      ]
+      ],
+      "description": "A martial artist who develops discipline, agility and inner energy."
     },
     "paladin": {
       "armor": "All armor, shields",
@@ -1566,7 +1572,8 @@
           "status": "INFORMATIONAL",
           "description": "Immune to disease."
         }
-      ]
+      ],
+      "description": "A sworn champion who combines martial skill with sacred power."
     },
     "ranger": {
       "armor": "Light, medium, shields",
@@ -1656,7 +1663,8 @@
           "status": "INFORMATIONAL",
           "description": "Use an action and a spell slot to sense presence (not location or number) of listed creature types within range for 1 minute per slot level."
         }
-      ]
+      ],
+      "description": "A tracker and wilderness defender, skilled with weapons and the ways of nature."
     },
     "rogue": {
       "armor": "Light",
@@ -1732,7 +1740,8 @@
           "status": "INFORMATIONAL",
           "description": "SRD Thief grants Fast Hands and Second-Story Work."
         }
-      ]
+      ],
+      "description": "An agile specialist who relies on skill, precision and opportunity."
     },
     "sorcerer": {
       "armor": "None",
@@ -1794,7 +1803,8 @@
           "status": "INFORMATIONAL",
           "description": "Choose two Metamagic options. Spell modifications and point expenditure remain manual."
         }
-      ]
+      ],
+      "description": "A spellcaster whose magic springs from an innate gift or bloodline."
     },
     "warlock": {
       "armor": "Light",
@@ -1856,7 +1866,8 @@
           "status": "INFORMATIONAL",
           "description": "Choose Pact of the Chain, Blade or Tome; related effects remain manual."
         }
-      ]
+      ],
+      "description": "A seeker of occult knowledge empowered by an otherworldly pact."
     },
     "wizard": {
       "armor": "None",
@@ -1904,7 +1915,8 @@
           "status": "INFORMATIONAL",
           "description": "SRD School of Evocation: Evocation Savant and Sculpt Spells."
         }
-      ]
+      ],
+      "description": "A scholar of arcane magic who studies spells and keeps a spellbook."
     }
   }
 }

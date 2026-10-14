@@ -19,14 +19,14 @@ public final class AbilityWorkspace {
         var geometry=layout(w);int cols=geometry.columns(),cw=(w-(cols-1)*6)/cols;
         for(int i=0;i<CreatorDraftState.ABILITIES.size();i++){
             String key=CreatorDraftState.ABILITIES.get(i);int fx=x+i%cols*(cw+6),y=geometry.top()+i/cols*geometry.stride();
-            pane.icon(key,fx,y,12);pane.label(NAMES.get(key),fx+14,y,cw-14,RpgTheme.GOLD);
-            int inputWidth=Math.max(18,cw-64);var field=new TextFieldWidget(font,fx+18,y+12,inputWidth,17,Text.literal(NAMES.get(key)));field.setMaxLength(2);field.setText(state.scores.get(key));field.setChangedListener(v->state.scores.put(key,v));pane.control(key,field);
-            pane.control("minus:"+key,new RpgButton(fx,y+12,16,17,"−","",()->adjust(state,key,-1,field,pending)).accessible("Decrease "+NAMES.get(key)));
-            pane.control("plus:"+key,new RpgButton(fx+20+inputWidth,y+12,16,17,"+","",()->adjust(state,key,1,field,pending)).accessible("Increase "+NAMES.get(key)));
-            pane.liveLabel(()->modifier(state.scores.get(key)),fx+40+inputWidth,y+15,24,RpgTheme.TEXT);
+            pane.panel("",fx-1,y-2,cw+2,33);pane.icon(key,fx,y,12);pane.label(NAMES.get(key),fx+14,y,cw-14,RpgTheme.GOLD);
+            int inputWidth=Math.min(40,Math.max(18,cw-64)),bx=fx+(cw-inputWidth-64)/2;var field=new TextFieldWidget(font,bx+18,y+12,inputWidth,17,Text.literal(NAMES.get(key)));field.setMaxLength(2);field.setText(state.scores.get(key));field.setChangedListener(v->state.scores.put(key,v));pane.control(key,field);
+            pane.control("minus:"+key,new RpgButton(bx,y+12,16,17,"−","",()->adjust(state,key,-1,field,pending)).accessible("Decrease "+NAMES.get(key)));
+            pane.control("plus:"+key,new RpgButton(bx+20+inputWidth,y+12,16,17,"+","",()->adjust(state,key,1,field,pending)).accessible("Increase "+NAMES.get(key)));
+            pane.liveLabel(()->modifier(state.scores.get(key)),bx+40+inputWidth,y+15,24,RpgTheme.TEXT);
         }
         int bottom=geometry.top()+((6+cols-1)/cols)*geometry.stride()+3;
-        pane.control("roll",new RpgButton(x,bottom,w,18,"In-game ability rolls unavailable","",()->{}).hint("Generic manual dice has no character/ability-generation authorization, six-roll assignment or durable anti-reroll contract.")).active=false;
+        pane.label("In-game ability rolls unavailable on this server",x,bottom,w,RpgTheme.MUTED);
         pane.label("No racial increases are applied. Saved combat scores are effective values.",x,bottom+24,w,RpgTheme.MUTED);
         pane.label("Point buy plans base scores. Enter racial adjustments manually only in Manual mode.",x,bottom+38,w,RpgTheme.MUTED);
         String saved=CreatorDraftState.ABILITIES.stream().map(k->k.toUpperCase(Locale.ROOT)+" "+CreatorDraftState.savedScore(state.snapshot(),k)).reduce((a,b)->a+" · "+b).orElse("");pane.label("Saved effective: "+saved,x,bottom+52,w,RpgTheme.MUTED);

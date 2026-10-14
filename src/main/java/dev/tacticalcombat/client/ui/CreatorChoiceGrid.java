@@ -16,9 +16,11 @@ public final class CreatorChoiceGrid extends ClickableWidget {
     private String selected="";
     private int first,focus;
     private final Consumer<Entry> choose;
-    public CreatorChoiceGrid(UiLayout.Rect r,Consumer<Entry> choose){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character choices"));this.choose=choose;}
-    private int columns(){return Math.max(1,width/58);}
-    private int rowHeight(){return 44;}
+    private final int cellWidth,cellHeight,iconSize;
+    public CreatorChoiceGrid(UiLayout.Rect r,Consumer<Entry> choose){this(r,choose,58,44,28);}
+    public CreatorChoiceGrid(UiLayout.Rect r,Consumer<Entry> choose,int cellWidth,int cellHeight,int iconSize){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character choices"));this.choose=choose;this.cellWidth=cellWidth;this.cellHeight=cellHeight;this.iconSize=iconSize;}
+    private int columns(){return Math.max(1,width/cellWidth);}
+    private int rowHeight(){return cellHeight;}
     public int position(){return first;}
     public int focusedIndex(){return focus;}
     public void focusedIndex(int value){focus=Math.clamp(value,0,Math.max(0,entries.size()-1));}
@@ -30,8 +32,8 @@ public final class CreatorChoiceGrid extends ClickableWidget {
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
             for(int i=start;i<Math.min(entries.size(),start+columns*visibleRows());i++){var e=entries.get(i);int x=getX()+i%columns*w,y=getY()+(i-start)/columns*rowHeight();boolean highlight=e.id().equals(selected)||isFocused()&&i==focus;
                 RpgTheme.panel(g,x,y,w-3,rowHeight()-2,highlight?RpgTheme.HOVER:RpgTheme.PANEL,highlight);
-                if(!e.icon().isEmpty()&&rowHeight()>=35)CreatorIcons.draw(g,e.icon(),x+(w-3-28)/2,y+2,28);
-                RpgTheme.text(g,font,e.name(),x+4,y+(e.icon().isEmpty()||rowHeight()<35?(rowHeight()-9)/2:32),w-11,highlight?RpgTheme.GOLD:RpgTheme.TEXT);
+                if(!e.icon().isEmpty()&&rowHeight()>=35)CreatorIcons.draw(g,e.icon(),x+(w-3-iconSize)/2,y+4,iconSize);
+                String title=font.trimToWidth(e.name(),w-9);g.drawText(font,title,x+(w-3-font.getWidth(title))/2,y+(e.icon().isEmpty()?(rowHeight()-9)/2:iconSize+9),highlight?RpgTheme.GOLD:RpgTheme.TEXT,false);
             }
         }
         if(isMouseOver(mx,my)){int i=index(mx,my);if(i>=0&&i<entries.size())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(entries.get(i).name()));}

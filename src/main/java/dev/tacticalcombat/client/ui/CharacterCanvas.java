@@ -16,6 +16,14 @@ public final class CharacterCanvas extends ClickableWidget {
     private record Progress(int x,int y,int width,double fraction) {}
     private final List<Progress> progress=new ArrayList<>();
     public void progress(int x,int y,int width,double fraction){progress.add(new Progress(x,y,width,Math.clamp(fraction,0,1)));total=Math.max(total,y+8);}
+    private record Head(String owner,int x,int y,int size) {}
+    private final List<Head> heads=new ArrayList<>();
+    public void skinHead(String owner,int x,int y,int size){heads.add(new Head(owner,x,y,size));total=Math.max(total,y+size);}
+    private record Panel(int x,int y,int width,int height,String title) {}
+    private final List<Panel> panels=new ArrayList<>();
+    public void panel(String title,int x,int y,int width,int height){panels.add(new Panel(x,y,width,height,title));total=Math.max(total,y+height+6);}
+    public void wrapped(String text,int x,int y,int width,int color){var font=MinecraftClient.getInstance().textRenderer;for(var line:font.getTextHandler().wrapLines(text,width,net.minecraft.text.Style.EMPTY)){label(line.getString(),x,y,width,color);y+=12;}}
+    public boolean dismissPopup(){if(focused!=null&&focused.widget() instanceof AlignmentDropdown d&&d.isOpen()){d.dismiss();return true;}return false;}
     private final List<Glyph> glyphs=new ArrayList<>();
     private final List<Child> controls=new ArrayList<>();
     private final List<Caption> captions=new ArrayList<>();
@@ -36,6 +44,8 @@ public final class CharacterCanvas extends ClickableWidget {
     @Override public void setFocused(boolean value){super.setFocused(value);if(focused!=null)focused.widget().setFocused(value);}
     @Override protected void renderWidget(DrawContext g,int mx,int my,float delta){var font=MinecraftClient.getInstance().textRenderer;g.fill(getX(),getY(),getRight(),getBottom(),0xFF181C21);
         try(var clip=ClipScope.open(()->g.enableScissor(getX(),getY(),getRight(),getBottom()),g::disableScissor)){
+            for(var panel:panels){int y=getY()+panel.y()-offset;RpgTheme.panel(g,getX()+panel.x(),y,panel.width(),panel.height(),RpgTheme.PANEL,false);if(!panel.title().isEmpty())RpgTheme.text(g,font,panel.title(),getX()+panel.x()+7,y+7,panel.width()-14,RpgTheme.GOLD);}
+            for(var head:heads){var client=MinecraftClient.getInstance();if(client.player!=null){var skin=client.player.getSkinTextures();boolean local=head.owner().isBlank()||head.owner().equals(client.player.getUuidAsString());if(!local){try{var entry=client.getNetworkHandler()==null?null:client.getNetworkHandler().getPlayerListEntry(java.util.UUID.fromString(head.owner()));if(entry==null)continue;skin=entry.getSkinTextures();}catch(RuntimeException missing){continue;}}net.minecraft.client.gui.PlayerSkinDrawer.draw(g,skin,getX()+head.x(),getY()+head.y()-offset,head.size());}}
             for(var bar:progress){int y=getY()+bar.y()-offset;g.fill(getX()+bar.x(),y,getX()+bar.x()+bar.width(),y+4,0xFF343A43);g.fill(getX()+bar.x(),y,getX()+bar.x()+(int)(bar.width()*bar.fraction()),y+4,RpgTheme.GOLD);}
             for(var icon:glyphs)CreatorIcons.draw(g,icon.key(),getX()+icon.x(),getY()+icon.y()-offset,icon.size());
             for(var c:captions){int y=getY()+c.y()-offset;if(y+12>=getY()&&y<getBottom()){RpgTheme.text(g,font,c.text().get(),getX()+c.x(),y,c.width(),c.color());if(isMouseOver(mx,my)&&my>=y&&my<y+12&&mx>=getX()+c.x()&&mx<getX()+c.x()+c.width())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(c.text().get()));}}
@@ -43,7 +53,7 @@ public final class CharacterCanvas extends ClickableWidget {
         }
         if(total>height){int h=Math.max(8,height*height/total),y=getY()+(height-h)*offset/Math.max(1,total-height);g.fill(getRight()-2,y,getRight(),y+h,RpgTheme.GOLD);}
     }
-    @Override public boolean mouseClicked(double x,double y,int button){if(!isMouseOver(x,y))return false;for(int i=controls.size()-1;i>=0;i--){var child=controls.get(i);var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);if(w.isMouseOver(x,y)){focusChild(child);if(w.mouseClicked(x,y,button))return true;}}setFocused(true);return true;}
+    @Override public boolean mouseClicked(double x,double y,int button){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown d&&d.isOpen()&&!d.isMouseOver(x,y)){d.dismiss();return true;}for(int i=controls.size()-1;i>=0;i--){var child=controls.get(i);var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);if(w.isMouseOver(x,y)){focusChild(child);if(w.mouseClicked(x,y,button))return true;}}setFocused(true);return true;}
     @Override public boolean mouseReleased(double x,double y,int button){return focused!=null&&focused.widget().mouseReleased(x,y,button);}
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){return focused!=null&&focused.widget().mouseDragged(x,y,button,dx,dy);}
     @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown dropdown&&dropdown.isOpen())return dropdown.mouseScrolled(x,y,horizontal,vertical);position(offset+(vertical>0?-20:20));return true;}
