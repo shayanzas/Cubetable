@@ -44,7 +44,7 @@ public final class CreatorCheckpointTests {
         }
         long original=0;for(String file:List.of("icons.png","class-extra.png")){var im=ImageIO.read(Path.of("src/main/resources/assets/tacticalcombat/textures/gui/creator/"+file).toFile());for(int y=0;y<im.getHeight();y++)for(int x=0;x<im.getWidth();x++)if((im.getRGB(x,y)>>>24)>0)original++;}
         check(visible==manifest.entrySet().stream().mapToLong(e->e.getValue().getAsJsonObject().get("pixels").getAsLong()).sum(),"All selected sprite-source pixels survive packaging");
-        check(manifest.entrySet().stream().filter(e->e.getValue().getAsJsonObject().get("source").getAsString().equals("icons.png")||e.getValue().getAsJsonObject().get("source").getAsString().equals("class-extra.png")).count()==43,"43 original assets remain in use; five explicitly corrected class assets");
+        check(manifest.entrySet().stream().filter(e->e.getValue().getAsJsonObject().get("source").getAsString().equals("icons.png")||e.getValue().getAsJsonObject().get("source").getAsString().equals("class-extra.png")).count()==38,"38 original assets, four C repairs and six explicitly corrected D class assets");
         check(CreatorIcons.REGIONS.keySet().stream().noneMatch(s->s.contains("elf")||s.contains("dwarf")||s.contains("race")),"No replacement race assets");
         var dir=Files.createTempDirectory("creator-checkpoint2");var repo=new CharacterRepository(dir.resolve("campaigns.json"));var library=new LibraryRepository(dir.resolve("library.json"));
         var api=new UiApiService(repo,library,(op,a)->{throw new IllegalArgumentException("No world adapter");});var owner=new CharacterRepository.Principal(UUID.randomUUID(),false);

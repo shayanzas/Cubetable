@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "method": "43 original motifs; four cleaned class motifs and rebuilt Ranger; lossless RGBA isolation; 2px transparent gutter",
+  "method": "38 original motifs; four retained Checkpoint C repairs; six Checkpoint D class repairs; lossless RGBA isolation; 2px transparent gutter",
   "sprites": {
     "barbarian": {
       "width": 631,
@@ -39,27 +39,27 @@
       ]
     },
     "druid": {
-      "width": 185,
-      "height": 210,
-      "pixels": 22378,
-      "source": "icons.png",
+      "width": 631,
+      "height": 622,
+      "pixels": 199828,
+      "source": "class-corrections-d.png",
       "sourceBounds": [
-        403,
-        33,
-        181,
-        206
+        0,
+        9,
+        627,
+        618
       ]
     },
     "fighter": {
-      "width": 155,
-      "height": 224,
-      "pixels": 19650,
-      "source": "icons.png",
+      "width": 628,
+      "height": 612,
+      "pixels": 165857,
+      "source": "class-corrections-d.png",
       "sourceBounds": [
-        572,
-        32,
-        151,
-        220
+        627,
+        19,
+        624,
+        608
       ]
     },
     "monk": {
@@ -75,51 +75,51 @@
       ]
     },
     "ranger": {
-      "width": 1220,
-      "height": 1241,
-      "pixels": 433058,
-      "source": "ranger-c.png",
+      "width": 1250,
+      "height": 1177,
+      "pixels": 396913,
+      "source": "ranger-d.png",
       "sourceBounds": [
         0,
-        17,
-        1216,
-        1237
+        57,
+        1246,
+        1173
       ]
     },
     "rogue": {
-      "width": 165,
-      "height": 197,
-      "pixels": 19689,
-      "source": "icons.png",
+      "width": 631,
+      "height": 631,
+      "pixels": 199700,
+      "source": "class-corrections-d.png",
       "sourceBounds": [
-        1016,
-        45,
-        161,
-        193
+        0,
+        627,
+        627,
+        627
       ]
     },
     "warlock": {
-      "width": 145,
-      "height": 200,
-      "pixels": 17604,
-      "source": "icons.png",
+      "width": 615,
+      "height": 631,
+      "pixels": 193659,
+      "source": "class-corrections-d.png",
       "sourceBounds": [
-        1165,
-        41,
-        141,
-        196
+        627,
+        627,
+        611,
+        627
       ]
     },
     "wizard": {
-      "width": 166,
-      "height": 245,
-      "pixels": 20992,
-      "source": "icons.png",
+      "width": 891,
+      "height": 874,
+      "pixels": 383266,
+      "source": "wizard-source-d.png",
       "sourceBounds": [
-        1286,
         0,
-        162,
-        241
+        17,
+        887,
+        870
       ]
     },
     "str": {

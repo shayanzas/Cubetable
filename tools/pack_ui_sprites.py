@@ -84,3 +84,23 @@ if correction_file.exists():
  manifest['method']='43 original motifs; four cleaned class motifs and rebuilt Ranger; lossless RGBA isolation; 2px transparent gutter'
  (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
  print('Packaged five Checkpoint C class corrections; 43 original sprites retained.')
+
+# Checkpoint D: repaired sources override only the six reported defective motifs.
+# Bard, Monk, Paladin, Sorcerer and the existing race presentation are untouched.
+if (BASE / 'class-corrections-d.png').exists():
+ corrected = np.asarray(Image.open(BASE/'class-corrections-d.png').convert('RGBA'))
+ assert corrected.shape[0] == corrected.shape[1] and corrected.shape[0] % 2 == 0
+ half=corrected.shape[0]//2
+ for index,name in enumerate(['druid','fighter','rogue','warlock']):
+  mask=np.zeros(corrected.shape[:2],dtype=bool);x=index%2*half;y=index//2*half
+  mask[y:y+half,x:x+half]=corrected[y:y+half,x:x+half,3]>0
+  package_correction(name,'class-corrections-d.png',corrected,mask)
+ wizard=np.asarray(Image.open(BASE/'wizard-source-d.png').convert('RGBA'))
+ mask=np.zeros(wizard.shape[:2],dtype=bool)
+ mask[:,:wizard.shape[1]//2]=wizard[:,:wizard.shape[1]//2,3]>0
+ package_correction('wizard','wizard-source-d.png',wizard,mask)
+ ranger=np.asarray(Image.open(BASE/'ranger-d.png').convert('RGBA'))
+ package_correction('ranger','ranger-d.png',ranger,ranger[:,:,3]>0)
+ manifest['method']='38 original motifs; four retained Checkpoint C repairs; six Checkpoint D class repairs; lossless RGBA isolation; 2px transparent gutter'
+ (BASE/'sprites.json').write_text(json.dumps(manifest,indent=2)+'\n')
+ print('Packaged six Checkpoint D class repairs; retained the four good C repairs and 38 originals.')
