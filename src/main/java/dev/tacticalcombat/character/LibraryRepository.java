@@ -13,7 +13,7 @@ import static dev.tacticalcombat.uiapi.SheetSections.require;
 /** Private, independent templates. Campaign submission copies bytes into the existing campaign transaction. */
 public final class LibraryRepository {
     public enum Stage { DRAFT, COMPLETE }
-    public record Draft(UUID id,UUID owner,String profile,SheetSections.Mode mode,Stage stage,long revision,String sheet) {}
+    public record Draft(UUID id,UUID owner,String profile,SheetSections.Mode mode,Stage stage,long revision,String sheet,boolean creationClosed) {}
     public record Validation(String section,String code,String message) {}
     private final AtomicJsonFile file;
     private Map<UUID,Draft> drafts;
@@ -30,14 +30,16 @@ public final class LibraryRepository {
     public Draft create(CharacterRepository.Principal p,String profile,SheetSections.Mode mode,String sheet) throws IOException {
         require(drafts.size()<1024 && drafts.values().stream().filter(d->d.owner.equals(p.id())).count()<32,"Library capacity reached");
         RulesProfiles.get(profile);Objects.requireNonNull(mode);SheetSections.validate(JsonParser.parseString(sheet).getAsJsonObject());
-        var d=new Draft(UUID.randomUUID(),p.id(),profile,mode,Stage.DRAFT,1,sheet);save(d);return d;
+        var d=new Draft(UUID.randomUUID(),p.id(),profile,mode,Stage.DRAFT,1,sheet,false);save(d);return d;
     }
     public Draft duplicate(CharacterRepository.Principal p,UUID id,long revision) throws IOException {
         var d=expected(p,id,revision);return create(p,d.profile,d.mode,d.sheet);
     }
     public Draft update(CharacterRepository.Principal p,UUID id,long revision,String section,JsonObject data) throws IOException {
         var d=expected(p,id,revision);var sheet=JsonParser.parseString(d.sheet).getAsJsonObject();var before=sheet.deepCopy();
-        if(section.equals("basics")) {
+        if(section.equals("classChange")) {
+            require(classChangeAllowed(d),"Class reset is available only for unfinished guided SRD creation drafts; completed/manual records use the existing non-reset editor");sheet=dev.tacticalcombat.uiapi.GuidedClassChange.apply(before,data);
+        } else if(section.equals("basics")) {
             require(data.keySet().equals(Set.of("name")),"Basics accepts name only");require(data.get("name").isJsonPrimitive() && data.get("name").getAsJsonPrimitive().isString(),"Name must be text");String name=data.get("name").getAsString();require(name.length()<=80,"Name too long");
             if(!sheet.has("text")) sheet.add("text",new JsonObject());sheet.getAsJsonObject("text").addProperty("name",name);
         } else if(section.equals("abilityAllocation")) {
@@ -49,10 +51,12 @@ public final class LibraryRepository {
             var rows=new JsonArray();rows.add(data.deepCopy());sheet.getAsJsonObject("collections").add("srd_combat",rows);
             SrdCharacterCodec.parseSheet(sheet.toString());
         } else sheet=SheetSections.update(sheet,section,data);
+        if(!section.equals("classChange")&&classChangeAllowed(d)&&!CreationRules.clazz(before).isBlank()&&!CreationRules.clazz(before).equals(CreationRules.clazz(sheet)))throw new IllegalArgumentException("Use the confirmed atomic class-change operation for guided creation drafts");
         CreationRules.transition(before,sheet);
         SheetSections.validate(sheet);
-        var next=new Draft(id,d.owner,d.profile,d.mode,Stage.DRAFT,revision+1,sheet.toString());save(next);return next;
+        var next=new Draft(id,d.owner,d.profile,d.mode,Stage.DRAFT,revision+1,sheet.toString(),d.creationClosed||d.stage==Stage.COMPLETE);save(next);return next;
     }
+    public static boolean classChangeAllowed(Draft d){return d.mode==SheetSections.Mode.GUIDED&&d.stage==Stage.DRAFT&&!d.creationClosed&&d.profile.equals(RulesProfiles.SRD)&&CreationRules.enrolled(JsonParser.parseString(d.sheet).getAsJsonObject());}
     public List<Validation> validate(CharacterRepository.Principal p,UUID id) {return validate(get(p,id));}
     private static List<Validation> validate(Draft d) {
         var errors=new ArrayList<Validation>();var sheet=JsonParser.parseString(d.sheet).getAsJsonObject();
@@ -68,27 +72,27 @@ public final class LibraryRepository {
     public Draft finalizeDraft(CharacterRepository.Principal p,UUID id,long revision,Integer confirmedUnusedPoints) throws IOException {
         var d=expected(p,id,revision);require(validate(d).isEmpty(),"Character has validation errors; review before finalizing");
         int unused=CreationRules.unusedPoints(JsonParser.parseString(d.sheet).getAsJsonObject());if(confirmedUnusedPoints!=null)require(Objects.equals(confirmedUnusedPoints,unused),"Unused ability point confirmation does not match this revision");require(d.stage==Stage.COMPLETE||unused<=0||Objects.equals(confirmedUnusedPoints,unused),"Confirm "+unused+" unused ability points for this exact revision before finalizing");
-        var next=new Draft(id,d.owner,d.profile,d.mode,Stage.COMPLETE,revision+1,d.sheet);save(next);return next;
+        var next=new Draft(id,d.owner,d.profile,d.mode,Stage.COMPLETE,revision+1,d.sheet,true);save(next);return next;
     }
     public void delete(CharacterRepository.Principal p,UUID id,long revision)throws IOException {
         expected(p,id,revision);var next=new HashMap<>(drafts);next.remove(id);
-        var root=new JsonObject();root.addProperty("schema",1);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
+        var root=new JsonObject();root.addProperty("schema",2);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
         file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);
     }
     public Draft expected(CharacterRepository.Principal p,UUID id,long revision) {
         var d=get(p,id);require(d.revision==revision,"Stale library revision; reload and reconcile");require(revision<Long.MAX_VALUE,"Revision exhausted");return d;
     }
     private void save(Draft d) throws IOException {
-        var next=new HashMap<>(drafts);next.put(d.id,d);var root=new JsonObject();root.addProperty("schema",1);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
+        var next=new HashMap<>(drafts);next.put(d.id,d);var root=new JsonObject();root.addProperty("schema",2);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
         file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);
     }
     private static Map<UUID,Draft> decode(String json) {
         CharacterRepository.checkDepth(json,24);var root=JsonParser.parseString(json).getAsJsonObject();
-        if(root.get("schema").getAsInt()!=1) throw new UnsupportedOperationException("Unsupported library schema; refusing rollback");
+        int schema=root.get("schema").getAsInt();if(schema!=1&&schema!=2) throw new UnsupportedOperationException("Unsupported library schema; refusing rollback");
         require(root.keySet().equals(Set.of("schema","drafts")),"Unknown library field");var rows=root.getAsJsonArray("drafts");require(rows.size()<=1024,"Library capacity exceeded");
         var result=new HashMap<UUID,Draft>();var owners=new HashMap<UUID,Integer>();
         for(var row:rows) {
-            var d=SheetSections.parse(row,Draft.class);Objects.requireNonNull(d.id);Objects.requireNonNull(d.owner);Objects.requireNonNull(d.mode);Objects.requireNonNull(d.stage);
+            var migrated=row.deepCopy().getAsJsonObject();if(schema==1){require(!migrated.has("creationClosed"),"Unexpected lifecycle field in legacy library");migrated.addProperty("creationClosed",migrated.get("stage").getAsString().equals("COMPLETE"));}var d=SheetSections.parse(migrated,Draft.class);Objects.requireNonNull(d.id);Objects.requireNonNull(d.owner);Objects.requireNonNull(d.mode);Objects.requireNonNull(d.stage);
             require(d.revision>0,"Invalid revision");RulesProfiles.get(d.profile);SheetSections.validate(JsonParser.parseString(d.sheet).getAsJsonObject());
             require(d.stage!=Stage.COMPLETE || validate(d).isEmpty(),"Invalid finalized draft");require(result.put(d.id,d)==null,"Duplicate library identity");require(owners.merge(d.owner,1,Integer::sum)<=32,"Owner library capacity exceeded");
         }
