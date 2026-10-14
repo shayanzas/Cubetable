@@ -30,11 +30,12 @@ public final class UiApiService {
             require(a.toString().length()<=49152,"Request too large");CharacterRepository.checkDepth(a.toString(),24);
             JsonObject out=new JsonObject();
             switch(op) {
-                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("hubQuickSwitch",true);out.addProperty("sectionsVersion",1);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
+                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("hubQuickSwitch",true);out.addProperty("sectionsVersion",1);out.addProperty("trackerVersion",2);out.addProperty("classChoiceValidation",true);out.addProperty("abilityAllocation",true);out.addProperty("inspirationCounts",true);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
                 case LIBRARY_LIST -> {fields(a,"page");var rows=new JsonArray();for(var d:library.list(p,integer(a,"page"))) {var row=draft(d,false);var errors=library.validate(p,d.id());row.addProperty("supportedValid",errors.isEmpty());row.addProperty("validationErrors",errors.size());rows.add(row);}out.add("characters",rows);out.addProperty("pageSize",8);}
                 case LIBRARY_CREATE -> {
                     fields(a,"profile mode sheet");String profile=string(a,"profile");String sheet=a.get("sheet").isJsonNull()?SrdAuthoring.template().toString():string(a,"sheet");
                     if(a.get("sheet").isJsonNull()) require(profile.equals(RulesProfiles.SRD),"Supply a manual pack sheet for this profile");
+                    if(a.get("sheet").isJsonNull()&&string(a,"mode").equals("GUIDED")) {var guided=JsonParser.parseString(sheet).getAsJsonObject();sheet=SheetSections.update(guided,"creation",SheetSections.raw(guided,"creation")).toString();}
                     out=draft(library.create(p,profile,SheetSections.Mode.valueOf(string(a,"mode")),sheet),true);
                 }
                 case LIBRARY_GET -> {

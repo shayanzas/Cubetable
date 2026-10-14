@@ -55,7 +55,7 @@ public final class LibraryCharacterScreen extends ManagementScreen {
             for(var e:array(draft,"submissions")) {var copy=e.getAsJsonObject();if(text(copy.getAsJsonObject("origin"),"submission").equals(existing.token().toString())) {client.setScreen(new CampaignCharacterScreen(this,text(copy,"id")));return;}}
             if(existing.revision()!=sourceRevision) {message="An older-source submission must be reconciled. Inspect campaign copies, or duplicate the source for an explicit new copy.";return;}
         }
-        confirm("Submit independent campaign copy?",text(draft,"name")+" → "+text(campaign,"name")+". This creates a separate campaign character. Source HP, XP, equipment and resources will not synchronize with it. Submission may require DM approval. If a reply is lost, refresh this source and retry with the same submission identity.",()->{
+        confirm("Submit independent campaign copy?",text(draft,"name")+" → "+text(campaign,"name")+". This creates a separate campaign character. Source HP, XP, equipment and resources will not synchronize with it. Campaign Inspiration begins at zero for player submissions and is awarded by the DM. Submission may require DM approval. If a reply is lost, refresh this source and retry with the same submission identity.",()->{
             if(revision(draft)!=sourceRevision) {message="Source changed while confirming. Reconcile before starting another copy.";return;}
             var intent=book.intent(id,target,sourceRevision); // Atomic write must succeed before the packet can be queued.
             mutate(LIBRARY_SUBMIT,args("character",id,"revision",intent.revision(),"campaign",target,"submission",intent.token()),data->client.setScreen(new CampaignCharacterScreen(this,text(data,"id"))));

@@ -24,20 +24,8 @@ public final class Srd2014Catalog {
         cls("warlock","Warlock","d8 · Charisma","Wisdom, Charisma saves · Patron at level 1"),cls("wizard","Wizard","d6 · Intelligence","Intelligence, Wisdom saves · Tradition at level 2"));
     public static final List<Choice> BACKGROUNDS=List.of(c("acolyte","Acolyte","Insight and Religion; two languages; shelter feature.","The SRD's worked background. Equipment/personality suggestions remain manual records."));
     public static final List<Choice> FEATS=List.of(c("grappler","Grappler","Prerequisite: Strength 13. Grappling benefits remain manual.","SRD 5.1 reference: advantage on attacks against a creature you grapple. A second grapple check can pin it, restraining both until the grapple ends. No effect is automated."));
-    public static int classSkillCount(String name){return switch(name){case "Bard","Ranger"->3;case "Rogue"->4;default->2;};}
-    public static Set<String> classSkills(String name){String skills=switch(name){
-        case "Barbarian"->"Animal Handling,Athletics,Intimidation,Nature,Perception,Survival";
-        case "Bard"->String.join(",",DashboardModel.SKILLS.keySet());
-        case "Cleric"->"History,Insight,Medicine,Persuasion,Religion";
-        case "Druid"->"Arcana,Animal Handling,Insight,Medicine,Nature,Perception,Religion,Survival";
-        case "Fighter"->"Acrobatics,Animal Handling,Athletics,History,Insight,Intimidation,Perception,Survival";
-        case "Monk"->"Acrobatics,Athletics,History,Insight,Religion,Stealth";
-        case "Paladin"->"Athletics,Insight,Intimidation,Medicine,Persuasion,Religion";
-        case "Ranger"->"Animal Handling,Athletics,Insight,Investigation,Nature,Perception,Stealth,Survival";
-        case "Rogue"->"Acrobatics,Athletics,Deception,Insight,Intimidation,Investigation,Perception,Performance,Persuasion,Sleight of Hand,Stealth";
-        case "Sorcerer"->"Arcana,Deception,Insight,Intimidation,Persuasion,Religion";
-        case "Warlock"->"Arcana,Deception,History,Intimidation,Investigation,Nature,Religion";
-        case "Wizard"->"Arcana,History,Insight,Investigation,Medicine,Religion";default->"";};return skills.isEmpty()?Set.of():Set.copyOf(Arrays.asList(skills.split(",")));}
+    public static int classSkillCount(String name){return dev.tacticalcombat.uiapi.CreationRules.skillCount(name);}
+    public static Set<String> classSkills(String name){return dev.tacticalcombat.uiapi.CreationRules.skills(name);}
     private Srd2014Catalog() {}
     private static Choice c(String id,String name,String summary,String guidance) {return new Choice(id,name,summary,guidance);}
     private static Choice cls(String id,String name,String summary,String guidance) {return c(id,capitalize(name),summary,guidance);}

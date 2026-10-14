@@ -17,7 +17,7 @@ public final class UiCorrectionTests {
         check(depth[0]==0,"exception releases acquired clip");var scope=ClipScope.open(push,pop);scope.close();scope.close();check(depth[0]==0,"close cannot underflow");
         var dir=Files.createTempDirectory("ui-correction");var repo=new CharacterRepository(dir.resolve("campaigns.json"));var library=new LibraryRepository(dir.resolve("library.json"));var owner=new CharacterRepository.Principal(UUID.randomUUID(),true);
         var api=new UiApiService(repo,library,(op,a)->{throw new IllegalArgumentException("world unavailable");});
-        var created=api.handle(owner,LIBRARY_CREATE,args("profile","srd_5_1","mode","GUIDED","sheet",null));check(created.code().equals("OK"),"create draft");String id=text(created.data(),"id");
+        var created=api.handle(owner,LIBRARY_CREATE,args("profile","srd_5_1","mode","GUIDED","sheet",dev.tacticalcombat.rules.srd.SrdAuthoring.template().toString()));check(created.code().equals("OK"),"create draft");String id=text(created.data(),"id");
         JsonObject canonical=DraftReplies.snapshot(created.data(),id);String saved=canonical.toString();
         var validation=api.handle(owner,LIBRARY_VALIDATE,args("character",id));check(validation.code().equals("OK")&&!validation.data().has("sheet"),"actual validation returns partial projection");
         DraftReplies.validation(validation.data());check(canonical.toString().equals(saved),"validation never replaces canonical draft");

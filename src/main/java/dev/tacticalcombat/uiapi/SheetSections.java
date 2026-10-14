@@ -60,37 +60,39 @@ public final class SheetSections {
     public record HitDice(int sides,int current,int maximum,String source) {
         public HitDice {require(Set.of(6,8,10,12).contains(sides),"Invalid Hit Die");range(maximum,0,20);range(current,0,maximum);text(source,128);}
     }
-    public record Trackers(boolean inspiration,int deathSuccesses,int deathFailures,int exhaustion,List<HitDice> hitDice,List<Pool> resources) {
-        public Trackers {range(deathSuccesses,0,3);range(deathFailures,0,3);range(exhaustion,0,6);hitDice=entries(hitDice,20);resources=entries(resources,32);unique(resources.stream().map(Pool::id).toList());}
+    public record Trackers(int inspiration,int deathSuccesses,int deathFailures,int exhaustion,List<HitDice> hitDice,List<Pool> resources) {
+        public Trackers(boolean inspiration,int successes,int failures,int exhaustion,List<HitDice> dice,List<Pool> resources){this(inspiration?1:0,successes,failures,exhaustion,dice,resources);}
+        public Trackers {require(inspiration>=0,"Inspiration must be nonnegative");range(deathSuccesses,0,3);range(deathFailures,0,3);range(exhaustion,0,6);hitDice=entries(hitDice,20);resources=entries(resources,32);unique(resources.stream().map(Pool::id).toList());}
     }
     public static final Map<String,Class<?>> TYPES=Map.of("identity",Identity.class,"proficiencies",Proficiencies.class,"progression",Progression.class,
-            "inventory",Inventory.class,"spellbook",Spellbook.class,"features",Features.class,"trackers",Trackers.class);
+            "inventory",Inventory.class,"spellbook",Spellbook.class,"features",Features.class,"trackers",Trackers.class,"creation",CreationRules.Choices.class);
     private SheetSections() {}
     public static Map<String,Object> defaults() {
         return Map.of("identity",new Identity("","","","","","","","","","","","","",""),
             "proficiencies",new Proficiencies(List.of(),List.of(),List.of(),List.of(),List.of(),List.of()),
             "progression",new Progression(1,0,Advancement.DM_MANAGED,List.of(),List.of(),List.of(),List.of(),List.of()),
             "inventory",new Inventory(List.of(),0,0,0,0,0),"spellbook",new Spellbook(List.of(),List.of(),List.of(),"",0,0),
-            "features",new Features(List.of(),List.of()),"trackers",new Trackers(false,0,0,0,List.of(),List.of()));
+            "features",new Features(List.of(),List.of()),"trackers",new Trackers(false,0,0,0,List.of(),List.of()),"creation",new CreationRules.Choices(List.of(),List.of(),"MANUAL"));
     }
-    public static JsonObject read(JsonObject sheet,String section) {
+    public static JsonObject read(JsonObject sheet,String section) {var data=raw(sheet,section);return section.equals("proficiencies")?CreationRules.effective(sheet,data):data;}
+    public static JsonObject raw(JsonObject sheet,String section) {
         require(TYPES.containsKey(section),"Unknown sheet section");
         var collections=sheet.getAsJsonObject("collections");
         if(collections==null || !collections.has("ui_"+section)) return JSON.toJsonTree(defaults().get(section)).getAsJsonObject();
         var rows=collections.getAsJsonArray("ui_"+section);require(rows.size()==1,"Section requires one versioned record");
         var wrapper=rows.get(0).getAsJsonObject();require(wrapper.keySet().equals(Set.of("version","data")),"Invalid section wrapper");
-        if(wrapper.get("version").getAsBigDecimal().intValueExact()!=1) throw new UnsupportedOperationException("Unsupported sheet section version; refusing rollback");
+        int version=wrapper.get("version").getAsBigDecimal().intValueExact();if(version!=1&&!(section.equals("trackers")&&version==2)) throw new UnsupportedOperationException("Unsupported sheet section version; refusing rollback");
         return JSON.toJsonTree(parse(wrapper.get("data"),TYPES.get(section))).getAsJsonObject();
     }
     public static JsonObject update(JsonObject sheet,String section,JsonElement data) {
         require(TYPES.containsKey(section),"Unknown sheet section");var value=parse(data,TYPES.get(section));var result=sheet.deepCopy();
         if(!result.has("collections")) result.add("collections",new JsonObject());
-        var wrapper=new JsonObject();wrapper.addProperty("version",1);wrapper.add("data",JSON.toJsonTree(value));var rows=new JsonArray();rows.add(wrapper);
+        var wrapper=new JsonObject();wrapper.addProperty("version",section.equals("trackers")?2:1);wrapper.add("data",JSON.toJsonTree(value));var rows=new JsonArray();rows.add(wrapper);
         result.getAsJsonObject("collections").add("ui_"+section,rows);validate(result);return result;
     }
     public static void validate(JsonObject sheet) {CharacterRepository.validateSheet(sheet.toString());validateExtensions(sheet);}
     public static void validateExtensions(JsonObject sheet) {var c=sheet.getAsJsonObject("collections");if(c!=null) for(String section:TYPES.keySet()) if(c.has("ui_"+section)) read(sheet,section);}
-    public static <T> T parse(JsonElement data,Class<T> type) {strict(data,type);return JSON.fromJson(data,type);}
+    public static <T> T parse(JsonElement data,Class<T> type) {if(type==Trackers.class&&data!=null&&data.isJsonObject()&&data.getAsJsonObject().has("inspiration")){var value=data.getAsJsonObject().get("inspiration");if(value.isJsonPrimitive()&&value.getAsJsonPrimitive().isBoolean()){data=data.deepCopy();data.getAsJsonObject().addProperty("inspiration",value.getAsBoolean()?1:0);}}strict(data,type);return JSON.fromJson(data,type);}
     private static void strict(JsonElement value,Type type) {
         if(value==null || value.isJsonNull()) {require(!(type instanceof Class<?> c) || !c.isPrimitive(),"Required primitive field");return;} // Nullable optional record members; required constructors reject null.
         if(type instanceof ParameterizedType p && p.getRawType()==List.class) {require(value.isJsonArray() && value.getAsJsonArray().size()<=128,"Invalid bounded list");for(var e:value.getAsJsonArray()) strict(e,p.getActualTypeArguments()[0]);return;}

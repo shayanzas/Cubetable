@@ -2,6 +2,7 @@ package dev.tacticalcombat.character;
 
 import com.google.gson.*;
 import dev.tacticalcombat.uiapi.SheetSections;
+import dev.tacticalcombat.uiapi.CreationRules;
 import dev.tacticalcombat.rules.RulesProfiles;
 import dev.tacticalcombat.rules.srd.*;
 import java.nio.file.Path;
@@ -35,15 +36,20 @@ public final class LibraryRepository {
         var d=expected(p,id,revision);return create(p,d.profile,d.mode,d.sheet);
     }
     public Draft update(CharacterRepository.Principal p,UUID id,long revision,String section,JsonObject data) throws IOException {
-        var d=expected(p,id,revision);var sheet=JsonParser.parseString(d.sheet).getAsJsonObject();
+        var d=expected(p,id,revision);var sheet=JsonParser.parseString(d.sheet).getAsJsonObject();var before=sheet.deepCopy();
         if(section.equals("basics")) {
             require(data.keySet().equals(Set.of("name")),"Basics accepts name only");require(data.get("name").isJsonPrimitive() && data.get("name").getAsJsonPrimitive().isString(),"Name must be text");String name=data.get("name").getAsString();require(name.length()<=80,"Name too long");
             if(!sheet.has("text")) sheet.add("text",new JsonObject());sheet.getAsJsonObject("text").addProperty("name",name);
+        } else if(section.equals("abilityAllocation")) {
+            require(d.profile.equals(RulesProfiles.SRD),"Ability allocation requires SRD profile");require(data.keySet().equals(Set.of("abilities","method")),"Allocation accepts scores and method only");
+            var combat=SrdAuthoring.data(sheet);combat.add("abilities",data.getAsJsonObject("abilities").deepCopy());var rows=new JsonArray();rows.add(combat);sheet.getAsJsonObject("collections").add("srd_combat",rows);SrdCharacterCodec.parseSheet(sheet.toString());
+            var choices=SheetSections.raw(sheet,"creation");choices.addProperty("abilityMethod",data.get("method").getAsString());sheet=SheetSections.update(sheet,"creation",choices);CreationRules.scores(sheet,false);
         } else if(section.equals("combat")) {
             require(d.profile.equals(RulesProfiles.SRD),"Combat section requires SRD profile");
             var rows=new JsonArray();rows.add(data.deepCopy());sheet.getAsJsonObject("collections").add("srd_combat",rows);
             SrdCharacterCodec.parseSheet(sheet.toString());
         } else sheet=SheetSections.update(sheet,section,data);
+        CreationRules.transition(before,sheet);
         SheetSections.validate(sheet);
         var next=new Draft(id,d.owner,d.profile,d.mode,Stage.DRAFT,revision+1,sheet.toString());save(next);return next;
     }
@@ -53,6 +59,7 @@ public final class LibraryRepository {
         if(!sheet.has("text") || !sheet.getAsJsonObject("text").has("name") || sheet.getAsJsonObject("text").get("name").getAsString().isBlank())
             errors.add(new Validation("basics","NAME_REQUIRED","Enter a character name"));
         if(d.profile.equals(RulesProfiles.SRD)) try {SrdCharacterCodec.parseSheet(d.sheet);} catch(RuntimeException e) {errors.add(new Validation("combat","INVALID_COMBAT",e.getMessage()));}
+        if(d.profile.equals(RulesProfiles.SRD)&&CreationRules.enrolled(sheet)){var identity=SheetSections.raw(sheet,"identity");if(identity.get("species").getAsString().isBlank())errors.add(new Validation("identity","RACE_REQUIRED","Choose a race or record a custom race in Identity"));if(identity.get("characterClass").getAsString().isBlank())errors.add(new Validation("identity","CLASS_REQUIRED","Choose a class or record a custom class"));for(String message:CreationRules.choiceErrors(sheet,true))errors.add(new Validation("proficiencies","CLASS_CHOICES",message));try{CreationRules.scores(sheet,true);}catch(RuntimeException e){errors.add(new Validation("abilities","SCORE_METHOD",e.getMessage()));}}
         return List.copyOf(errors);
     }
     public Draft finalizeDraft(CharacterRepository.Principal p,UUID id,long revision) throws IOException {

@@ -101,7 +101,7 @@ public class UiFoundationGameTests implements FabricGameTest {
             var target=f.actor(3,2,true);var e=SrdLiveGameTests.begin(f,new SrdLiveGameTests.Dice(20,1,18),player,target);
             var intent=e.preview(p,target.getUuid(),SrdEquipment.Weapon.UNARMED,SrdRules.AttackMode.MELEE,SrdCharacter.Ability.STR,false);
             long revision=e.revision(),turn=e.turn();var snapshot=f.repo.srdSnapshot(p.id(),f.campaign);var original=e.snapshot(p);
-            var change=new RpgRecords.Change(RpgRecords.Action.INSPIRATION,"trackers","",0,1);
+            var change=new RpgRecords.Change(RpgRecords.Action.DEATH_SUCCESSES,"trackers","",0,1);
             var request=new JsonObject();request.addProperty("character",id.toString());request.addProperty("manualRevision",0);request.add("change",SheetSections.JSON.toJsonTree(change));
             check(UiNetworking.handle(player,new UiRequestPayload(1,"MANUAL_COUNTER",request.toString())).code().equals("OK"),"bound accepted controller uses authenticated counter API");
             check(e.revision()==revision&&e.turn()==turn&&f.repo.srdSnapshot(p.id(),f.campaign).equals(snapshot),"no encounter or combat snapshot change");

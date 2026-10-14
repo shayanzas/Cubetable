@@ -34,7 +34,7 @@ public final class ManagementUiTests {
         var policy=memberCampaign.getAsJsonObject("policy").deepCopy();policy.addProperty("requireNewApproval",false);
         denied(api,owner,CAMPAIGN_POLICY,args("campaign",campaign,"revision",4,"policy",policy));
         denied(api,coDm,CAMPAIGN_INVITE,args("campaign",campaign,"revision",4,"player",outsider.id(),"dm",true));
-        var d=ok(api,owner,LIBRARY_CREATE,args("profile","srd_5_1","mode","GUIDED","sheet",null));String source=text(d,"id");
+        var d=ok(api,owner,LIBRARY_CREATE,args("profile","srd_5_1","mode","GUIDED","sheet",dev.tacticalcombat.rules.srd.SrdAuthoring.template().toString()));String source=text(d,"id");
         check(text(d,"stage").equals("DRAFT") && text(d,"mode").equals("GUIDED"),"persistent guided scaffold is explicitly a draft");
         check(array(ok(api,outsider,LIBRARY_LIST,args("page",0)),"characters").isEmpty(),"private libraries not listed to outsiders");denied(api,admin,LIBRARY_GET,args("character",source));
         d=ok(api,owner,LIBRARY_UPDATE,args("character",source,"revision",1,"section","basics","data",args("name","")));

@@ -12,7 +12,7 @@ public final class RpgRecords {
         require(change!=null && change.action()!=null,"Tracker action required");String section=change.section();
         var data=SheetSections.read(sheet,section);
         switch(change.action()) {
-            case INSPIRATION -> {require(section.equals("trackers") && (change.value()==0 || change.value()==1),"Inspiration is a single manual state");data.addProperty("inspiration",change.value()==1);}
+            case INSPIRATION -> {require(section.equals("trackers") && change.value()>=0,"Inspiration must be a nonnegative manual count");data.addProperty("inspiration",change.value());}
             case DEATH_SUCCESSES,DEATH_FAILURES,EXHAUSTION -> {
                 require(section.equals("trackers"),"Tracker section required");data.addProperty(switch(change.action()) {case DEATH_SUCCESSES->"deathSuccesses";case DEATH_FAILURES->"deathFailures";default->"exhaustion";},change.value());
             }

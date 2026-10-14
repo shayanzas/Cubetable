@@ -111,6 +111,7 @@ public final class CharacterRepository {
         // Submission is an independent, unapproved copy; it never imports ownership or permissions.
         var stats=new HashMap<>(Map.of("hp",20d,"hp_max",20d,"ac",10d,"movement_blocks",8d));
         JsonObject raw=JsonParser.parseString(sheet).getAsJsonObject();
+        if(!manages(p,campaign)){var trackers=dev.tacticalcombat.uiapi.SheetSections.read(raw,"trackers");if(trackers.get("inspiration").getAsInt()>0){trackers.addProperty("inspiration",0);raw=dev.tacticalcombat.uiapi.SheetSections.update(raw,"trackers",trackers);sheet=raw.toString();}}
         if(raw.has("values") && raw.get("values").isJsonObject()) {
             JsonObject values=raw.getAsJsonObject("values");
             for(String key:List.of("hp","hp_max","ac","movement_blocks","initiative_bonus","str","dex","con","int","wis","cha","prof","level"))
@@ -168,6 +169,9 @@ public final class CharacterRepository {
         if(c.profile.equals(RulesProfiles.SRD) && changes.has("collections.srd_combat"))
             require(c.runtimeRevision==runtimeRevision,"Stale SRD health revision; refresh and reconcile before replacing combat data");
         JsonObject sheet=CharacterEdits.apply(effectiveSheet(c),changes); validateSheet(sheet.toString());
+        dev.tacticalcombat.uiapi.CreationRules.transition(effectiveSheet(c),sheet);
+        int oldInspiration=dev.tacticalcombat.uiapi.SheetSections.read(effectiveSheet(c),"trackers").get("inspiration").getAsInt(),newInspiration=dev.tacticalcombat.uiapi.SheetSections.read(sheet,"trackers").get("inspiration").getAsInt();
+        require(newInspiration<=oldInspiration||manages(p,c.campaign),"Only campaign DM may award Inspiration");
         if(c.profile.equals(RulesProfiles.SRD) && changes.has("collections.srd_combat"))
             dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
         var stats=new HashMap<>(c.stats);
@@ -200,6 +204,7 @@ public final class CharacterRepository {
         var c=visible(p,id);require(mayTrack(p,id),"Only current controller or campaign DM may update manual counters");
         require(manualRevision(id)==expected,"Stale manual revision; refresh and reconcile counters");
         require(change!=null,"Manual change required");
+        if(change.action()==dev.tacticalcombat.uiapi.RpgRecords.Action.INSPIRATION)require(change.value()<=dev.tacticalcombat.uiapi.SheetSections.read(effectiveSheet(c),"trackers").get("inspiration").getAsInt()||manages(p,c.campaign),"Only campaign DM may award Inspiration");
         if(!manages(p,c.campaign)) require(campaign(c.campaign).policy.permits("collections.ui_"+change.section()),"Manual field forbidden by campaign policy");
         var sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
         var data=dev.tacticalcombat.uiapi.RpgRecords.apply(sheet,change);
