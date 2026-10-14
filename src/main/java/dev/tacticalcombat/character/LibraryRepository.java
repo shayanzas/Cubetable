@@ -63,7 +63,11 @@ public final class LibraryRepository {
         return List.copyOf(errors);
     }
     public Draft finalizeDraft(CharacterRepository.Principal p,UUID id,long revision) throws IOException {
+        return finalizeDraft(p,id,revision,null);
+    }
+    public Draft finalizeDraft(CharacterRepository.Principal p,UUID id,long revision,Integer confirmedUnusedPoints) throws IOException {
         var d=expected(p,id,revision);require(validate(d).isEmpty(),"Character has validation errors; review before finalizing");
+        int unused=CreationRules.unusedPoints(JsonParser.parseString(d.sheet).getAsJsonObject());if(confirmedUnusedPoints!=null)require(Objects.equals(confirmedUnusedPoints,unused),"Unused ability point confirmation does not match this revision");require(d.stage==Stage.COMPLETE||unused<=0||Objects.equals(confirmedUnusedPoints,unused),"Confirm "+unused+" unused ability points for this exact revision before finalizing");
         var next=new Draft(id,d.owner,d.profile,d.mode,Stage.COMPLETE,revision+1,d.sheet);save(next);return next;
     }
     public void delete(CharacterRepository.Principal p,UUID id,long revision)throws IOException {

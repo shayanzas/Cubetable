@@ -30,12 +30,12 @@ public final class UiApiService {
             require(a.toString().length()<=49152,"Request too large");CharacterRepository.checkDepth(a.toString(),24);
             JsonObject out=new JsonObject();
             switch(op) {
-                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("hubQuickSwitch",true);out.addProperty("sectionsVersion",1);out.addProperty("trackerVersion",2);out.addProperty("classChoiceValidation",true);out.addProperty("abilityAllocation",true);out.addProperty("inspirationCounts",true);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
+                case CAPABILITIES -> {fields(a,"");out.addProperty("version",1);out.addProperty("hubQuickSwitch",true);out.addProperty("sectionsVersion",1);out.addProperty("trackerVersion",2);out.addProperty("classChoiceValidation",true);out.addProperty("abilityAllocation",true);out.addProperty("inspirationCounts",true);out.addProperty("unusedPointBuyConfirmation",true);out.add("operations",SheetSections.JSON.toJsonTree(Operation.values()));out.addProperty("liveTakeover",false);out.addProperty("spellAutomation",false);out.addProperty("restRecovery",false);out.add("srdFields",SheetSections.JSON.toJsonTree(SrdAuthoring.fields()));out.add("sectionDefaults",SheetSections.JSON.toJsonTree(SheetSections.defaults()));}
                 case LIBRARY_LIST -> {fields(a,"page");var rows=new JsonArray();for(var d:library.list(p,integer(a,"page"))) {var row=draft(d,false);var errors=library.validate(p,d.id());row.addProperty("supportedValid",errors.isEmpty());row.addProperty("validationErrors",errors.size());rows.add(row);}out.add("characters",rows);out.addProperty("pageSize",8);}
                 case LIBRARY_CREATE -> {
                     fields(a,"profile mode sheet");String profile=string(a,"profile");String sheet=a.get("sheet").isJsonNull()?SrdAuthoring.template().toString():string(a,"sheet");
                     if(a.get("sheet").isJsonNull()) require(profile.equals(RulesProfiles.SRD),"Supply a manual pack sheet for this profile");
-                    if(a.get("sheet").isJsonNull()&&string(a,"mode").equals("GUIDED")) {var guided=JsonParser.parseString(sheet).getAsJsonObject();sheet=SheetSections.update(guided,"creation",SheetSections.raw(guided,"creation")).toString();}
+                    if(a.get("sheet").isJsonNull()&&string(a,"mode").equals("GUIDED")) {var guided=JsonParser.parseString(sheet).getAsJsonObject();var choices=SheetSections.raw(guided,"creation");choices.addProperty("abilityMethod","POINT_BUY");var combat=SrdAuthoring.data(guided);for(String key:CreationRules.ABILITIES)combat.getAsJsonObject("abilities").addProperty(key,8);var rows=new JsonArray();rows.add(combat);guided.getAsJsonObject("collections").add("srd_combat",rows);sheet=SheetSections.update(guided,"creation",choices).toString();}
                     out=draft(library.create(p,profile,SheetSections.Mode.valueOf(string(a,"mode")),sheet),true);
                 }
                 case LIBRARY_GET -> {
@@ -52,8 +52,8 @@ public final class UiApiService {
                 }
                 case LIBRARY_UPDATE -> {fields(a,"character revision section data");out=draft(library.update(p,id(a,"character"),revision(a),string(a,"section"),a.getAsJsonObject("data")),true);}
                 case LIBRARY_DELETE -> {fields(a,"character revision");library.delete(p,id(a,"character"),revision(a));out.addProperty("deleted",true);}
-                case LIBRARY_VALIDATE -> {fields(a,"character");out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,id(a,"character"))));out.addProperty("guidedRulesComplete",false);}
-                case LIBRARY_FINALIZE -> {fields(a,"character revision");out=draft(library.finalizeDraft(p,id(a,"character"),revision(a)),true);}
+                case LIBRARY_VALIDATE -> {fields(a,"character");var d=library.get(p,id(a,"character"));out.add("errors",SheetSections.JSON.toJsonTree(library.validate(p,d.id())));out.addProperty("revision",d.revision());out.addProperty("unusedAbilityPoints",CreationRules.unusedPoints(JsonParser.parseString(d.sheet()).getAsJsonObject()));out.addProperty("guidedRulesComplete",false);}
+                case LIBRARY_FINALIZE -> {fields(a,a.has("confirmedUnusedPoints")?"character revision confirmedUnusedPoints":"character revision");out=draft(library.finalizeDraft(p,id(a,"character"),revision(a),a.has("confirmedUnusedPoints")?integer(a,"confirmedUnusedPoints"):null),true);}
                 case LIBRARY_DUPLICATE -> {fields(a,"character revision");out=draft(library.duplicate(p,id(a,"character"),revision(a)),true);}
                 case LIBRARY_SUBMIT -> {
                     fields(a,"character revision campaign submission");var d=library.expected(p,id(a,"character"),revision(a));UUID campaign=id(a,"campaign"),submission=id(a,"submission");
