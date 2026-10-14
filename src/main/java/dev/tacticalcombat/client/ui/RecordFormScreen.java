@@ -30,7 +30,7 @@ public final class RecordFormScreen extends RpgScreen {
     private boolean reviewRequired;
     private String confirmedSnapshot;
     private boolean ambiguousCreation;
-    private boolean saving;
+    private boolean saving,continueAfterSave;
     public RecordFormScreen(Screen parent,String title,UiApiService.Operation readOp,JsonObject readArgs,List<Field> fields,
                             BiFunction<JsonObject,Map<String,String>,JsonObject> build,UiApiService.Operation saveOp,Consumer<JsonObject> saved,String explanation) {
         super(title,parent);this.readOp=readOp;this.readArgs=readArgs.deepCopy();this.fields=List.copyOf(fields);this.build=build;this.saveOp=saveOp;this.saved=saved;this.explanation=explanation;
@@ -38,20 +38,21 @@ public final class RecordFormScreen extends RpgScreen {
     }
     public static int capacity(int frameHeight) {return ManagementState.formCapacity(frameHeight);}
     public RecordFormScreen expected(JsonObject initial) {baseline=initial.deepCopy();return this;}
+    @Override protected boolean hasUnsavedChanges(){return dirty;}
     @Override protected void init() {
         for(var e:inputs.entrySet())if(e.getValue().isFocused()){focusKey=e.getKey();cursor=e.getValue().getCursor();}inputs.clear();super.init();clearChildren();busy=false;fresh=false;saving=false;
-        int x=frame.x()+12,w=frame.width()-24,n=capacity(frame.height());page=Math.min(page,(fields.size()-1)/n);
+        int x=frame.x()+12,w=frame.width()-24,n=capacity(frame.height()-footerExtra());page=Math.min(page,(fields.size()-1)/n);
         for(int i=page*n;i<Math.min(fields.size(),(page+1)*n);i++) {
             var f=fields.get(i);int y=frame.y()+54+(i-page*n)*36;
             if(f.label().contains("true/false")){var toggle=button(Boolean.parseBoolean(values.get(f.key()))?"☑ Yes":"☐ No","",x,y,w,20,()->{boolean value=!Boolean.parseBoolean(values.get(f.key()));values.put(f.key(),Boolean.toString(value));dirty=true;for(var child:children())if(child instanceof RpgButton b&&b.getY()==y)b.setMessage(Text.literal(value?"☑ Yes":"☐ No"));});toggle.hint(f.label().replace(" (true/false)",""));continue;}
             var input=addDrawableChild(new TextFieldWidget(textRenderer,x,y,w,20,Text.literal(f.label())));input.setMaxLength(f.limit());input.setText(values.get(f.key()));
             input.setChangedListener(v->{values.put(f.key(),v);dirty=true;});inputs.put(f.key(),input);if(f.key().equals(focusKey)){setInitialFocus(input);input.setCursor(cursor,false);}
         }
-        int bottom=frame.y()+frame.height()-60;
+        int bottom=frame.y()+frame.height()-60-footerExtra();
         button("Previous page","",x,bottom,(w-12)/3,20,()->{if(!busy && page>0) {page--;init();}}).active=page>0;
         button("Reload","",x+(w-12)/3+6,bottom,(w-12)/3,20,this::reload).hint("Fetch the latest revision without discarding staged text. Review concurrent changes before saving.");
         button("Next page","",x+2*((w-12)/3+6),bottom,(w-12)/3,20,()->{if(!busy && (page+1)*n<fields.size()) {page++;init();}}).active=(page+1)*n<fields.size();
-        footer();footerAction(saveLabel,0,this::save);
+        footer();footerAction(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE?"Save Draft":saveLabel,0,()->{continueAfterSave=false;save();});if(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE)footerAction("Save & Continue",1,()->{continueAfterSave=true;save();});
         reload();
     }
     private void reload() {
@@ -77,11 +78,12 @@ public final class RecordFormScreen extends RpgScreen {
     }
     private void performSave() {
         JsonObject a;try {a=build.apply(snapshot,Map.copyOf(values));}catch(RuntimeException invalid) {message=invalid.getMessage();messageColor=RpgTheme.ERROR;return;}
-        fresh=false;saving=true;if(saveOp==UiApiService.Operation.CAMPAIGN_CREATE) ambiguousCreation=true;
-        request(saveOp,a,r->{saving=false;if(r.code().equals("OK")) {ambiguousCreation=false;dirty=false;saved.accept(r.data());}else {if(!r.code().equals("TIMEOUT") && !r.code().equals("INVALID_REPLY")) ambiguousCreation=false;message=r.code()+": "+r.message()+" Unsaved text retained. Reload and review server state before retrying.";}});
+        var sent=Map.copyOf(values);fresh=false;saving=true;if(saveOp==UiApiService.Operation.CAMPAIGN_CREATE) ambiguousCreation=true;
+        saveDraftRequest(saveOp,a,next->{saving=false;ambiguousCreation=false;snapshot=next.deepCopy();baseline=snapshot.deepCopy();reviewRequired=false;fresh=true;dirty=!values.equals(sent);if(dirty){message="Submitted edits saved; newer typing retained.";if(continueAfterSave)save();return false;}message="Draft saved.";return true;},()->{if(creatorWizard()!=null&&saveOp==UiApiService.Operation.LIBRARY_UPDATE){if(continueAfterSave){var wizard=creatorWizard();wizard.navigateFromChild(CreatorFlow.Step.values()[Math.min(wizard.currentStep().ordinal()+1,CreatorFlow.Step.values().length-1)]);}}else saved.accept(snapshot);});
     }
+    @Override protected void request(UiApiService.Operation op,JsonObject args,java.util.function.Consumer<UiApiService.Reply> result){super.request(op,args,r->{if(!r.code().equals("OK")){saving=false;if(!r.code().equals("TIMEOUT")&&!r.code().equals("INVALID_REPLY"))ambiguousCreation=false;}result.accept(r);});}
     @Override protected void content(DrawContext g,int mx,int my,float delta) {
-        int n=capacity(frame.height());for(int i=page*n;i<Math.min(fields.size(),(page+1)*n);i++) RpgTheme.text(g,textRenderer,fields.get(i).label(),frame.x()+12,frame.y()+41+(i-page*n)*36,frame.width()-24,RpgTheme.MUTED);
+        int n=capacity(frame.height()-footerExtra());for(int i=page*n;i<Math.min(fields.size(),(page+1)*n);i++) RpgTheme.text(g,textRenderer,fields.get(i).label(),frame.x()+12,frame.y()+41+(i-page*n)*36,frame.width()-24,RpgTheme.MUTED);
     }
     @Override protected int statusWidth() {return frame.width()-226;}
     @Override public void close() {

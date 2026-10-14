@@ -25,11 +25,11 @@ public final class CreatorWorkspace {
         pane.label(recorded,dx,dy,dw,RpgTheme.TEXT);dy+=14;
         String intro=recorded.isBlank()?"Choose a race to explore its heritage and traits.":IdentityModel.intro(base);
         for(var line:font.getTextHandler().wrapLines(intro,dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.TEXT);dy+=12;}
-        dy+=5;for(var line:font.getTextHandler().wrapLines(IdentityModel.status(state),dw,net.minecraft.text.Style.EMPTY)){pane.label(line.getString(),dx,dy,dw,RpgTheme.MUTED);dy+=12;}
+        dy+=5;
         var variants=CreatorFlow.subraces(base);
         if(!variants.isEmpty()){
             dy+=8;pane.label("Subrace",dx,dy,dw,RpgTheme.GOLD);dy+=17;
-            pane.control("subrace:base",new RpgButton(dx,dy,dw,19,"Base "+base+" · manual","",()->{IdentityModel.subrace(state,"");rebuild.run();}).selected(sub.isEmpty()).hint("Keep the original base race. Base traits alone are an incomplete 2014 racial choice; choose a subrace or agree on a manual choice with your DM."));dy+=23;
+            pane.control("subrace:base",new RpgButton(dx,dy,dw,19,"Base "+base+" — No Subrace","",()->{IdentityModel.subrace(state,"");rebuild.run();}).selected(sub.isEmpty()).hint("Keep the original base race. Base traits alone are an incomplete 2014 racial choice; choose a subrace or agree on a manual choice with your DM."));dy+=23;
             for(String variant:variants){pane.control("subrace:"+variant,new RpgButton(dx,dy,dw,19,variant,"",()->{IdentityModel.subrace(state,variant);rebuild.run();}).selected(sub.equals(variant)).hint(variant+" · 2014 SRD choice. Its extra traits appear below; no bonus is granted automatically."));dy+=23;}
         }
         if(!IdentityModel.subraceIntro(sub).isBlank()){String description=IdentityModel.subraceIntro(sub);pane.wrapped(description,dx,dy,dw,RpgTheme.TEXT);dy+=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(description,dw,net.minecraft.text.Style.EMPTY).size()*12+5;}
@@ -55,7 +55,7 @@ public final class CreatorWorkspace {
         String prof=FeatureReference.classProficiencies(selected.id())+"\nSaves: "+selected.guidance().split(" · ")[0].replace(" saves","");
         for(String line:prof.split("\n")){int lines=net.minecraft.client.MinecraftClient.getInstance().textRenderer.getTextHandler().wrapLines(line,right-14,net.minecraft.text.Style.EMPTY).size();int height=lines*12+10;pane.panel("",dx,y,right,height);pane.wrapped(line,dx+7,y+5,right-14,RpgTheme.TEXT);y+=height+4;}
         String skills="Choose "+Srd2014Catalog.classSkillCount(selected.name())+" skills";pane.control("skills",new RpgButton(dx,y,right,18,skills,"",proficiencies).hint("Open the interactive class-specific Proficiencies page."));y+=25;
-        int level=-1;for(var entry:FeatureReference.classFeatures(selected.id())){if(entry.level()!=level){level=entry.level();pane.label("Level "+level,dx,y,right,RpgTheme.GOLD);y+=16;}feature(pane,entry,dx,y,right,inspect);y+=21;}
+        ClassFeatureRegion.build(pane,selected.id(),new UiLayout.Rect(dx,y,right,Math.max(1,pane.getHeight()-y)),inspect);
     }
     public static void feature(CharacterCanvas pane,FeatureReference.Entry entry,int x,int y,int width,java.util.function.Consumer<FeatureReference.Entry> inspect){pane.control(entry.id(),new RpgButton(x,y,width,18,entry.name(),"",()->inspect.accept(entry)).icon("features").hint(entry.tooltip()));}
 }

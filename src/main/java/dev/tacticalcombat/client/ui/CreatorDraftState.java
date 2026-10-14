@@ -15,6 +15,7 @@ public final class CreatorDraftState {
     private JsonObject snapshot,baseline;
     private WizardModel.ScoreMethod savedMethod;
     public CreatorDraftState(JsonObject initial){method=WizardModel.ScoreMethod.valueOf(SheetSections.read(initial.getAsJsonObject("sheet"),"creation").get("abilityMethod").getAsString());savedMethod=method;snapshot=initial.deepCopy();baseline=initial.deepCopy();for(String f:FIELDS)fields.put(f,savedField(initial,f));for(String k:ABILITIES)scores.put(k,savedScore(initial,k));}
+    public boolean legacyArray(){return method==WizardModel.ScoreMethod.STANDARD_ARRAY||savedMethod==WizardModel.ScoreMethod.STANDARD_ARRAY;}
     public JsonObject snapshot(){return snapshot.deepCopy();}
     public void accept(JsonObject next,boolean ownAcknowledgement){
         for(String f:FIELDS)if(fields.get(f).equals(savedField(snapshot,f)))fields.put(f,savedField(next,f));

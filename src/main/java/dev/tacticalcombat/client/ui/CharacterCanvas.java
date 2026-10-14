@@ -11,10 +11,13 @@ import org.lwjgl.glfw.GLFW;
 /** One clipped contextual surface with real child controls, explicit focus and retained scroll. */
 public final class CharacterCanvas extends ClickableWidget {
     private record Child(String key,ClickableWidget widget,int x,int y) {}
-    private record Caption(java.util.function.Supplier<String> text,int x,int y,int width,int color) {}
+    private record Caption(java.util.function.Supplier<String> text,int x,int y,int width,int color,boolean bold) {}
     private record Hint(int x,int y,int width,int height,String text) {}
     private final List<Hint> hints=new ArrayList<>();
     public void tooltip(int x,int y,int width,int height,String text){hints.add(new Hint(x,y,width,height,text));}
+    private record Marker(int x,int y,int size,boolean filled) {}
+    private final List<Marker> markers=new ArrayList<>();
+    public void marker(int x,int y,int size,boolean filled){markers.add(new Marker(x,y,size,filled));total=Math.max(total,y+size);}
     private record Glyph(String key,int x,int y,int size) {}
     private record Progress(int x,int y,int width,double fraction) {}
     private final List<Progress> progress=new ArrayList<>();
@@ -34,8 +37,9 @@ public final class CharacterCanvas extends ClickableWidget {
     private int offset,total;
     public CharacterCanvas(UiLayout.Rect r){super(r.x(),r.y(),r.width(),r.height(),Text.literal("Character workspace"));}
     public <T extends ClickableWidget>T control(String key,T widget){controls.add(new Child(key,widget,widget.getX(),widget.getY()));total=Math.max(total,widget.getBottom()+4);return widget;}
-    public void label(String text,int x,int y,int width,int color){captions.add(new Caption(()->text,x,y,width,color));total=Math.max(total,y+14);}
-    public void liveLabel(java.util.function.Supplier<String> text,int x,int y,int width,int color){captions.add(new Caption(text,x,y,width,color));total=Math.max(total,y+14);}
+    public void label(String text,int x,int y,int width,int color){captions.add(new Caption(()->text,x,y,width,color,false));total=Math.max(total,y+14);}
+    public void boldLabel(String text,int x,int y,int width,int color){captions.add(new Caption(()->text,x,y,width,color,true));total=Math.max(total,y+14);}
+    public void liveLabel(java.util.function.Supplier<String> text,int x,int y,int width,int color){captions.add(new Caption(text,x,y,width,color,false));total=Math.max(total,y+14);}
     public void icon(String key,int x,int y,int size){glyphs.add(new Glyph(key,x,y,size));total=Math.max(total,y+size);}
     public Map<String,Integer> cursors(){var result=new HashMap<String,Integer>();for(var c:controls)if(c.widget() instanceof net.minecraft.client.gui.widget.TextFieldWidget f)result.put(c.key(),f.getCursor());return result;}
     public void cursors(Map<String,Integer> saved){for(var c:controls)if(c.widget() instanceof net.minecraft.client.gui.widget.TextFieldWidget f&&saved.containsKey(c.key()))f.setCursor(Math.min(saved.get(c.key()),f.getText().length()),false);}
@@ -51,7 +55,8 @@ public final class CharacterCanvas extends ClickableWidget {
             for(var head:heads){var client=MinecraftClient.getInstance();if(client.player!=null){var skin=client.player.getSkinTextures();boolean local=head.owner().isBlank()||head.owner().equals(client.player.getUuidAsString());if(!local){try{var entry=client.getNetworkHandler()==null?null:client.getNetworkHandler().getPlayerListEntry(java.util.UUID.fromString(head.owner()));if(entry==null)continue;skin=entry.getSkinTextures();}catch(RuntimeException missing){continue;}}net.minecraft.client.gui.PlayerSkinDrawer.draw(g,skin,getX()+head.x(),getY()+head.y()-offset,head.size());}}
             for(var bar:progress){int y=getY()+bar.y()-offset;g.fill(getX()+bar.x(),y,getX()+bar.x()+bar.width(),y+4,0xFF343A43);g.fill(getX()+bar.x(),y,getX()+bar.x()+(int)(bar.width()*bar.fraction()),y+4,RpgTheme.GOLD);}
             for(var icon:glyphs)CreatorIcons.draw(g,icon.key(),getX()+icon.x(),getY()+icon.y()-offset,icon.size());
-            for(var c:captions){int y=getY()+c.y()-offset;if(y+12>=getY()&&y<getBottom()){RpgTheme.text(g,font,c.text().get(),getX()+c.x(),y,c.width(),c.color());if(isMouseOver(mx,my)&&my>=y&&my<y+12&&mx>=getX()+c.x()&&mx<getX()+c.x()+c.width())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(c.text().get()));}}
+            for(var marker:markers)RpgButton.drawMarker(g,getX()+marker.x(),getY()+marker.y()-offset,marker.size(),marker.filled(),marker.filled()?RpgTheme.GOLD:RpgTheme.MUTED);
+            for(var c:captions){int y=getY()+c.y()-offset;if(y+12>=getY()&&y<getBottom()){if(c.bold()){String label=font.getTextHandler().trimToWidth(c.text().get(),c.width(),net.minecraft.text.Style.EMPTY.withBold(true));g.drawText(font,Text.literal(label).formatted(net.minecraft.util.Formatting.BOLD),getX()+c.x(),y,c.color(),false);}else RpgTheme.text(g,font,c.text().get(),getX()+c.x(),y,c.width(),c.color());if(isMouseOver(mx,my)&&my>=y&&my<y+12&&mx>=getX()+c.x()&&mx<getX()+c.x()+c.width())MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(c.text().get()));}}
             for(var hint:hints)if(isMouseOver(mx,my)&&new UiLayout.Rect(getX()+hint.x(),getY()+hint.y()-offset,hint.width(),hint.height()).contains(mx,my))MinecraftClient.getInstance().currentScreen.setTooltip(Text.literal(hint.text()));
             for(var child:controls){var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);w.visible=w.getBottom()>getY()&&w.getY()<getBottom();if(w.visible)w.render(g,isMouseOver(mx,my)?mx:-1000,isMouseOver(mx,my)?my:-1000,delta);}
         }
@@ -60,7 +65,7 @@ public final class CharacterCanvas extends ClickableWidget {
     @Override public boolean mouseClicked(double x,double y,int button){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown d&&d.isOpen()&&!d.isMouseOver(x,y)){d.dismiss();return true;}for(int i=controls.size()-1;i>=0;i--){var child=controls.get(i);var w=child.widget();w.setX(getX()+child.x());w.setY(getY()+child.y()-offset);if(w.isMouseOver(x,y)){focusChild(child);if(w.mouseClicked(x,y,button))return true;}}setFocused(true);return true;}
     @Override public boolean mouseReleased(double x,double y,int button){return focused!=null&&focused.widget().mouseReleased(x,y,button);}
     @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){return focused!=null&&focused.widget().mouseDragged(x,y,button,dx,dy);}
-    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown dropdown&&dropdown.isOpen())return dropdown.mouseScrolled(x,y,horizontal,vertical);position(offset+(vertical>0?-20:20));return true;}
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(!isMouseOver(x,y))return false;if(focused!=null&&focused.widget() instanceof AlignmentDropdown dropdown&&dropdown.isOpen())return dropdown.mouseScrolled(x,y,horizontal,vertical);for(var child:controls)if(child.widget() instanceof RpgList list&&list.isMouseOver(x,y)&&list.mouseScrolled(x,y,horizontal,vertical))return true;position(offset+(vertical>0?-20:20));return true;}
     @Override public boolean charTyped(char c,int mods){return focused!=null&&focused.widget().charTyped(c,mods);}
     @Override public boolean keyPressed(int key,int scan,int mods){if(key==GLFW.GLFW_KEY_TAB&&!controls.isEmpty()){int i=focused==null?-1:controls.indexOf(focused);int next=i+((mods&GLFW.GLFW_MOD_SHIFT)!=0?-1:1);if(next<0||next>=controls.size())return false;focusChild(controls.get(next));return true;}if(focused!=null&&focused.widget().keyPressed(key,scan,mods))return true;if(key==GLFW.GLFW_KEY_PAGE_UP||key==GLFW.GLFW_KEY_PAGE_DOWN){position(offset+(key==GLFW.GLFW_KEY_PAGE_UP?-height:height));return true;}return false;}
     @Override protected void appendClickableNarrations(NarrationMessageBuilder b){if(focused!=null)focused.widget().appendNarrations(b);else b.put(NarrationPart.TITLE,Text.literal("Character workspace; Tab selects controls, wheel scrolls."));}

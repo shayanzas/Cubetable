@@ -17,9 +17,10 @@ public abstract class RpgScreen extends Screen {
     protected int messageColor=RpgTheme.MUTED;
     protected long generation;
     protected boolean busy;
+    private final DraftSaveFlow saveFlow=new DraftSaveFlow();
     protected RpgScreen(String title,Screen parent) {super(Text.literal(title));this.parent=parent;}
-    @Override protected void init() {generation++;frame=UiLayout.frame(width,height,parent instanceof CharacterWizardScreen?980:maximumWidth());guidedFrame=parent instanceof CharacterWizardScreen?frame:null;if(guidedFrame!=null)frame=WizardChildLayout.content(guidedFrame);}
-    @Override public void removed() {generation++;}
+    @Override protected void init() {saveFlow.invalidate();generation++;frame=UiLayout.frame(width,height,creatorWizard()!=null?980:maximumWidth());guidedFrame=creatorWizard()!=null?frame:null;if(guidedFrame!=null)frame=WizardChildLayout.content(guidedFrame);}
+    @Override public void removed() {saveFlow.invalidate();generation++;}
     @Override public void close() {client.setScreen(parent);}
     @Override public boolean shouldPause() {return false;}
     @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
@@ -33,11 +34,15 @@ public abstract class RpgScreen extends Screen {
     protected void wizardRail(CreatorFlow.Step step,java.util.function.BooleanSupplier canLeave){if(parent instanceof CharacterWizardScreen wizard&&guidedFrame!=null){var rail=addDrawableChild(new SectionRail(WizardChildLayout.rail(guidedFrame),java.util.Arrays.stream(CreatorFlow.Step.values()).map(v->new SectionRail.Item(v.name(),v.title)).toList(),key->{var next=CreatorFlow.Step.valueOf(key);if(next==step)return;if(busy)return;if(!canLeave.getAsBoolean()){message="Save these edits before changing creator tabs.";return;}wizard.navigateFromChild(next);},28));rail.selected(step.name());}}
     protected void returnFromWizard(CreatorFlow.Step step){if(parent instanceof CharacterWizardScreen wizard)wizard.navigateFromChild(CreatorFlow.Step.values()[Math.max(0,step.ordinal()-1)]);else client.setScreen(parent);}
     protected UiLayout.Rect footerFrame(){return guidedFrame==null?frame:guidedFrame;}
-    protected RpgButton footerAction(String title,int slot,Runnable action){var r=CreatorFooter.action(footerFrame(),slot);return button(title,"",r.x(),r.y(),r.width(),r.height(),action).hint(title);}
-    protected void creatorContinue(CreatorFlow.Step step,java.util.function.BooleanSupplier canLeave){if(parent instanceof CharacterWizardScreen wizard)footerAction("Continue",1,()->{if(busy)return;if(!canLeave.getAsBoolean()){message="Save these edits before continuing.";return;}wizard.navigateFromChild(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]);});}
+    protected boolean creatorFooter(){return this instanceof CharacterWizardScreen||creatorWizard()!=null;}
+    protected int footerExtra(){return creatorFooter()?CreatorFooter.extra(footerFrame()):0;}
+    protected RpgButton footerAction(String title,int slot,Runnable action){var r=CreatorFooter.action(footerFrame(),slot,creatorFooter());return button(title,"",r.x(),r.y(),r.width(),r.height(),action).wrappedTitle().hint(title);}
+    protected CharacterWizardScreen creatorWizard(){Screen current=parent;while(current instanceof RpgScreen screen){if(current instanceof CharacterWizardScreen wizard)return wizard;current=screen.parent;}return null;}
+    protected void creatorContinue(CreatorFlow.Step step,java.util.function.Consumer<Runnable> save){if(parent instanceof CharacterWizardScreen wizard)footerAction("Save & Continue",1,()->{if(!busy)save.accept(()->wizard.navigateFromChild(CreatorFlow.Step.values()[Math.min(step.ordinal()+1,CreatorFlow.Step.values().length-1)]));});}
     protected void footer() {
-        var r=CreatorFooter.back(footerFrame());button("Back","",r.x(),r.y(),r.width(),r.height(),this::close).hint("Return to the previous screen (Escape)");
+        var r=CreatorFooter.back(footerFrame(),creatorFooter());button("Back","",r.x(),r.y(),r.width(),r.height(),this::close).hint("Return to the previous screen (Escape)");
     }
+    protected void saveDraftRequest(UiApiService.Operation op,JsonObject args,java.util.function.Function<JsonObject,Boolean> accept,Runnable after){saveFlow.submit(this::request,op,args,accept,after,reason->{busy=false;message=reason;messageColor=RpgTheme.ERROR;});}
     protected void request(UiApiService.Operation op,JsonObject args,Consumer<UiApiService.Reply> result) {
         long current=generation;busy=true;message="Loading…";messageColor=RpgTheme.MUTED;
         UiRequestQueue.enqueue(op,args,()->client!=null && client.currentScreen==this && generation==current,reply->{
@@ -49,15 +54,17 @@ public abstract class RpgScreen extends Screen {
     protected void background(DrawContext g) {
         g.fill(0,0,width,height,RpgTheme.BACKGROUND);var box=guidedFrame==null?frame:guidedFrame;RpgTheme.panel(g,box.x(),box.y(),box.width(),box.height(),0xFF191D23,false);
         g.fill(frame.x()+12,frame.y()+29,frame.x()+frame.width()-12,frame.y()+30,RpgTheme.GOLD);
-        RpgTheme.text(g,textRenderer,getTitle().getString(),frame.x()+12,frame.y()+12,frame.width()-24,RpgTheme.GOLD);
+        var titleBox=footerExtra()>0?box:frame;RpgTheme.text(g,textRenderer,getTitle().getString(),titleBox.x()+12,titleBox.y()+12,titleBox.width()-(footerExtra()>0?74:24),RpgTheme.GOLD);
     }
     protected int maximumWidth(){return 720;}
     protected int statusWidth() {return frame.width()-100;}
+    protected boolean hasUnsavedChanges(){return false;}
+    protected String statusText(){return hasUnsavedChanges()&&!busy?"Unsaved changes · "+message:message;}
     protected void content(DrawContext g,int mx,int my,float delta) { }
     @Override public void render(DrawContext g,int mx,int my,float delta) {
         background(g);content(g,mx,my,delta);super.render(g,mx,my,delta);
-        RpgTheme.text(g,textRenderer,(busy?"… ":"")+message,footerFrame().x()+12,footerFrame().y()+footerFrame().height()-9,footerFrame().width()-24,messageColor);
-        if(new UiLayout.Rect(footerFrame().x()+12,footerFrame().y()+footerFrame().height()-10,footerFrame().width()-24,10).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(message));
+        RpgTheme.text(g,textRenderer,(busy?"… ":"")+statusText(),footerFrame().x()+12,footerFrame().y()+footerFrame().height()-9,footerFrame().width()-24,messageColor);
+        if(new UiLayout.Rect(footerFrame().x()+12,footerFrame().y()+footerFrame().height()-10,footerFrame().width()-24,10).contains(mx,my) && !message.isEmpty()) setTooltip(Text.literal(statusText()));
     }
     protected void paragraphs(DrawContext g,String text,int x,int y,int w,int maxHeight) {
         int bottom=y+maxHeight;for(var line:textRenderer.wrapLines(Text.literal(text),w)) {if(y+9>bottom) break;g.drawText(textRenderer,line,x,y,RpgTheme.MUTED,false);y+=12;}
