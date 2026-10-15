@@ -22,18 +22,19 @@ public final class UiNetworking {
     private static CharacterWatchService watches(){var repo=CharacterService.repository();require(library!=null,"Library service unavailable");if(watches==null||!watches.matches(repo,library))watches=new CharacterWatchService(repo,library);return watches;}
 
     private UiNetworking() {}
-    public static void forget(UUID player){SESSIONS.forget(player);SELECTED.remove(player);WATCH_LIMIT.forget(player);if(watches!=null)watches.forget(player);}
+    public static void forget(UUID player){SESSIONS.forget(player);EncounterLauncher.forget(player);SELECTED.remove(player);WATCH_LIMIT.forget(player);if(watches!=null)watches.forget(player);}
     public static void register() {
         PayloadTypeRegistry.playC2S().register(RulesWatchPayload.ID,RulesWatchPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(RulesChangedPayload.ID,RulesChangedPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(RulesWatchPayload.ID,(request,context)->{
             var player=context.player();if(!player.getServer().isOnThread()||!ServerPlayNetworking.canSend(player,RulesChangedPayload.ID))return;
-            if(request.close()){if(watches!=null)watches.close(player.getUuid(),request.token());return;}
+            if(request.close()){EncounterLauncher.close(player.getUuid(),request.token());if(watches!=null)watches.close(player.getUuid(),request.token());return;}
             if(!WATCH_LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime()))return;
             try{watches().watch(CharacterService.principal(player),request.token(),request.library(),request.character(),request.observed());}
             catch(RuntimeException unavailable){ServerPlayNetworking.send(player,new RulesChangedPayload(request.token(),true));}
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server->{
+            if(library!=null)EncounterLauncher.synchronize(server);
             if(watches==null)return;
             for(var notice:watches.drain(id->{var p=server.getPlayerManager().getPlayer(id);return p==null?null:CharacterService.principal(p);})){var p=server.getPlayerManager().getPlayer(notice.viewer());if(p!=null&&ServerPlayNetworking.canSend(p,RulesChangedPayload.ID))ServerPlayNetworking.send(p,new RulesChangedPayload(notice.token(),notice.revoked()));}
         });
@@ -46,7 +47,7 @@ public final class UiNetworking {
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{forget(handler.player.getUuid());});
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{EncounterLauncher.clear();watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
         require(player.getServer().isOnThread(),"UI operations require server thread");
@@ -92,6 +93,7 @@ public final class UiNetworking {
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
+            case ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
             case ACTIVE -> {
                 fields(a,"");var restored=CharacterService.restoreSelection(p);if(restored!=null&&restored.character()!=null)SELECTED.put(p.getUuid(),restored.character());try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }
                 UUID selected=SELECTED.get(p.getUuid());if(selected!=null) try {var c=repo.visible(who,selected);require(c.campaign().equals(CharacterService.selected(p)),"Selection campaign changed");require(repo.controller(selected).equals(p.getUuid())||repo.manages(who,c.campaign()),"Character control revoked");out.addProperty("character",selected.toString());} catch(IllegalArgumentException revoked) {SELECTED.remove(p.getUuid());}

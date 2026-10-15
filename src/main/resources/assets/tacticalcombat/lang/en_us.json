@@ -26,5 +26,7 @@
   "tacticalcombat.cmd.ended": "Combat ended.",
   "tacticalcombat.cmd.not_in_combat": "You are not in combat.",
   "key.tacticalcombat.event_log": "Cubetable event log (Shift: resize panel)",
-  "key.tacticalcombat.skip_dice": "Skip Cubetable dice animation"
+  "key.tacticalcombat.skip_dice": "Skip Cubetable dice animation",
+  "key.tacticalcombat.quick_sheet": "Character Quick Sheet",
+  "key.tacticalcombat.dm_quick": "DM Quick Tools"
 }

@@ -22,14 +22,19 @@ public final class SrdCombatScreen extends Screen {
     private final List<String> tieChoice=new ArrayList<>();
     private final Screen parent;
     public SrdCombatScreen() {this(null);}
-    public SrdCombatScreen(Screen parent) {super(Text.literal("SRD controlled encounter"));this.parent=parent;}
+    public SrdCombatScreen(Screen parent) {super(Text.literal("SRD controlled encounter"));this.parent=parent;page=ClientSrdCombat.state.has("state")&&ClientSrdCombat.state.get("state").getAsString().equals("PENDING")?1:2;}
+    @Override public boolean keyPressed(int key,int scan,int modifiers) {
+        if(TacticalCombatClient.QUICK_SHEET_KEY.matchesKey(key,scan)){client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(this,false));return true;}
+        if(TacticalCombatClient.DM_QUICK_KEY.matchesKey(key,scan)){client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(this,true));return true;}
+        return super.keyPressed(key,scan,modifiers);
+    }
     @Override public void close() {client.setScreen(parent);}
     /** Foreground is drawn before super.render; skip its late default background blur. */
     @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
     @Override public boolean shouldPause() { return false; }
     private int left() { return (width-Math.min(440,width-16))/2; }
     private int panel() { return Math.min(440,width-16); }
-    private void button(String text,int x,int y,int w,Runnable run) { addDrawableChild(ButtonWidget.builder(Text.literal(text),b->run.run()).dimensions(x,y,w,20).build()); }
+    private ButtonWidget button(String text,int x,int y,int w,Runnable run) { return addDrawableChild(ButtonWidget.builder(Text.literal(text),b->run.run()).dimensions(x,y,w,20).build()); }
     @Override protected void init() {
         clearChildren(); int x=left(),w=panel(),half=(w-4)/2;
         button("Refresh",x,height-24,half,()->ClientSrdCombat.send("state"));
@@ -80,8 +85,8 @@ public final class SrdCombatScreen extends Screen {
         }
         if(ClientSrdCombat.state.get("state").getAsString().equals("PENDING")) {
             button("Next tied actor: "+(target()==null?"none":target().get("name").getAsString()),x,118,w,()->{targetIndex++;init();});
-            button("Append to tie order",x,142,half,()->{if(target()!=null&&!tieChoice.contains(target().get("id").getAsString()))tieChoice.add(target().get("id").getAsString());});
-            button("Submit / clear",x+half+4,142,half,()->{var args=new JsonObject();var order=new JsonArray();tieChoice.forEach(order::add);args.add("order",order);ClientSrdCombat.send("tie",args);tieChoice.clear();});
+            button("Append to tie order ("+tieChoice.size()+")",x,142,half,()->{if(target()!=null&&!tieChoice.contains(target().get("id").getAsString()))tieChoice.add(target().get("id").getAsString());init();});
+            button("Submit / clear",x+half+4,142,half,()->{var args=new JsonObject();var order=new JsonArray();tieChoice.forEach(order::add);args.add("order",order);ClientSrdCombat.send("tie",args);tieChoice.clear();init();}).setTooltip(net.minecraft.client.gui.tooltip.Tooltip.of(Text.literal("Choose each actor from one equal-initiative group in the desired order, then Submit. A DM resolves NPC/mixed ties. Every tied player must submit the same order for a player-only tie. See Status / initiative for totals.")));
         }
     }
     @Override public void tick() {

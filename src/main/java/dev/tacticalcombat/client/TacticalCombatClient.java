@@ -40,6 +40,8 @@ public class TacticalCombatClient implements ClientModInitializer {
 			"key.categories.tacticalcombat"));
 
 	private static final double PAN_SPEED = 0.35;
+    public static final KeyBinding QUICK_SHEET_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.quick_sheet",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_J,"key.categories.tacticalcombat"));
+    public static final KeyBinding DM_QUICK_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.dm_quick",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,"key.categories.tacticalcombat"));
     private static final KeyBinding LOG_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.event_log",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_L,"key.categories.tacticalcombat"));
     private static final KeyBinding SKIP_DICE_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.skip_dice",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_O,"key.categories.tacticalcombat"));
 	private static final double PAN_LIMIT = 24.0;
@@ -107,6 +109,8 @@ public class TacticalCombatClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			ClientCombatState.tick(client);
             dev.tacticalcombat.client.ui.CubetableHud.tick(client);
+            while(QUICK_SHEET_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(null,false));
+            while(DM_QUICK_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(null,true));
             while(LOG_KEY.wasPressed()) {if(InputUtil.isKeyPressed(client.getWindow().getHandle(),GLFW.GLFW_KEY_LEFT_SHIFT)) dev.tacticalcombat.client.ui.CubetableHud.toggleLog();else client.setScreen(new dev.tacticalcombat.client.ui.HudLogScreen(client.currentScreen));}
             while(SKIP_DICE_KEY.wasPressed()) {dev.tacticalcombat.client.ui.CubetableHud.skip();}
 			BlockFade.tick(client);

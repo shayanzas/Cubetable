@@ -12,6 +12,7 @@ public final class PlayerUiModel {
  public static String primary(JsonObject d){return complete(d)?"Open Character Sheet":"Continue Creating";}
  public static String status(JsonObject d){return flag(d,"needsAttention")?"Needs Attention":complete(d)?"Complete":"Draft";}
  public static JsonObject identity(JsonObject d){return d.has("summary")?d.getAsJsonObject("summary"):d.has("sheet")?SheetSections.raw(d.getAsJsonObject("sheet"),"identity"):new JsonObject();}
+ public static String raceLabel(String species){for(var entry:dev.tacticalcombat.uiapi.GuidedRaceRules.SUBRACES.entrySet())for(String sub:entry.getValue())if(species.equals(entry.getKey()+" — "+sub))return sub;return species.isBlank()?"Race not chosen":species;}
  public static String race(JsonObject d){String s=text(identity(d),"species");return s.isBlank()?"Race not chosen":s;}
  public static String clazz(JsonObject d){var i=identity(d);String s=text(i,"characterClass"),sub=text(i,"subclass");return s.isBlank()?"Class not chosen":s+(sub.isBlank()?"":" · "+sub);}
  public static String level(JsonObject d){if(d.has("summary")&&d.getAsJsonObject("summary").has("level"))return "Level "+d.getAsJsonObject("summary").get("level").getAsInt();return d.has("sheet")&&creator(d)?"Level "+DashboardModel.xp(d.getAsJsonObject("sheet")).level():"";}

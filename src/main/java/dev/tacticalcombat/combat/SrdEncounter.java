@@ -65,19 +65,7 @@ public final class SrdEncounter implements Encounter {
         SrdEncounter encounter=new SrdEncounter(world,campaign,actors,dice);
         // Validate the entire admission set before taking ownership or changing any entity.
         for(LivingEntity actor:actors) {
-            require(actor.getWorld()==world && actor.isAlive() && !actor.isRemoved() && !actor.isSpectator()
-                    && world.getEntity(actor.getUuid())==actor,"Actor must be loaded and alive in this world");
-            if(actor instanceof ServerPlayerEntity player)
-                require(net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID),"Updated SRD v1 client required");
-            else require(actor instanceof MobEntity,"Only explicitly bound living mobs are supported NPCs");
-            require(!actor.hasVehicle() && !actor.hasPassengers() && !actor.isSwimming() && !actor.isFallFlying(),"Unsupported movement mode");
-            require(!CombatManager.isInCombat(actor),"Actor already belongs to an encounter");
-            var snapshot=CharacterService.srdStats(actor,campaign);
-            require(snapshot.stats().hp()>0,"Zero-HP actor needs adjudication before admission");
-            require(CharacterService.mayJoin(actor,campaign,RulesProfiles.get(RulesProfiles.SRD)),"Incompatible campaign or ruleset");
-            var terrain=new SrdTerrain(actor,snapshot.stats()); var cell=terrain.currentCell();
-            require(actor.getPos().squaredDistanceTo(terrain.position(cell))<1e-6 && terrain.landing(cell)==SrdMovement.Reason.OK,
-                    "Place actors on supported centered SRD footprints before admission");
+            var snapshot=validateAdmission(world,campaign,actor);
             encounter.snapshots.put(actor.getUuid(),snapshot);
         }
         var claimed=new ArrayList<LivingEntity>();
@@ -92,6 +80,23 @@ public final class SrdEncounter implements Encounter {
             }
             CombatManager.schedule(encounter); return encounter;
         } catch(RuntimeException failure) { encounter.end(); throw failure; }
+    }
+    /** Shared side-effect-free admission check for discovery and the trusted start path. */
+    static CharacterRepository.SrdSnapshot validateAdmission(ServerWorld world,UUID campaign,LivingEntity actor) {
+            require(actor.getWorld()==world && actor.isAlive() && !actor.isRemoved() && !actor.isSpectator()
+                    && world.getEntity(actor.getUuid())==actor,"Actor must be loaded and alive in this world");
+            if(actor instanceof ServerPlayerEntity player)
+                require(net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID),"Updated SRD v1 client required");
+            else require(actor instanceof MobEntity,"Only explicitly bound living mobs are supported NPCs");
+            require(!actor.hasVehicle() && !actor.hasPassengers() && !actor.isSwimming() && !actor.isFallFlying(),"Unsupported movement mode");
+            require(!CombatManager.isInCombat(actor),"Actor already belongs to an encounter");
+            var snapshot=CharacterService.srdStats(actor,campaign);
+            require(snapshot.stats().hp()>0,"Zero-HP actor needs adjudication before admission");
+            require(CharacterService.mayJoin(actor,campaign,RulesProfiles.get(RulesProfiles.SRD)),"Incompatible campaign or ruleset");
+            var terrain=new SrdTerrain(actor,snapshot.stats()); var cell=terrain.currentCell();
+            require(actor.getPos().squaredDistanceTo(terrain.position(cell))<1e-6 && terrain.landing(cell)==SrdMovement.Reason.OK,
+                    "Place actors on supported centered SRD footprints before admission");
+        return snapshot;
     }
     private static void require(boolean value,String reason) { if(!value) throw new IllegalArgumentException(reason); }
     public UUID id() { return id; }

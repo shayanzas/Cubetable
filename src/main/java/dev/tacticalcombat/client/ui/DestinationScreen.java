@@ -15,14 +15,15 @@ public final class DestinationScreen extends RpgScreen {
         super.init();clearChildren();int x=frame.x()+12,w=frame.width()-24,y=frame.y()+38;
         switch(destination) {
             case ENCOUNTERS -> {
-                button("SRD combat interface","Current controlled encounter",x,y,w,34,()->client.setScreen(new SrdCombatScreen(this))).hint("Uses the existing server-authoritative SRD interface. Start/watch via current DM commands.");
-                var tactical=button("Return to Tactical battlefield","Existing movement & combat controls",x,y+40,w,34,()->client.setScreen(new TacticalScreen()));
-                tactical.active=ClientCombatState.active;tactical.hint(tactical.active?"Return to the active Tactical encounter":"No active Tactical encounter");
-                addDrawableChild(new RpgTextBox(x,y+82,w,Math.max(24,frame.height()-158),"The encounter browser and graphical encounter setup arrive later. Existing /srdcombat and /tbc commands remain available."));
+                button("New Encounter","Select nearby approved, bound participants",x,y,w,34,()->client.setScreen(new EncounterLauncherScreen(this,true)));
+                button("View Active Encounters","Initiative, combat controls and DM ending",x,y+40,w,34,()->client.setScreen(ClientSrdCombat.hudEncounter()!=null?new SrdCombatScreen(this):new EncounterLauncherScreen(this,false)));
+                var tactical=button("Return to Tactical battlefield","Existing movement & combat controls",x,y+80,w,30,()->client.setScreen(new TacticalScreen()));tactical.active=ClientCombatState.active;
+                addDrawableChild(new RpgTextBox(x,y+116,w,Math.max(24,frame.height()-190),"Your selected campaign DM can start controlled SRD combat here. Actors need approved bindings and supported centered footprints. No automatic monster statistics are generated."));
             }
             case DM -> {
+                button("DM Quick Tools","Compact in-game panel",x,y+40,w,30,()->client.setScreen(new QuickPanelScreen(null,true)));
                 button("Campaign character roster","Inspect, approve, request changes, assign and bind",x,y,w,34,this::openRoster);
-                addDrawableChild(new RpgTextBox(x,y+42,w,Math.max(38,frame.height()-118),"Your campaign manager role was checked with the server. The roster and dashboard Manage tab provide ordinary character review. The server checks authority for every action. Live takeover is unavailable."));
+                addDrawableChild(new RpgTextBox(x,y+76,w,Math.max(38,frame.height()-152),"Your campaign manager role was checked with the server. The roster and dashboard Manage tab provide ordinary character review. The server checks authority for every action. Live takeover is unavailable."));
             }
             case TABLETOP -> {
                 button("Local character sheets","Generic D20, Percentile & manual dice",x,y,w,34,()->CharacterSheetScreen.open(this));

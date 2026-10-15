@@ -17,6 +17,7 @@ public final class ClientRulesWatch {
         active=new Watch(owner,token,library,character,stamp,changed);
         ClientPlayNetworking.send(new RulesWatchPayload(token,library,character,stamp,false));
     }
+    public static void panel(Object owner,UUID token,Consumer<Boolean> changed){close(owner);active=new Watch(owner,token,false,new UUID(0,0),"",changed);}
     public static void receive(RulesChangedPayload message){
         var watch=active;if(watch==null||!watch.token.equals(message.token()))return;
         if(message.revoked())active=null;

@@ -37,9 +37,7 @@ public final class SrdCommands {
                 if(!(entity instanceof LivingEntity living)) throw new IllegalArgumentException("Loaded actor not found: "+value);
                 actors.add(living);
             }
-            var encounter=SrdEncounter.start(p.getServerWorld(),CharacterService.principal(p),campaign,actors);
-            try { encounter.begin(); SrdNetworking.watch(p,encounter); for(var actor:actors) if(actor instanceof ServerPlayerEntity player) SrdNetworking.watch(player,encounter); }
-            catch(RuntimeException failure) { CombatManager.endCombat(encounter); throw failure; }
+            var encounter=EncounterLauncher.startAndWatch(p,campaign,actors);
             dev.tacticalcombat.TacticalCombatMod.LOGGER.info("DM {} started controlled SRD encounter {} in campaign {}",p.getUuid(),encounter.id(),campaign);
             return "Controlled public-position free-for-all "+encounter.id()+". Open /srdcombat. All participants are hostile; locations public even if invisible. No reactions/environment/death saves. DM controls NPCs.";
         }))));
