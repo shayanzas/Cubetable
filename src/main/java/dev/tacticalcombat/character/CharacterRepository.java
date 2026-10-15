@@ -35,15 +35,20 @@ public final class CharacterRepository {
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
     private final AtomicJsonFile file;
     private State state;
-    private record ParsedSrd(Character source,dev.tacticalcombat.rules.srd.SrdCharacter inputs) {}
-    // At most one immutable value per stored character (store limit 1,024). Never caches authorization.
+    private long viewGeneration;
+    public long viewGeneration(){return viewGeneration;}
+    private record ParsedSrd(Character source,dev.tacticalcombat.rules.srd.DerivedRulesState rules) {}
+    // One immutable projection per stored character. Object identity covers build/runtime/manual writes.
+    // Rules/catalog version is fixed by this process; future executable effects require a new snapshot contract.
     private final Map<UUID,ParsedSrd> parsedSrd=new HashMap<>();
-    dev.tacticalcombat.rules.srd.SrdCharacter srdInputs(Character c) {
+    dev.tacticalcombat.rules.srd.SrdCharacter srdInputs(Character c) { return srdRules(c).inputs(); }
+    dev.tacticalcombat.rules.srd.DerivedRulesState srdRules(Character c) {
+        require(c.profile.equals(RulesProfiles.SRD),"SRD projection requires SRD profile");
         var cached=parsedSrd.get(c.id);
-        if(cached!=null && cached.source==c) return cached.inputs;
-        var inputs=dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(c.sheet);
-        if(state.characters.get(c.id)==c) parsedSrd.put(c.id,new ParsedSrd(c,inputs));
-        return inputs;
+        if(cached!=null && cached.source==c) return cached.rules;
+        var rules=dev.tacticalcombat.rules.srd.CharacterRules.read(c.sheet);
+        if(state.characters.get(c.id)==c) parsedSrd.put(c.id,new ParsedSrd(c,rules));
+        return rules;
     }
     public CharacterRepository(Path path) throws IOException {
         this(new AtomicJsonFile(path));
@@ -138,7 +143,12 @@ public final class CharacterRepository {
      * The future encounter gateway must additionally validate ownership, turn and action identity.
      */
     public record SrdSnapshot(UUID character,UUID actor,UUID campaign,long revision,long runtimeRevision,
-                              dev.tacticalcombat.rules.srd.SrdCharacter stats) {}
+                              dev.tacticalcombat.rules.srd.DerivedRulesState rules) {
+        public SrdSnapshot(UUID character,UUID actor,UUID campaign,long revision,long runtimeRevision,dev.tacticalcombat.rules.srd.SrdCharacter stats) {
+            this(character,actor,campaign,revision,runtimeRevision,dev.tacticalcombat.rules.srd.CharacterRules.derive(stats));
+        }
+        public dev.tacticalcombat.rules.srd.SrdCharacter stats() { return rules.inputs(); }
+    }
     public SrdSnapshot srdSnapshot(UUID actor,UUID expectedCampaign) {
         UUID id=state.bindings.get(actor);
         require(id!=null,"SRD combat requires an approved bound character");
@@ -146,7 +156,7 @@ public final class CharacterRepository {
         require(c.approved && c.profile.equals(RulesProfiles.SRD) && c.profileVersion==1,"Approved SRD 5.1 profile required");
         require(c.campaign.equals(expectedCampaign),"SRD character belongs to another campaign");
         require(member(new Principal(c.owner,false),c.campaign),"SRD character owner is no longer a campaign member");
-        return new SrdSnapshot(c.id,actor,c.campaign,c.revision,c.runtimeRevision,srdInputs(c));
+        return new SrdSnapshot(c.id,actor,c.campaign,c.revision,c.runtimeRevision,srdRules(c));
     }
     public void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes) throws IOException {
         edit(p,id,revision,runtimeRevision,changes,false);
@@ -321,7 +331,7 @@ public final class CharacterRepository {
     public SrdSnapshot commitSrdHealth(SrdSnapshot expected,dev.tacticalcombat.rules.srd.SrdHealth health) throws IOException {
         SrdSnapshot current=srdSnapshot(expected.actor,expected.campaign);
         require(current.equals(expected),"Stale SRD runtime snapshot; effect not committed");
-        require(health.maximum()==current.stats.maximumHp(),"Runtime effects cannot change approved maximum HP");
+        require(health.maximum()==current.stats().maximumHp(),"Runtime effects cannot change approved maximum HP");
         Character c=character(current.character);
         JsonObject sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
         JsonObject data=dev.tacticalcombat.rules.srd.SrdAuthoring.data(sheet);
@@ -345,14 +355,14 @@ public final class CharacterRepository {
             dev.tacticalcombat.rules.srd.SrdEquipment.Weapon weapon,dev.tacticalcombat.rules.srd.SrdRules.AttackMode mode) throws IOException {
         require(!attacker.actor.equals(target.actor) && attacker.campaign.equals(target.campaign),"Invalid action participants");
         require(srdSnapshot(attacker.actor,attacker.campaign).equals(attacker) && srdSnapshot(target.actor,target.campaign).equals(target),"Stale SRD action snapshot");
-        require(health.maximum()==target.stats.maximumHp(),"Runtime effects cannot change maximum HP");
+        require(health.maximum()==target.stats().maximumHp(),"Runtime effects cannot change maximum HP");
         String stock=null; int remaining=0;
         if(mode==dev.tacticalcombat.rules.srd.SrdRules.AttackMode.THROWN) {
-            require(weapon==dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.DAGGER,"Unsupported thrown stock"); stock="daggers"; remaining=attacker.stats.daggers()-1;
+            require(weapon==dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.DAGGER,"Unsupported thrown stock"); stock="daggers"; remaining=attacker.stats().daggers()-1;
         } else if(mode==dev.tacticalcombat.rules.srd.SrdRules.AttackMode.RANGED) {
             require(weapon.ranged,"Invalid ranged weapon");
             stock=weapon==dev.tacticalcombat.rules.srd.SrdEquipment.Weapon.LIGHT_CROSSBOW?"bolts":"arrows";
-            remaining=(stock.equals("bolts")?attacker.stats.bolts():attacker.stats.arrows())-1;
+            remaining=(stock.equals("bolts")?attacker.stats().bolts():attacker.stats().arrows())-1;
         }
         require(stock==null || remaining>=0,"No approved ammunition remains");
         var records=new HashMap<>(state.characters);
@@ -369,7 +379,7 @@ public final class CharacterRepository {
         return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
     }
     private void commit(State next) throws IOException {
-        String json=encode(next); file.write(json,CharacterRepository::decode); state=next;
+        String json=encode(next); file.write(json,CharacterRepository::decode); state=next; viewGeneration++;
         parsedSrd.entrySet().removeIf(e->next.characters.get(e.getKey())!=e.getValue().source);
     }
     public static void validateStats(Map<String,Double> stats) {

@@ -17,6 +17,8 @@ public final class LibraryRepository {
     public record Validation(String section,String code,String message) {}
     private final AtomicJsonFile file;
     private Map<UUID,Draft> drafts;
+    private long viewGeneration;
+    public long viewGeneration(){return viewGeneration;}
     public LibraryRepository(Path path) throws IOException {this(new AtomicJsonFile(path));}
     LibraryRepository(AtomicJsonFile file) throws IOException {this.file=file;drafts=file.read(LibraryRepository::decode,Map.of());}
     public boolean recoveredFromBackup() {return file.recoveredFromBackup();}
@@ -77,14 +79,14 @@ public final class LibraryRepository {
     public void delete(CharacterRepository.Principal p,UUID id,long revision)throws IOException {
         expected(p,id,revision);var next=new HashMap<>(drafts);next.remove(id);
         var root=new JsonObject();root.addProperty("schema",2);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
-        file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);
+        file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);viewGeneration++;
     }
     public Draft expected(CharacterRepository.Principal p,UUID id,long revision) {
         var d=get(p,id);require(d.revision==revision,"Stale library revision; reload and reconcile");require(revision<Long.MAX_VALUE,"Revision exhausted");return d;
     }
     private void save(Draft d) throws IOException {
         var next=new HashMap<>(drafts);next.put(d.id,d);var root=new JsonObject();root.addProperty("schema",2);root.add("drafts",SheetSections.JSON.toJsonTree(next.values()));
-        file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);
+        file.write(root.toString(),LibraryRepository::decode);drafts=Map.copyOf(next);viewGeneration++;
     }
     private static Map<UUID,Draft> decode(String json) {
         CharacterRepository.checkDepth(json,24);var root=JsonParser.parseString(json).getAsJsonObject();

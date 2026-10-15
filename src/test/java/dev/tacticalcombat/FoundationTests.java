@@ -111,6 +111,7 @@ public final class FoundationTests {
         CharacterSyncTests.run();
         dev.tacticalcombat.character.PersistenceFaultTests.run();
         LegacyRulesParityTests.run();
+        dev.tacticalcombat.character.RulesProjectionTests.run();
         SrdRulesTests.run();
         SrdMovementTests.run();
         SrdAuthoringTests.run();

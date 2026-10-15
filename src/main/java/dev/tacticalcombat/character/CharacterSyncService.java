@@ -94,22 +94,25 @@ public final class CharacterSyncService {
     }
     public JsonObject snapshot(CharacterRepository.Principal who,UUID id) {
         var c=repo.visible(who,id);var sheet=repo.effectiveSheet(c);var result=summary(who,c,sheet);
+        result.addProperty("viewStamp",dev.tacticalcombat.uiapi.CharacterWatchService.campaignStamp(repo,who,id));
         result.add("sheet",sheet); result.add("stats",GSON.toJsonTree(c.stats()));
         result.add("policy",GSON.toJsonTree(repo.campaign(c.campaign()).policy()));
         if(c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD)) {
             var srd=new JsonObject(); srd.addProperty("authoringVersion",1);
             srd.addProperty("worldCombatEnabled",dev.tacticalcombat.rules.RulesProfiles.get(c.profile()).worldCombat());
             try {
-                var stats=repo.srdInputs(c);
+                var rules=repo.srdRules(c);var stats=rules.inputs();
+                result.add("rules",dev.tacticalcombat.uiapi.RulesReadModel.of(rules,sheet));
                 srd.addProperty("valid",true); srd.addProperty("hp",stats.hp()); srd.addProperty("maximumHp",stats.maximumHp());
-                srd.addProperty("temporaryHp",stats.temporaryHp()); srd.addProperty("ac",stats.armorClass());
-                srd.addProperty("speedFeet",stats.walkingSpeedFeet());
-                srd.addProperty("initiativeModifier",stats.modifier(dev.tacticalcombat.rules.srd.SrdCharacter.Ability.DEX)+stats.initiativeBonus());
+                srd.addProperty("temporaryHp",stats.temporaryHp()); srd.addProperty("ac",rules.armorClass());
+                srd.addProperty("speedFeet",rules.walkingSpeedFeet());
+                srd.addProperty("initiativeModifier",rules.initiativeModifier());
                 boolean member=repo.member(new CharacterRepository.Principal(c.owner(),false),c.campaign());
                 boolean ready=c.approved() && repo.binding(id)!=null && member && stats.hp()>0;
                 srd.addProperty("characterReady",ready);
                 srd.addProperty("reason",!member?"Owner is not a campaign member":!c.approved()?"Needs campaign approval":repo.binding(id)==null?"Needs server binding":stats.hp()==0?"Zero HP requires adjudication":"Character prerequisites satisfied; encounter activation is separate");
             } catch(RuntimeException e) {
+                result.add("rules",dev.tacticalcombat.uiapi.RulesReadModel.unavailable(e));
                 srd.addProperty("valid",false); srd.addProperty("characterReady",false);
                 String error=e.getMessage()==null?"Invalid SRD character data":e.getMessage();
                 srd.addProperty("reason",error.substring(0,Math.min(error.length(),240)));

@@ -50,6 +50,7 @@ public class TacticalCombatClient implements ClientModInitializer {
         dev.tacticalcombat.client.ui.PauseMenuEntry.register();
         ClientTickEvents.END_CLIENT_TICK.register(client->dev.tacticalcombat.client.ui.UiRequestQueue.tick());
         ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.UiReplyPayload.ID,(payload,context)->ClientUiApi.receive(payload));
+        ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.RulesChangedPayload.ID,(payload,context)->ClientRulesWatch.receive(payload));
         ClientTickEvents.END_CLIENT_TICK.register(client->ClientUiApi.tick());
         ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.SrdStatePayload.ID,(payload,context)->ClientSrdCombat.receive(payload));
         ClientCommandRegistrationCallback.EVENT.register((dispatcher,registryAccess)->dispatcher.register(ClientCommandManager.literal("srdcombat").executes(ctx->{ClientSrdCombat.open();return 1;})));
@@ -71,6 +72,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 			ClientSrdCombat.clear();
             dev.tacticalcombat.client.ui.CubetableHud.clear();
             ClientUiApi.clear();
+            ClientRulesWatch.clear();
             dev.tacticalcombat.client.ui.UiRequestQueue.clear();
 			ClientCharacters.clear();
             ClientCombatState.reset();

@@ -17,9 +17,26 @@ public final class UiNetworking {
     private static final Map<UUID,UUID> SELECTED=new HashMap<>();
     private static LibraryRepository library;
     private static UiWorkflowStore workflows;
+    private static CharacterWatchService watches;
+    private static final dev.tacticalcombat.core.RateLimit WATCH_LIMIT=new dev.tacticalcombat.core.RateLimit(8,20);
+    private static CharacterWatchService watches(){var repo=CharacterService.repository();require(library!=null,"Library service unavailable");if(watches==null||!watches.matches(repo,library))watches=new CharacterWatchService(repo,library);return watches;}
+
     private UiNetworking() {}
-    public static void forget(UUID player){SESSIONS.forget(player);SELECTED.remove(player);}
+    public static void forget(UUID player){SESSIONS.forget(player);SELECTED.remove(player);WATCH_LIMIT.forget(player);if(watches!=null)watches.forget(player);}
     public static void register() {
+        PayloadTypeRegistry.playC2S().register(RulesWatchPayload.ID,RulesWatchPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(RulesChangedPayload.ID,RulesChangedPayload.CODEC);
+        ServerPlayNetworking.registerGlobalReceiver(RulesWatchPayload.ID,(request,context)->{
+            var player=context.player();if(!player.getServer().isOnThread()||!ServerPlayNetworking.canSend(player,RulesChangedPayload.ID))return;
+            if(request.close()){if(watches!=null)watches.close(player.getUuid(),request.token());return;}
+            if(!WATCH_LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime()))return;
+            try{watches().watch(CharacterService.principal(player),request.token(),request.library(),request.character(),request.observed());}
+            catch(RuntimeException unavailable){ServerPlayNetworking.send(player,new RulesChangedPayload(request.token(),true));}
+        });
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server->{
+            if(watches==null)return;
+            for(var notice:watches.drain(id->{var p=server.getPlayerManager().getPlayer(id);return p==null?null:CharacterService.principal(p);})){var p=server.getPlayerManager().getPlayer(notice.viewer());if(p!=null&&ServerPlayNetworking.canSend(p,RulesChangedPayload.ID))ServerPlayNetworking.send(p,new RulesChangedPayload(notice.token(),notice.revoked()));}
+        });
         PayloadTypeRegistry.playC2S().register(UiRequestPayload.ID,UiRequestPayload.CODEC);PayloadTypeRegistry.playS2C().register(UiReplyPayload.ID,UiReplyPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(UiRequestPayload.ID,(request,context)->{
             if(ServerPlayNetworking.canSend(context.player(),UiReplyPayload.ID)) ServerPlayNetworking.send(context.player(),handle(context.player(),request));
@@ -29,7 +46,7 @@ public final class UiNetworking {
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{forget(handler.player.getUuid());});
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
         require(player.getServer().isOnThread(),"UI operations require server thread");

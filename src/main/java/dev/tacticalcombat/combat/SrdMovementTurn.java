@@ -64,7 +64,7 @@ public final class SrdMovementTurn {
         terrain=new SrdTerrain(actor,snapshot.stats()); anchor=terrain.currentCell();
         if(actor.getPos().squaredDistanceTo(terrain.position(anchor))>1e-6 || terrain.landing(anchor)!=Reason.OK)
             throw new IllegalArgumentException("SRD movement requires a supported, centered starting footprint");
-        budget=snapshot.stats().walkingSpeedFeet(); requests=new TurnRequests(initial.encounter); requests.nextTurn();
+        budget=snapshot.rules().walkingSpeedFeet(); requests=new TurnRequests(initial.encounter); requests.nextTurn();
     }
     public int spentFeet() { return spent; }
     public int remainingFeet() { return budget-spent; }

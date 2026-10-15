@@ -134,7 +134,7 @@ public final class SrdEncounter implements Encounter {
         thread(); require(state==State.PENDING && initiative.isEmpty(),"Initiative already rolled");
         var totals=new LinkedHashMap<UUID,Integer>();
         for(var actor:actors) {
-            var roll=SrdRules.initiative(fresh(actor).stats(),dice); initiative.put(actor.getUuid(),roll); totals.put(actor.getUuid(),roll.total());
+            var roll=fresh(actor).rules().initiative(dice); initiative.put(actor.getUuid(),roll); totals.put(actor.getUuid(),roll.total());
         }
         groups=SrdRules.initiativeGroups(totals); requests.nextTurn(); revision++;
         reason="Initiative tie: players choose PC order; campaign DM chooses NPC/mixed order";
@@ -218,7 +218,7 @@ public final class SrdEncounter implements Encounter {
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands) {
         thread(); require(state==State.ACTIVE && controls(p,current()) && !actionUsed && !movement.moving(),"No eligible active action");
         var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
-        var plan=SrdRules.plan(a.stats(),weapon,mode,ability,twoHands);
+        var plan=a.rules().plan(weapon,mode,ability,twoHands);
         var geometry=legalTarget(attacker,target,plan);
         intent=new Intent(UUID.randomUUID(),p.id(),turn(),attacker.getUuid(),targetId,weapon,ability,twoHands,a,b,attacker.getPos(),target.getPos(),plan,geometry);
         revision++; return intent;
@@ -233,8 +233,8 @@ public final class SrdEncounter implements Encounter {
         require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target cover changed; preview again");
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
         actionUsed=true; intent=null;
-        var roll=SrdRules.attack(selected.attacker.stats(),selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,
-                selected.defender.stats().armorClass()+selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage(),dice);
+        var roll=selected.attacker.rules().attack(selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,
+                selected.defender.rules().armorClass()+selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage(),dice);
         var health=SrdHealth.of(selected.defender.stats()).damage(List.of(roll.damage()),selected.defender.stats());
         transaction=new Transaction(selected,roll,health); persistTransaction(); return transaction;
     }

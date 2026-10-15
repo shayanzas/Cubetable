@@ -156,4 +156,34 @@ public class CharacterSyncGameTests implements FabricGameTest {
         } finally { buffer.release(); }
         ctx.complete();
     }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void sharedSrdProjectionMatchesAuthorizedNetworkRead(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx)) {
+            var player=f.player();var dm=new CharacterRepository.Principal(player.getUuid(),true);
+            UUID campaign=f.repo().createCampaign(dm,"J1 projection");
+            UUID id=f.repo().submit(dm,campaign,RulesProfiles.SRD,dev.tacticalcombat.rules.srd.SrdAuthoring.template().toString());
+            f.repo().approve(dm,id,1);UUID actor=UUID.randomUUID();f.repo().bind(dm,id,2,actor,null);
+            var response=CharacterNetworking.handle(player,new CharacterRequestPayload(1,"get","{\"character\":\""+id+"\"}"),100);
+            check(response.code().equals("OK"),"authorized network read");
+            var rules=JsonParser.parseString(response.json()).getAsJsonObject().getAsJsonObject("rules");
+            var encounter=f.repo().srdSnapshot(actor,campaign).rules();
+            check(rules.get("ac").getAsInt()==encounter.armorClass()&&rules.get("speedFeet").getAsInt()==encounter.walkingSpeedFeet(),"network sheet matches encounter projection");
+            check(!rules.get("checksExecutable").getAsBoolean(),"recorded checks remain informational");
+        }ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void runtimeHealthProducesTargetedSheetInvalidation(TestContext ctx) throws Exception {
+        try(var f=new Fixture(ctx)) {
+            var player=f.player();var dm=new CharacterRepository.Principal(player.getUuid(),true);
+            UUID campaign=f.repo().createCampaign(dm,"J1 refresh"),actor=UUID.randomUUID();
+            UUID id=f.repo().submit(dm,campaign,RulesProfiles.SRD,dev.tacticalcombat.rules.srd.SrdAuthoring.template().toString());
+            f.repo().approve(dm,id,1);f.repo().bind(dm,id,2,actor,null);
+            var watches=new dev.tacticalcombat.uiapi.CharacterWatchService(f.repo(),new LibraryRepository(f.dir.resolve("library.json")));
+            UUID token=UUID.randomUUID();watches.watch(dm,token,false,id,dev.tacticalcombat.uiapi.CharacterWatchService.campaignStamp(f.repo(),dm,id));
+            check(watches.drain(viewer->dm).isEmpty(),"no redundant notice");
+            var old=f.repo().srdSnapshot(actor,campaign);f.repo().commitSrdHealth(old,new dev.tacticalcombat.rules.srd.SrdHealth(1,old.stats().maximumHp(),2));
+            var notices=watches.drain(viewer->dm);check(notices.size()==1&&notices.getFirst().token().equals(token)&&!notices.getFirst().revoked(),"opaque targeted health notice");
+            var fresh=new CharacterSyncService(f.repo()).snapshot(dm,id).getAsJsonObject("rules");check(fresh.get("hp").getAsInt()==1&&fresh.get("temporaryHp").getAsInt()==2,"refresh observes committed runtime resources");
+        }ctx.complete();
+    }
 }
