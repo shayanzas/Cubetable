@@ -20,6 +20,7 @@ public final class CharacterDashboardScreen extends ManagementScreen {
     private CharacterCanvas primary;
     private CurrencyDraft money;
     private SectionRail rail;
+    private RpgButton manageButton;
     private net.minecraft.client.gui.widget.TextFieldWidget filterInput;
     private final List<RpgButton> inventoryControls=new ArrayList<>();
     private final Map<DashboardModel.Tab,Integer> positions=new EnumMap<>(DashboardModel.Tab.class);
@@ -30,7 +31,9 @@ public final class CharacterDashboardScreen extends ManagementScreen {
     @Override protected int maximumWidth(){return 980;}
     @Override protected UiLayout.Rect listBounds(){return DashboardLayout.shell(frame).content();}
     @Override protected void searchControls(){filterInput=search(frame.x()+84,frame.y()+frame.height()-30,Math.max(40,frame.width()-182),query,q->{query=q;if(tab==DashboardModel.Tab.INVENTORY)display();else filter();});button("Refresh","",frame.x()+frame.width()-86,frame.y()+8,74,20,this::refresh);}
-    @Override protected void controls(){var r=DashboardLayout.shell(frame).rail();rail=addDrawableChild(new SectionRail(DashboardLayout.navigation(frame),Arrays.stream(DashboardModel.Tab.values()).map(t->new SectionRail.Item(t.name(),DashboardModel.title(t))).toList(),v->show(DashboardModel.Tab.valueOf(v)),28));button("Manage Character","",r.x(),r.y()+r.height()-22,r.width(),20,()->{if(fresh&&!busy&&character!=null)client.setScreen(source.library()?new LibraryCharacterScreen(this,source.character()):new CampaignCharacterScreen(this,source.character()));}).hint("Approval, control, binding, source and lifecycle actions");}
+    @Override protected void controls(){var r=DashboardLayout.shell(frame).rail();rail=addDrawableChild(new SectionRail(DashboardLayout.navigation(frame),Arrays.stream(DashboardModel.Tab.values()).map(t->new SectionRail.Item(t.name(),DashboardModel.title(t))).toList(),v->show(DashboardModel.Tab.valueOf(v)),28));manageButton=button("Manage Character","",r.x(),r.y()+r.height()-22,r.width(),20,()->{if(fresh&&!busy&&character!=null&&(money==null||!money.dirty()))client.setScreen(PlayerNavigation.manage(this,source));}).hint("Edit or manage this character");manageButton.active=false;}
+    boolean matches(DashboardSource other){return source.library()==other.library()&&source.character().equals(other.character());}
+    @Override public void tick(){super.tick();if(manageButton!=null){manageButton.active=fresh&&!busy&&character!=null&&(money==null||!money.dirty());manageButton.hint(money!=null&&money.dirty()?"Save currency before managing this character":!fresh||busy?"Wait for the character to load, or Refresh":"Edit or manage this "+(source.library()?"personal character":"campaign character"));}}
     @Override protected void refresh(){if(busy)return;fresh=false;clearRows();if(source.library())read(source.read(),source.readArgs(),data->{character=SnapshotReplies.checked(source,data);active=new JsonObject();encounter=new JsonObject();campaign="";campaignName="";display();});else read(ACTIVE,args(),a->{active=a;read(source.read(),source.readArgs(),data->{character=SnapshotReplies.checked(source,data);campaign=text(data,"campaign");read(CAMPAIGN_GET,args("campaign",campaign),c->{campaignName=text(c,"name");var id=dev.tacticalcombat.client.ClientSrdCombat.hudEncounter();if(id!=null&&selected())read(INITIATIVE,args("encounter",id),d->{encounter=d;display();});else{encounter=new JsonObject();display();}});});});}
     private boolean combat(){return flag(active,"inCombat");}
     private boolean selected(){return source.character().equals(text(active,"character"))||source.character().equals(text(active,"boundCharacter"));}

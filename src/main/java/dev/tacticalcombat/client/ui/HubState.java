@@ -10,9 +10,9 @@ public final class HubState {
     public Status status=Status.LOADING;
     public String message="Loading server selection…",campaignName="No campaign selected",characterName="No character selected",profile="",characterProfile="";
     public String campaign,character,bound;
-    public boolean manager,inCombat,quickSupported;
+    public boolean manager,inCombat,quickSupported,characterApproved,characterBound;
     public void reset(boolean supported) {
-        status=supported?Status.LOADING:Status.UNSUPPORTED;manager=false;campaign=null;character=null;bound=null;inCombat=false;
+        status=supported?Status.LOADING:Status.UNSUPPORTED;manager=false;characterApproved=false;characterBound=false;campaign=null;character=null;bound=null;inCombat=false;
         campaignName="No campaign selected";characterName="No character selected";profile="";characterProfile="";quickSupported=false;
         message=supported?"Loading server selection…":"Server UI unavailable. Local tabletop tools are available.";
     }
@@ -23,12 +23,12 @@ public final class HubState {
     }
     public void character(JsonObject data) {
         if(!Objects.equals(character==null?bound:character,data.get("id").getAsString())) return;
-        characterProfile=ManagementState.text(data,"profile");characterName=(character==null?"Bound: ":"Selected: ")+data.get("name").getAsString()+" · "+(data.get("approved").getAsBoolean()?"approved":"awaiting approval")+(data.has("bound")?" · bound":" · unbound");
+        characterApproved=ManagementState.flag(data,"approved");characterBound=!ManagementState.text(data,"bound").isEmpty();characterProfile=ManagementState.text(data,"profile");characterName=(character==null?"Bound: ":"Selected: ")+data.get("name").getAsString()+" · "+(data.get("approved").getAsBoolean()?"approved":"awaiting approval")+(data.has("bound")?" · bound":" · unbound");
         if(campaign!=null && data.has("campaign") && !campaign.equals(data.get("campaign").getAsString())) characterName+=" · other campaign";
     }
     public boolean opensDashboard(){return status==Status.READY&&characterProfile.equals("srd_5_1")&&(character!=null||bound!=null);}
     public boolean dmTools() {return status==Status.READY && campaign!=null && manager;}
-    public String dmReason() {return status==Status.UNSUPPORTED?"Updated UI server required":campaign==null?"Select a campaign first":manager?"Campaign manager tools":"Only this campaign's DM or co-DM can open these tools";}
+    public String dmReason() {return status==Status.LOADING?"Wait for campaign permissions to load":status==Status.ERROR?"Refresh to verify campaign permissions":status==Status.UNSUPPORTED?"Updated UI server required":campaign==null?"Select a campaign first":manager?"Campaign manager tools":"Only this campaign's DM or co-DM can open these tools";}
     public boolean canSwitch() {return status==Status.READY && !inCombat;}
     public static String profileName(String id) {return switch(id) {case "minecraft_tactical"->"Minecraft Tactical";case "manual_tabletop"->"Manual Tabletop";case "srd_5_1"->"D&D SRD 5.1";default->id;};}
     public static List<Choice> campaigns(JsonArray rows,boolean quick,boolean combat) {
