@@ -6,7 +6,9 @@ The OGL license pages are deliberately excluded; distribution elects CC BY 4.0.
 """
 import fitz,re,json,sys,hashlib
 from pathlib import Path
-source=Path(sys.argv[1]);pdf=fitz.open(source)
+source=Path(sys.argv[1]);expected_sha256="d3f94417d2532f42a5abaec07e71a59007bf6cc46992c6458be6667f7a9f1e34"
+if hashlib.sha256(source.read_bytes()).hexdigest()!=expected_sha256:raise ValueError("Use the verified J2.5 SRD 5.1 source; a different edition requires explicit review")
+pdf=fitz.open(source)
 def clean(s):return re.sub(r'-{2,}','-',re.sub(r'\s+',' ',s.replace('\xad','').replace('‐','-').replace('‑','-'))).strip()
 def slug(s):return re.sub('[^a-z0-9]+','-',s.lower()).strip('-')
 lines=[]
@@ -57,7 +59,8 @@ for j,start in enumerate(starts):
 class_pages={'barbarian':8,'bard':12,'cleric':16,'druid':20,'fighter':24,'monk':26,'paladin':30,'ranger':34,'rogue':38,'sorcerer':40,'warlock':45,'wizard':49}
 for name,hd in zip(['Barbarian','Bard','Cleric','Druid','Fighter','Monk','Paladin','Ranger','Rogue','Sorcerer','Warlock','Wizard'],[12,8,8,8,10,8,10,10,8,6,8,6]):
  # Locate class chapter directly, rather than assuming page numbers from another edition.
- heading=next(l for l in lines if l['text']==name and 7<=l['page']<=54)
+ heading_index=next(i for i,l in enumerate(lines) if l['text']==name and 7<=l['page']<=54);heading=lines[heading_index]
+ hit_dice=re.search(r'Hit Dice: 1d(\d+) per', ' '.join(l['text'] for l in lines[heading_index:heading_index+100]));assert hit_dice and int(hit_dice[1])==hd,(name,'Hit Die source mismatch')
  add('classes',name,[heading['page']],f'{name} class reference. Hit Die: d{hd}. This batch indexes class identity and hit dice only; full progression and feature grants are not yet cataloged.',dict(hitDie=hd,progressionComplete=False),[])
 # Conditions: all fifteen exact condition headings, no unrelated appendix content.
 conditions=['Blinded','Charmed','Deafened','Exhaustion','Frightened','Grappled','Incapacitated','Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained','Stunned','Unconscious']
@@ -125,7 +128,7 @@ race_names=['Dwarf','Elf','Halfling','Human','Dragonborn','Gnome','Half-Elf','Ha
 for ri,name in enumerate(race_names):
  chunk=section(name,3,7,race_names[ri+1] if ri+1<len(race_names) else 'Barbarian')
  body=' '.join(l['text'] for l in chunk[1:]);speed=re.search(r'base walking speed is (\d+) feet',body)
- add('races',name,[l['page'] for l in chunk],body,dict(size='Small' if name in ['Gnome','Halfling'] else 'Medium',speedFeet=int(speed[1]),traitsText=body,automated=False))
+ add('races',name,[l['page'] for l in chunk],body,dict(size=re.search(r'your size is (Small|Medium)',body,re.I)[1],speedFeet=int(speed[1]),traitsText=body,automated=False))
 for name,parent,end in [('Hill Dwarf','Dwarf','Elf'),('High Elf','Elf','Halfling'),('Lightfoot','Halfling','Human'),('Rock Gnome','Gnome','Half-Elf')]:
  chunk=section(name,3,7,end);body=' '.join(l['text'] for l in chunk[1:]);add('subraces',name,[l['page'] for l in chunk],body,dict(parent='srd51:races:'+slug(parent),traitsText=body,automated=False),['srd51:races:'+slug(parent)])
 subclasses=[('Path of the Berserker','barbarian',3),('College of Lore','bard',3),('Life Domain','cleric',1),('Circle of the Land','druid',2),('Champion','fighter',3),('Way of the Open Hand','monk',3),('Oath of Devotion','paladin',3),('Hunter','ranger',3),('Thief','rogue',3),('Draconic Bloodline','sorcerer',1),('The Fiend','warlock',1),('School of Evocation','wizard',2)]
