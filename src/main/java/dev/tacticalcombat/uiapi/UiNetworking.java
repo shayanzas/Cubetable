@@ -94,7 +94,7 @@ public final class UiNetworking {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
             case GAMEPLAY_RECOVERY, GAMEPLAY_CANCEL -> out=GameplayRecovery.handle(p,op,a);
-            case ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
+            case ACTOR_CHARACTERS, ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
             case ACTIVE -> {
                 fields(a,"");var restored=CharacterService.restoreSelection(p);if(restored!=null&&restored.character()!=null)SELECTED.put(p.getUuid(),restored.character());try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }
                 UUID selected=SELECTED.get(p.getUuid());if(selected!=null) try {var c=repo.visible(who,selected);require(c.campaign().equals(CharacterService.selected(p)),"Selection campaign changed");require(repo.controller(selected).equals(p.getUuid())||repo.manages(who,c.campaign()),"Character control revoked");out.addProperty("character",selected.toString());} catch(IllegalArgumentException revoked) {SELECTED.remove(p.getUuid());}
@@ -138,16 +138,18 @@ public final class UiNetworking {
             }
             case UNBIND -> {fields(a,"character revision");CharacterService.release(p,id(a,"character"),revision(a));out.addProperty("unbound",true);}
             case ELIGIBLE_ENTITIES -> {
-                fields(a,"character");var c=repo.visible(who,id(a,"character"));require(repo.manages(who,c.campaign()),"Only campaign DMs inspect binding candidates");
-                var nearby=new ArrayList<LivingEntity>();p.getServerWorld().collectEntitiesByType(net.minecraft.util.TypeFilter.instanceOf(LivingEntity.class),p.getBoundingBox().expand(32),entity->entity.isAlive() && !entity.isSpectator(),nearby,65);
-                var rows=new JsonArray();for(var entity:nearby.stream().limit(64).toList()) {
+                fields(a,a.has("binding")?"character binding kind":"character");var c=repo.visible(who,id(a,"character"));require(repo.manages(who,c.campaign()),"Only campaign DMs inspect binding candidates");
+                var binding=a.has("binding")?dev.tacticalcombat.combat.NearbyActors.Binding.valueOf(string(a,"binding")):dev.tacticalcombat.combat.NearbyActors.Binding.ALL;var kind=a.has("kind")?dev.tacticalcombat.combat.NearbyActors.Kind.valueOf(string(a,"kind")):dev.tacticalcombat.combat.NearbyActors.Kind.ALL;
+                var nearby=dev.tacticalcombat.combat.NearbyActors.sorted(p,32);
+                var rows=new JsonArray();boolean truncated=false;for(var entity:nearby) {
                     var row=new JsonObject();row.addProperty("id",entity.getUuidAsString());row.addProperty("name",entity.getName().getString().substring(0,Math.min(80,entity.getName().getString().length())));
-                    row.addProperty("position",entity.getBlockX()+", "+entity.getBlockY()+", "+entity.getBlockZ());
+                    row.addProperty("distance",Math.round(Math.sqrt(entity.squaredDistanceTo(p))*10)/10d);row.addProperty("position",entity.getBlockX()+", "+entity.getBlockY()+", "+entity.getBlockZ());
                     boolean occupied=CharacterService.bound(entity)!=null,combat=CombatManager.isInCombat(entity),controller=!(entity instanceof ServerPlayerEntity) || repo.controller(c.id()).equals(entity.getUuid());
                     boolean type=!c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD) || entity instanceof ServerPlayerEntity || entity instanceof net.minecraft.entity.mob.MobEntity;
-                    row.addProperty("eligible",c.approved() && repo.binding(c.id())==null && !occupied && !combat && controller && type);
+                    boolean eligible=c.approved() && !repo.reserved(c.id()) && repo.binding(c.id())==null && !occupied && !combat && controller && type;
+                    if(!dev.tacticalcombat.combat.NearbyActors.matches(binding,kind,occupied,eligible,entity instanceof ServerPlayerEntity))continue;if(rows.size()==64){truncated=true;break;}row.addProperty("eligible",eligible);
                     row.addProperty("reason",!c.approved()?"Character needs approval":repo.binding(c.id())!=null?"Character already bound":occupied?"Entity already bound":combat?"Entity in combat":!controller?"Player must accept control first":!type?"Unsupported SRD entity":"Binding candidate; server will revalidate");rows.add(row);
-                }out.add("entities",rows);out.addProperty("truncated",nearby.size()>64);out.addProperty("radius",32);
+                }out.add("entities",rows);out.addProperty("truncated",truncated);out.addProperty("radius",32);
             }
             case ELIGIBLE_PLAYERS -> {
                 fields(a,"campaign");UUID campaign=id(a,"campaign");require(repo.manages(who,campaign),"Only campaign DMs inspect eligible players");var rows=new JsonArray();

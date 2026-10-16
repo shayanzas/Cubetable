@@ -39,9 +39,10 @@ public final class EncounterLauncher {
     }
     static SrdEncounter startAndWatch(ServerPlayerEntity p,UUID campaign,List<LivingEntity> actors){
         require(ServerPlayNetworking.canSend(p,SrdStatePayload.ID),"Updated SRD client required");
+        var before=new HashMap<LivingEntity,net.minecraft.util.math.Vec3d>();var velocity=new HashMap<LivingEntity,net.minecraft.util.math.Vec3d>();for(var actor:actors){before.put(actor,actor.getPos());velocity.put(actor,actor.getVelocity());}
         var encounter=SrdEncounter.start(p.getServerWorld(),CharacterService.principal(p),campaign,actors);
         try {encounter.begin();SrdNetworking.watch(p,encounter);for(var actor:actors)if(actor instanceof ServerPlayerEntity player && player!=p)SrdNetworking.watch(player,encounter);return encounter;}
-        catch(RuntimeException failure){CombatManager.endCombat(encounter);throw failure;}
+        catch(RuntimeException failure){CombatManager.endCombat(encounter);before.forEach((actor,pos)->{actor.requestTeleport(pos.x,pos.y,pos.z);actor.setVelocity(velocity.get(actor));});throw failure;}
     }
     private static boolean near(ServerPlayerEntity p,LivingEntity actor){return actor.getWorld()==p.getWorld()&&p.squaredDistanceTo(actor)<=RADIUS*RADIUS;}
     private static String name(LivingEntity actor){String n=actor.getName().getString();return n.substring(0,Math.min(80,n.length()));}
@@ -57,20 +58,32 @@ public final class EncounterLauncher {
         UUID campaign=campaign(p);
         switch(op){
             case ENCOUNTER_DISCOVER -> {
-                fields(a,"");var nearby=new ArrayList<LivingEntity>();p.getServerWorld().collectEntitiesByType(TypeFilter.instanceOf(LivingEntity.class),p.getBoundingBox().expand(RADIUS),e->e.isAlive()&&!e.isSpectator()&&near(p,e),nearby,LIMIT+1);
-                // Some entity queries omit the requesting player; include it explicitly.
-                if(!nearby.contains(p))nearby.addFirst(p);
-                var valid=new HashMap<UUID,CharacterRepository.SrdSnapshot>();var rows=new JsonArray();
-                for(var actor:nearby.stream().limit(LIMIT).toList()){
-                    var row=new JsonObject();row.addProperty("actor",actor.getUuidAsString());row.addProperty("name",name(actor));row.addProperty("kind",actor instanceof ServerPlayerEntity?"Player":"NPC");
-                    var bound=CharacterService.bound(actor);boolean same=bound!=null&&bound.campaign().equals(campaign);
-                    row.addProperty("bound",bound!=null);row.addProperty("approved",same&&bound.approved());row.addProperty("characterName",same?UiApiService.name(bound.sheet()):"");
-                    try{var snapshot=SrdEncounter.validateAdmission(p.getServerWorld(),campaign,actor);valid.put(actor.getUuid(),snapshot);row.addProperty("eligible",true);row.addProperty("reason","Approved and bound; ready for server revalidation");}
-                    catch(IllegalArgumentException invalid){row.addProperty("eligible",false);row.addProperty("reason",bound!=null&&!same?"Bound to another campaign":invalid.getMessage());}
-                    rows.add(row);
+                fields(a,a.has("binding")?"binding kind":"");
+                var binding=a.has("binding")?NearbyActors.Binding.valueOf(string(a,"binding")):NearbyActors.Binding.ALL;
+                var kind=a.has("kind")?NearbyActors.Kind.valueOf(string(a,"kind")):NearbyActors.Kind.ALL;
+                var nearby=NearbyActors.sorted(p,RADIUS);var valid=new HashMap<UUID,CharacterRepository.SrdSnapshot>();var rows=new JsonArray();boolean truncated=false;
+                for(var actor:nearby){
+                    boolean player=actor instanceof ServerPlayerEntity;var bound=CharacterService.bound(actor);boolean same=bound!=null&&bound.campaign().equals(campaign);
+                    if(kind!=NearbyActors.Kind.ALL&&(kind==NearbyActors.Kind.PLAYER)!=player)continue;
+                    if(binding==NearbyActors.Binding.BOUND&&bound==null||binding==NearbyActors.Binding.UNBOUND&&bound!=null)continue;
+                    CharacterRepository.SrdSnapshot snapshot=null;String reason="Ready";
+                    try{snapshot=SrdEncounter.validateAdmission(p.getServerWorld(),campaign,actor);}catch(IllegalArgumentException invalid){reason=bound!=null&&!same?"Other campaign":invalid.getMessage();}
+                    if(binding==NearbyActors.Binding.ELIGIBLE&&snapshot==null)continue;
+                    if(rows.size()==LIMIT){truncated=true;break;}
+                    var row=new JsonObject();row.addProperty("actor",actor.getUuidAsString());row.addProperty("name",name(actor));row.addProperty("kind",player?"Player":"NPC");row.addProperty("type",net.minecraft.registry.Registries.ENTITY_TYPE.getId(actor.getType()).toString());
+                    row.addProperty("distance",Math.round(Math.sqrt(actor.squaredDistanceTo(p))*10)/10d);row.addProperty("position",actor.getBlockX()+", "+actor.getBlockY()+", "+actor.getBlockZ());
+                    row.addProperty("bound",bound!=null);row.addProperty("approved",same&&bound.approved());row.addProperty("characterName",same?UiApiService.name(bound.sheet()):"");row.addProperty("eligible",snapshot!=null);row.addProperty("reason",reason);
+                    row.addProperty("canBind",!player&&actor instanceof net.minecraft.entity.mob.MobEntity&&bound==null&&!CombatManager.isInCombat(actor));
+                    if(snapshot!=null)valid.put(actor.getUuid(),snapshot);rows.add(row);
                 }
                 UUID token=UUID.randomUUID();discoveries.put(p.getUuid(),new Discovery(token,campaign,repo.campaign(campaign).revision(),p.getServer().getTicks()+1200,Map.copyOf(valid)));
-                out.addProperty("discovery",token.toString());out.addProperty("radius",RADIUS);out.addProperty("truncated",nearby.size()>LIMIT);out.add("actors",rows);panel(p,out,campaign,null,true,false);
+                out.addProperty("discovery",token.toString());out.addProperty("radius",RADIUS);out.addProperty("truncated",truncated);out.add("actors",rows);panel(p,out,campaign,null,true,false);
+            }
+            case ACTOR_CHARACTERS -> {
+                fields(a,"actor page");int page=integer(a,"page");require(page>=0&&page<128,"Invalid page");var entity=p.getServerWorld().getEntity(id(a,"actor"));
+                require(entity instanceof net.minecraft.entity.mob.MobEntity&&entity.isAlive()&&near(p,(LivingEntity)entity)&&CharacterService.bound((LivingEntity)entity)==null&&!CombatManager.isInCombat(entity),"Nearby unbound NPC required");
+                var available=repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign)&&c.approved()&&repo.binding(c.id())==null&&!repo.reserved(c.id())&&c.profile().equals(RulesProfiles.SRD)&&repo.member(new CharacterRepository.Principal(repo.controller(c.id()),false),campaign)).sorted(Comparator.comparing((CharacterRepository.Character c)->UiApiService.name(c.sheet()),String.CASE_INSENSITIVE_ORDER).thenComparing(c->c.id().toString())).toList();
+                var rows=new JsonArray();for(var c:available.stream().skip(page*8L).limit(8).toList()){var row=new JsonObject();row.addProperty("character",c.id().toString());row.addProperty("revision",c.revision());row.addProperty("name",UiApiService.name(c.sheet()));rows.add(row);}out.add("characters",rows);out.addProperty("hasMore",available.size()>(page+1)*8);panel(p,out,campaign,null,true,false);
             }
             case ENCOUNTER_START -> {
                 fields(a,"discovery actors");var d=discoveries.remove(p.getUuid());require(d!=null&&d.token.equals(id(a,"discovery"))&&d.campaign.equals(campaign)&&d.expires>=p.getServer().getTicks()&&d.campaignRevision==repo.campaign(campaign).revision(),"Stale encounter selection; Refresh and select participants again");
@@ -86,9 +99,9 @@ public final class EncounterLauncher {
                 if(op==Operation.ENCOUNTER_END){encounter.stop(who);out.addProperty("ended",true);}else{SrdNetworking.watch(p,encounter);out.addProperty("encounter",encounter.id().toString());}
             }
             case DM_QUICK -> {
-                fields(a,"page");int page=integer(a,"page");require(page>=0&&page<=128,"Invalid page");out.addProperty("campaign",campaign.toString());out.addProperty("campaignName",repo.campaign(campaign).name());out.addProperty("manager",true);
+                fields(a,"page");int page=integer(a,"page");require(page>=0&&page<=128,"Invalid page");out.addProperty("campaign",campaign.toString());out.addProperty("campaignName",repo.campaign(campaign).name());out.addProperty("manager",true);out.addProperty("location",p.getBlockX()+", "+p.getBlockY()+", "+p.getBlockZ());out.addProperty("dimension",p.getServerWorld().getRegistryKey().getValue().toString());
                 var rows=new JsonArray();var characters=repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign)).sorted(Comparator.comparing(c->c.id().toString())).toList();
-                for(var c:characters.stream().skip(page*8L).limit(8).toList()){var row=new JsonObject();row.addProperty("character",c.id().toString());row.addProperty("name",UiApiService.name(c.sheet()));row.addProperty("approved",c.approved());UUID binding=repo.binding(c.id());row.addProperty("bound",binding!=null);LivingEntity actor=binding!=null&&p.getServerWorld().getEntity(binding) instanceof LivingEntity living?living:null;row.addProperty("kind",actor instanceof ServerPlayerEntity?"Player":actor!=null?"NPC":binding!=null?"Unloaded binding":"Unbound");row.addProperty("inCombat",actor!=null&&CombatManager.isInCombat(actor));var snapshot=new CharacterSyncService(repo).snapshot(who,c.id());if(snapshot.has("rules")&&snapshot.getAsJsonObject("rules").get("valid").getAsBoolean()){var r=snapshot.getAsJsonObject("rules");row.addProperty("health",r.get("hp").getAsInt()+" / "+r.get("maximumHp").getAsInt()+" HP");}rows.add(row);}
+                for(var c:characters.stream().skip(page*8L).limit(8).toList()){var row=new JsonObject();row.addProperty("character",c.id().toString());row.addProperty("name",UiApiService.name(c.sheet()));row.addProperty("approved",c.approved());UUID binding=repo.binding(c.id());row.addProperty("bound",binding!=null);LivingEntity actor=binding!=null&&p.getServerWorld().getEntity(binding) instanceof LivingEntity living?living:null;row.addProperty("kind",actor instanceof ServerPlayerEntity?"Player":actor!=null?"NPC":binding!=null?"Unloaded binding":"Unbound");row.addProperty("inCombat",actor!=null&&CombatManager.isInCombat(actor));var snapshot=new CharacterSyncService(repo).snapshot(who,c.id());if(snapshot.has("rules")&&snapshot.getAsJsonObject("rules").get("valid").getAsBoolean()){var r=snapshot.getAsJsonObject("rules");row.addProperty("health",r.get("hp").getAsInt()+" / "+r.get("maximumHp").getAsInt()+" HP");row.addProperty("ac",r.get("ac").getAsInt());}var conditions=new ArrayList<String>();for(var feature:SheetSections.read(snapshot.getAsJsonObject("sheet"),"features").getAsJsonArray("entries")){var item=feature.getAsJsonObject();if(Set.of("CONDITION","TEMPORARY").contains(item.get("kind").getAsString()))conditions.add(item.get("name").getAsString()+" (recorded)");}row.addProperty("conditions",String.join(", ",conditions));rows.add(row);}
                 out.add("characters",rows);out.addProperty("hasMore",characters.size()>(page+1)*8);panel(p,out,campaign,null,true,false);
             }
             default -> throw new IllegalArgumentException("Unsupported launcher operation");

@@ -136,6 +136,19 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
         return new Cell((int)Math.floor(actor.getX()-footprint/2d+EPS),
                 (int)Math.floor(actor.getZ()-footprint/2d+EPS),actor.getY());
     }
+    /** Closest same-height grid anchor; discovery never changes the entity. */
+    public Cell admissionCell() {
+        return new Cell((int)Math.floor(actor.getX()-footprint/2d+.5),
+                (int)Math.floor(actor.getZ()-footprint/2d+.5),actor.getY());
+    }
+    public Reason alignment(Cell cell) {
+        Vec3d to=position(cell),from=actor.getPos();
+        if(Math.abs(to.x-from.x)>.50001||Math.abs(to.z-from.z)>.50001||Math.abs(to.y-from.y)>EPS) return Reason.BLOCKED;
+        // A conservative full swept footprint: no wall crossing, unsupported floor or occupied space.
+        Box destination=body(cell),source=destination.offset(from.subtract(to));
+        Box swept=source.union(destination);Reason r=clear(swept);
+        return r==Reason.OK?supported(swept,cell.y()):r;
+    }
     public Vec3d position(Cell cell) { return new Vec3d(cell.x()+footprint/2d,cell.y(),cell.z()+footprint/2d); }
     private Box body(Cell cell) {
         Vec3d p=position(cell); double width=Math.max(footprint,actor.getBoundingBox().getLengthX());
@@ -179,15 +192,18 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     }
     private Reason landingLive(Cell cell) {
         Box box=body(cell); Reason result=clear(box); if(result!=Reason.OK) return result;
+        return supported(box,cell.y());
+    }
+    private Reason supported(Box box,double height) {
         // Every intersected footprint column needs support at this height. Large uneven landings fail safely.
         for(int x=MathHelper.floor(box.minX);x<=MathHelper.floor(box.maxX);x++)
             for(int z=MathHelper.floor(box.minZ);z<=MathHelper.floor(box.maxZ);z++) {
                 double minX=Math.max(box.minX,x+.01),maxX=Math.min(box.maxX,x+.99);
                 double minZ=Math.max(box.minZ,z+.01),maxZ=Math.min(box.maxZ,z+.99);
-                Box support=new Box(minX,cell.y()-.03,minZ,maxX,cell.y()-EPS,maxZ);
+                Box support=new Box(minX,height-.03,minZ,maxX,height-EPS,maxZ);
                 if(bounds(support)!=Reason.OK) return bounds(support);
                 if(!collision(support)) return Reason.NO_SUPPORT;
-                BlockPos floor=BlockPos.ofFloored(x,cell.y()-.01,z);
+                BlockPos floor=BlockPos.ofFloored(x,height-.01,z);
                 var state=block(floor);
                 if(state.isIn(BlockTags.FENCES) || state.isIn(BlockTags.WALLS)) return Reason.BLOCKED;
             }

@@ -92,6 +92,7 @@ public final class CharacterService {
     public static void bind(ServerPlayerEntity requester,UUID character,long revision,LivingEntity target) throws IOException {
         if(CombatManager.isInCombat(target)) throw new IllegalArgumentException("Cannot change binding during combat");
         var record=repository().visible(principal(requester),character);
+        repository().requireUnreserved(character);
         repository().bind(principal(requester),character,revision,target.getUuid(),target instanceof ServerPlayerEntity?target.getUuid():null);
         apply(target);
         if(record.profile().equals(RulesProfiles.TACTICAL)) target.setHealth(record.stats().get("hp").floatValue());

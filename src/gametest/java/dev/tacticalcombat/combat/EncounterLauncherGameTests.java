@@ -37,7 +37,7 @@ public class EncounterLauncherGameTests implements FabricGameTest {
         ServerPlayerEntity p=null;try(var f=new Fixture(ctx)){p=manager(f);var player=p;var a=f.actor(3,1,true);var b=f.actor(5,1,true);var unbound=f.actor(7,1,false);
             rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,selection(player,a.getUuid(),a.getUuid())),"duplicate actor rejected");rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,selection(player,a.getUuid(),unbound.getUuid())),"unbound actor rejected");
             var stale=selection(p,a.getUuid(),b.getUuid());var old=f.repo.srdSnapshot(b.getUuid(),f.campaign);f.repo.commitSrdHealth(old,new SrdHealth(9,old.stats().maximumHp(),0));rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,stale),"changed character requires new selection");
-            var moved=selection(p,a.getUuid(),b.getUuid());b.setPosition(b.getX()+.1,b.getY(),b.getZ());rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,moved),"unsupported footprint rejected without teleport");check(Math.abs(b.getX()-(f.origin.getX()+5.6))<.00001,"no silent repositioning");check(!CombatManager.isInCombat(a)&&!CombatManager.isInCombat(b),"failure claims nothing");
+            var moved=selection(p,a.getUuid(),b.getUuid());b.setPosition(b.getX()+.1,b.getY(),b.getZ());var aligned=EncounterLauncher.handle(player,ENCOUNTER_START,moved);var alignedEncounter=SrdNetworking.find(UUID.fromString(aligned.get("encounter").getAsString()));check(Math.abs(b.getX()-(f.origin.getX()+5.5))<.00001,"ordinary standing position safely aligned to nearest anchor");check(CombatManager.isInCombat(a)&&CombatManager.isInCombat(b),"valid alignment claims both actors");alignedEncounter.stop(f.dm);
             UUID other=f.repo.createCampaign(f.dm,"Other");UUID foreign=f.repo.submit(f.dm,other,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,foreign,1);f.repo.bind(f.dm,foreign,2,unbound.getUuid(),null);rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,selection(player,a.getUuid(),unbound.getUuid())),"cross campaign rejected");
             var missing=selection(p,a.getUuid(),b.getUuid());b.discard();rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,missing),"unloaded stale selection rejected");
         }finally{if(p!=null)cleanup(p);}ctx.complete();
@@ -54,7 +54,7 @@ public class EncounterLauncherGameTests implements FabricGameTest {
     @GameTest(templateName=EMPTY_STRUCTURE)
     public void beginFailureRestoresAiAndManagerOnlyEnd(TestContext ctx)throws Exception{
         ServerPlayerEntity p=null;try(var f=new Fixture(ctx)){p=manager(f);var player=p;bindPlayer(f,p);var mob=f.actor(4,1,true);mob.setAiDisabled(false);
-            p.getAbilities().flying=true;var attempt=selection(p,p.getUuid(),mob.getUuid());rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,attempt),"begin failure propagates");check(!CombatManager.isInCombat(p)&&!CombatManager.isInCombat(mob)&&!mob.isAiDisabled(),"post-claim failure restores AI and releases every actor");p.getAbilities().flying=false;
+            p.setPosition(p.getPos().add(.15,0,0));mob.setPosition(mob.getPos().add(.15,0,0));var originalPlayer=p.getPos();var originalMob=mob.getPos();p.getAbilities().flying=true;var attempt=selection(p,p.getUuid(),mob.getUuid());rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,attempt),"begin failure propagates");check(!CombatManager.isInCombat(p)&&!CombatManager.isInCombat(mob)&&!mob.isAiDisabled(),"post-claim failure restores AI and releases every actor");check(p.getPos().equals(originalPlayer)&&mob.getPos().equals(originalMob),"begin failure restores original unaligned positions");p.getAbilities().flying=false;
             var response=EncounterLauncher.handle(p,ENCOUNTER_START,selection(p,p.getUuid(),mob.getUuid()));var e=SrdNetworking.find(UUID.fromString(response.get("encounter").getAsString()));f.encounters.add(e);
             rejects(()->EncounterLauncher.handle(player,ENCOUNTER_START,selection(player,player.getUuid(),mob.getUuid())),"already-in-combat actors cannot be claimed again");
             f.repo.revokeDm(f.dm,f.campaign,f.repo.campaign(f.campaign).revision(),p.getUuid());rejects(()->EncounterLauncher.handle(player,ENCOUNTER_END,args("encounter",e.id())),"participant is not entitled to end encounter");check(CombatManager.encounter(p)==e,"unauthorized end leaves encounter intact");
@@ -79,5 +79,20 @@ public class EncounterLauncherGameTests implements FabricGameTest {
             f.repo.revokeDm(f.dm,f.campaign,f.repo.campaign(f.campaign).revision(),p.getUuid());EncounterLauncher.synchronize(p.getServer());check(PacketProbe.packets.getLast() instanceof dev.tacticalcombat.net.RulesChangedPayload notice&&notice.token().equals(token)&&notice.revoked(),"revocation sends only matching opaque token");
             PacketProbe.clear();PacketProbe.enabled=true;EncounterLauncher.synchronize(p.getServer());check(PacketProbe.packets.isEmpty(),"revoked panel subscription removed");
         }finally{PacketProbe.clear();if(p!=null)cleanup(p);}ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void discoveryFiltersBeforeCapAndOrdersDistance(TestContext ctx)throws Exception{
+        ServerPlayerEntity p=null;try(var f=new Fixture(ctx)){p=manager(f);var near=f.actor(3,1,true);var far=f.actor(7,1,true);var unbound=f.actor(5,1,false);
+            var filters=new JsonObject();filters.addProperty("binding","BOUND");filters.addProperty("kind","NPC");var rows=EncounterLauncher.handle(p,ENCOUNTER_DISCOVER,filters).getAsJsonArray("actors");check(rows.size()==2&&rows.get(0).getAsJsonObject().get("actor").getAsString().equals(near.getUuidAsString()),"bound NPC filter and server distance order");check(rows.get(0).getAsJsonObject().has("distance"),"distance exposed prominently");
+            filters.addProperty("binding","UNBOUND");rows=EncounterLauncher.handle(p,ENCOUNTER_DISCOVER,filters).getAsJsonArray("actors");check(rows.size()==1&&rows.get(0).getAsJsonObject().get("actor").getAsString().equals(unbound.getUuidAsString()),"unbound filter excludes approved actors");
+            var available=new JsonObject();available.addProperty("actor",unbound.getUuidAsString());available.addProperty("page",0);UUID character=f.repo.submit(f.dm,f.campaign,RulesProfiles.SRD,SrdAuthoring.template().toString());f.repo.approve(f.dm,character,1);var choices=EncounterLauncher.handle(p,ACTOR_CHARACTERS,available).getAsJsonArray("characters");check(choices.size()==1&&choices.get(0).getAsJsonObject().get("revision").getAsLong()==2,"quick binding lists approved available revision");CharacterService.bind(p,character,2,unbound);check(CharacterService.bound(unbound).id().equals(character),"quick binding uses existing service");
+        }finally{if(p!=null)cleanup(p);}ctx.complete();
+    }
+    @GameTest(templateName=EMPTY_STRUCTURE)
+    public void unsafeAlignmentCannotCrossBlocksOrMoveOtherActors(TestContext ctx)throws Exception{
+        try(var f=new Fixture(ctx)){var a=f.actor(2,1,true);var b=f.actor(5,1,true);a.setPosition(a.getX()+.4,a.getY(),a.getZ());var before=a.getPos();ctx.getWorld().setBlockState(a.getBlockPos().west(),net.minecraft.block.Blocks.STONE.getDefaultState());
+            // Occupied logical squares and unsupported floor are rejected without any alignment side effects.
+            b.setPosition(a.getPos().add(.1,0,0));var other=b.getPos();rejects(()->f.start(a,b),"overlapping footprints denied");check(a.getPos().equals(before)&&b.getPos().equals(other)&&!CombatManager.isInCombat(a),"invalid set never moves or claims actors");
+        }ctx.complete();
     }
 }

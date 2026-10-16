@@ -70,10 +70,15 @@ public final class SrdEncounter implements Encounter {
             var snapshot=validateAdmission(world,campaign,actor);
             encounter.snapshots.put(actor.getUuid(),snapshot);
         }
+        var original=new HashMap<LivingEntity,Vec3d>();var velocities=new HashMap<LivingEntity,Vec3d>();
+        for(var actor:actors){original.put(actor,actor.getPos());velocities.put(actor,actor.getVelocity());}
         var claimed=new ArrayList<LivingEntity>();
         try {
             for(var actor:actors) {
                 require(CombatManager.claim(actor,encounter),"Actor ownership changed"); claimed.add(actor);
+                var terrain=new SrdTerrain(actor,encounter.snapshots.get(actor.getUuid()).stats());
+                require(terrain.alignment(terrain.admissionCell())==SrdMovement.Reason.OK,"Admission geometry changed");
+                Vec3d anchor=terrain.position(terrain.admissionCell());actor.requestTeleport(anchor.x,anchor.y,anchor.z);
                 encounter.anchors.put(actor.getUuid(),actor.getPos());
                 if(actor instanceof MobEntity mob) {
                     encounter.previousAi.put(actor.getUuid(),mob.isAiDisabled()); mob.setAiDisabled(true); mob.getNavigation().stop();
@@ -81,7 +86,7 @@ public final class SrdEncounter implements Encounter {
                 CombatInteractions.cancel(actor); actor.setVelocity(Vec3d.ZERO);
             }
             CombatManager.schedule(encounter); return encounter;
-        } catch(RuntimeException failure) { encounter.end(); throw failure; }
+        } catch(RuntimeException failure) { encounter.end();for(var actor:actors){var old=original.get(actor);actor.requestTeleport(old.x,old.y,old.z);actor.setVelocity(velocities.get(actor));}throw failure; }
     }
     /** Shared side-effect-free admission check for discovery and the trusted start path. */
     static CharacterRepository.SrdSnapshot validateAdmission(ServerWorld world,UUID campaign,LivingEntity actor) {
@@ -96,9 +101,9 @@ public final class SrdEncounter implements Encounter {
             CharacterService.repository().requireUnreserved(snapshot.character());
             require(snapshot.stats().hp()>0,"Zero-HP actor needs adjudication before admission");
             require(CharacterService.mayJoin(actor,campaign,RulesProfiles.get(RulesProfiles.SRD)),"Incompatible campaign or ruleset");
-            var terrain=new SrdTerrain(actor,snapshot.stats()); var cell=terrain.currentCell();
-            require(actor.getPos().squaredDistanceTo(terrain.position(cell))<1e-6 && terrain.landing(cell)==SrdMovement.Reason.OK,
-                    "Place actors on supported centered SRD footprints before admission");
+            var terrain=new SrdTerrain(actor,snapshot.stats()); var cell=terrain.admissionCell();
+            require(terrain.alignment(cell)==SrdMovement.Reason.OK,
+                    "No safe nearby grid anchor: check floor, clearance and occupied space");
         return snapshot;
     }
     private static void require(boolean value,String reason) { if(!value) throw new IllegalArgumentException(reason); }
