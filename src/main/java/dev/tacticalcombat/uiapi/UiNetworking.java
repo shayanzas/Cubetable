@@ -148,7 +148,7 @@ public final class UiNetworking {
                     boolean type=!c.profile().equals(dev.tacticalcombat.rules.RulesProfiles.SRD) || entity instanceof ServerPlayerEntity || entity instanceof net.minecraft.entity.mob.MobEntity;
                     boolean eligible=c.approved() && !repo.reserved(c.id()) && repo.binding(c.id())==null && !occupied && !combat && controller && type;
                     if(!dev.tacticalcombat.combat.NearbyActors.matches(binding,kind,occupied,eligible,entity instanceof ServerPlayerEntity))continue;if(rows.size()==64){truncated=true;break;}row.addProperty("eligible",eligible);
-                    row.addProperty("reason",!c.approved()?"Character needs approval":repo.binding(c.id())!=null?"Character already bound":occupied?"Entity already bound":combat?"Entity in combat":!controller?"Player must accept control first":!type?"Unsupported SRD entity":"Binding candidate; server will revalidate");rows.add(row);
+                    row.addProperty("reason",!c.approved()?"Character needs approval":repo.reserved(c.id())?"Prepared gameplay reservation":repo.binding(c.id())!=null?"Character already bound":occupied?"Entity already bound":combat?"Entity in combat":!controller?"Player must accept control first":!type?"Unsupported SRD entity":"Binding candidate; server will revalidate");rows.add(row);
                 }out.add("entities",rows);out.addProperty("truncated",truncated);out.addProperty("radius",32);
             }
             case ELIGIBLE_PLAYERS -> {

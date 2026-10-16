@@ -40,6 +40,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 			"key.categories.tacticalcombat"));
 
 	private static final double PAN_SPEED = 0.35;
+    public static final KeyBinding DICE_TOOLBAR_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.dice_toolbar",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_V,"key.categories.tacticalcombat"));
     public static final KeyBinding QUICK_SHEET_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.quick_sheet",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_J,"key.categories.tacticalcombat"));
     public static final KeyBinding DM_QUICK_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.dm_quick",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_UNKNOWN,"key.categories.tacticalcombat"));
     private static final KeyBinding LOG_KEY=KeyBindingHelper.registerKeyBinding(new KeyBinding("key.tacticalcombat.event_log",InputUtil.Type.KEYSYM,GLFW.GLFW_KEY_L,"key.categories.tacticalcombat"));
@@ -64,7 +65,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 				(payload, context) -> ClientGrid.apply(payload));
 
 		ClientPlayNetworking.registerGlobalReceiver(DiceRollPayload.ID,
-				(payload, context) -> dev.tacticalcombat.client.ui.CubetableHud.legacy(payload));
+				(payload, context) -> {dev.tacticalcombat.client.ui.CubetableHud.legacy(payload);dev.tacticalcombat.client.ui.DiceToolbar.receive(payload);});
 
 		ClientPlayNetworking.registerGlobalReceiver(dev.tacticalcombat.net.ShareCardPayload.ID,
 				(payload, context) -> ShareCardHud.receive(payload));
@@ -72,7 +73,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 		FadeModels.register();
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
 			ClientSrdCombat.clear();
-            dev.tacticalcombat.client.ui.CubetableHud.clear();
+            dev.tacticalcombat.client.ui.CubetableHud.clear();dev.tacticalcombat.client.ui.DiceToolbar.clear();
             ClientUiApi.clear();
             ClientRulesWatch.clear();
             dev.tacticalcombat.client.ui.UiRequestQueue.clear();
@@ -100,6 +101,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 		HudRenderCallback.EVENT.register(DiceAnimation::render);
 		HudRenderCallback.EVENT.register(ShareCardHud::render);
         HudRenderCallback.EVENT.register(dev.tacticalcombat.client.ui.CubetableHud::render);
+        HudRenderCallback.EVENT.register(dev.tacticalcombat.client.ui.DiceToolbar::render);
 		net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
 				net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.afterRender(screen).register(
 						(s, ctx, mouseX, mouseY, delta) -> ShareCardHud.drawOverScreen(ctx, delta, mouseX, mouseY)));
@@ -109,8 +111,9 @@ public class TacticalCombatClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			ClientCombatState.tick(client);
             dev.tacticalcombat.client.ui.CubetableHud.tick(client);
+            while(DICE_TOOLBAR_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.DiceToolbarScreen(null,false));
             while(QUICK_SHEET_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(null,false));
-            while(DM_QUICK_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(null,true));
+            while(DM_QUICK_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.DmWorkspaceScreen(null));
             while(LOG_KEY.wasPressed()) {if(InputUtil.isKeyPressed(client.getWindow().getHandle(),GLFW.GLFW_KEY_LEFT_SHIFT)) dev.tacticalcombat.client.ui.CubetableHud.toggleLog();else client.setScreen(new dev.tacticalcombat.client.ui.HudLogScreen(client.currentScreen));}
             while(SKIP_DICE_KEY.wasPressed()) {dev.tacticalcombat.client.ui.CubetableHud.skip();}
 			BlockFade.tick(client);

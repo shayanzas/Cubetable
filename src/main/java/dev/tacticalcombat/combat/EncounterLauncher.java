@@ -71,18 +71,18 @@ public final class EncounterLauncher {
                     if(binding==NearbyActors.Binding.ELIGIBLE&&snapshot==null)continue;
                     if(rows.size()==LIMIT){truncated=true;break;}
                     var row=new JsonObject();row.addProperty("actor",actor.getUuidAsString());row.addProperty("name",name(actor));row.addProperty("kind",player?"Player":"NPC");row.addProperty("type",net.minecraft.registry.Registries.ENTITY_TYPE.getId(actor.getType()).toString());
-                    row.addProperty("distance",Math.round(Math.sqrt(actor.squaredDistanceTo(p))*10)/10d);row.addProperty("position",actor.getBlockX()+", "+actor.getBlockY()+", "+actor.getBlockZ());
+                    row.addProperty("x",actor.getX());row.addProperty("z",actor.getZ());row.addProperty("distance",Math.round(Math.sqrt(actor.squaredDistanceTo(p))*10)/10d);row.addProperty("position",actor.getBlockX()+", "+actor.getBlockY()+", "+actor.getBlockZ());
                     row.addProperty("bound",bound!=null);row.addProperty("approved",same&&bound.approved());row.addProperty("characterName",same?UiApiService.name(bound.sheet()):"");row.addProperty("eligible",snapshot!=null);row.addProperty("reason",reason);
                     row.addProperty("canBind",!player&&actor instanceof net.minecraft.entity.mob.MobEntity&&bound==null&&!CombatManager.isInCombat(actor));
                     if(snapshot!=null)valid.put(actor.getUuid(),snapshot);rows.add(row);
                 }
                 UUID token=UUID.randomUUID();discoveries.put(p.getUuid(),new Discovery(token,campaign,repo.campaign(campaign).revision(),p.getServer().getTicks()+1200,Map.copyOf(valid)));
-                out.addProperty("discovery",token.toString());out.addProperty("radius",RADIUS);out.addProperty("truncated",truncated);out.add("actors",rows);panel(p,out,campaign,null,true,false);
+                out.addProperty("originX",p.getX());out.addProperty("originZ",p.getZ());out.addProperty("location",p.getBlockX()+", "+p.getBlockY()+", "+p.getBlockZ());out.addProperty("dimension",p.getServerWorld().getRegistryKey().getValue().toString());out.addProperty("campaignName",repo.campaign(campaign).name());out.addProperty("discovery",token.toString());out.addProperty("radius",RADIUS);out.addProperty("truncated",truncated);out.add("actors",rows);panel(p,out,campaign,null,true,false);
             }
             case ACTOR_CHARACTERS -> {
                 fields(a,"actor page");int page=integer(a,"page");require(page>=0&&page<128,"Invalid page");var entity=p.getServerWorld().getEntity(id(a,"actor"));
                 require(entity instanceof net.minecraft.entity.mob.MobEntity&&entity.isAlive()&&near(p,(LivingEntity)entity)&&CharacterService.bound((LivingEntity)entity)==null&&!CombatManager.isInCombat(entity),"Nearby unbound NPC required");
-                var available=repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign)&&c.approved()&&repo.binding(c.id())==null&&!repo.reserved(c.id())&&c.profile().equals(RulesProfiles.SRD)&&repo.member(new CharacterRepository.Principal(repo.controller(c.id()),false),campaign)).sorted(Comparator.comparing((CharacterRepository.Character c)->UiApiService.name(c.sheet()),String.CASE_INSENSITIVE_ORDER).thenComparing(c->c.id().toString())).toList();
+                var available=repo.state().characters().values().stream().filter(c->c.campaign().equals(campaign)&&c.approved()&&repo.binding(c.id())==null&&!repo.reserved(c.id())&&c.profile().equals(RulesProfiles.SRD)&&repo.member(new CharacterRepository.Principal(c.owner(),false),campaign)&&repo.member(new CharacterRepository.Principal(repo.controller(c.id()),false),campaign)).sorted(Comparator.comparing((CharacterRepository.Character c)->UiApiService.name(c.sheet()),String.CASE_INSENSITIVE_ORDER).thenComparing(c->c.id().toString())).toList();
                 var rows=new JsonArray();for(var c:available.stream().skip(page*8L).limit(8).toList()){var row=new JsonObject();row.addProperty("character",c.id().toString());row.addProperty("revision",c.revision());row.addProperty("name",UiApiService.name(c.sheet()));rows.add(row);}out.add("characters",rows);out.addProperty("hasMore",available.size()>(page+1)*8);panel(p,out,campaign,null,true,false);
             }
             case ENCOUNTER_START -> {

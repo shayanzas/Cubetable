@@ -28,5 +28,6 @@
   "key.tacticalcombat.event_log": "Cubetable event log (Shift: resize panel)",
   "key.tacticalcombat.skip_dice": "Skip Cubetable dice animation",
   "key.tacticalcombat.quick_sheet": "Character Quick Sheet",
-  "key.tacticalcombat.dm_quick": "DM Quick Tools"
+  "key.tacticalcombat.dm_quick": "DM Workspace",
+  "key.tacticalcombat.dice_toolbar": "Manual Dice Toolbar"
 }
