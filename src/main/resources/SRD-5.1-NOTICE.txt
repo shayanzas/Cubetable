@@ -8,3 +8,18 @@ https://creativecommons.org/licenses/by/4.0/legalcode.
 Cubetable adapts selected 2014 SRD 5.1 equipment data and rules into software
 calculations. The implementation is incomplete, includes product-specific
 validation limits, and does not imply endorsement by Wizards of the Coast.
+
+The J2.5 reference catalog is a structured adaptation of the 2014 SRD 5.1.
+PDF typography and whitespace are normalized, stable IDs and metadata are
+added, and reference entries remain separate from executable mechanics.
+Source and verification details accompany each batch in
+data/tacticalcombat/reference/catalog-v1.json and
+docs/srd51-catalog-coverage.md.
+
+SRD 5.1 is available under both OGL 1.0a and CC BY 4.0; this catalog elects
+CC BY 4.0. The user-provided PDF has the original OGL-layout license pages.
+Those license pages are not included in the catalog or relabeled as CC text.
+Official dual-license page: https://www.dndbeyond.com/srd
+Archived CC edition: https://commons.wikimedia.org/wiki/File:SRD5.1-CCBY4.0License.pdf
+Independent retrieval of the CC edition was blocked during this checkpoint;
+see the coverage report for the precise provenance and verification limits.

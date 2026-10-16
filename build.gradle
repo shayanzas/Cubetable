@@ -95,3 +95,12 @@ loom {
         }
     }
 }
+
+// Validate packaged reference resources independently; no network or PDF tools at runtime.
+tasks.register('validateSrdCatalog', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.tacticalcombat.reference.CatalogValidationTests'
+    args layout.buildDirectory.file('reports/srd51-catalog.json').get().asFile.absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('validateSrdCatalog') }
