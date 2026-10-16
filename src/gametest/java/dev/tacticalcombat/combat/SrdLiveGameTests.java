@@ -94,9 +94,9 @@ public class SrdLiveGameTests implements FabricGameTest {
             var confirm=new JsonObject(); confirm.addProperty("intent",data(preview).getAsJsonObject("preview").get("id").getAsString()); var packet=request(e,"confirm",confirm);
             var result=SrdNetworking.handle(player,packet); check(result.code().equals("RESULT") && e.actionUsed(),"confirmation commits before returning success");
             check(CharacterService.srdStats(mob,f.campaign).stats().hp()==9 && player.getHealth()==20,"forged fields cannot change authoritative damage");
-            check(SrdNetworking.handle(player,packet).code().equals("REJECTED") && dice.rolls==3,"duplicate result request cannot reroll");
+            check(SrdNetworking.handle(player,packet).code().equals("RESULT") && dice.rolls==3 && CharacterService.srdStats(mob,f.campaign).stats().hp()==9,"duplicate result request returns durable result without reroll or damage");
             long old=e.turn(); check(SrdNetworking.handle(player,request(e,"endturn",new JsonObject())).code().equals("OK") && e.current()==mob,"player End Turn advances live encounter");
-            check(SrdNetworking.handle(player,new SrdRequestPayload(e.id(),old,UUID.randomUUID(),"confirm",confirm.toString())).code().equals("REJECTED"),"stale turn packet denied");
+            check(SrdNetworking.handle(player,new SrdRequestPayload(e.id(),old+99,UUID.randomUUID(),"confirm",confirm.toString())).code().equals("REJECTED"),"altered stale turn identity denied even for a retained receipt");
             e.stop(f.dm); check(!CombatManager.isInCombat(player),"termination releases player ownership");
         } finally {
             CharacterService.forget(player.getUuid()); ctx.getWorld().getServer().getPlayerManager().remove(player); ctx.getWorld().getServer().getPlayerManager().remove(outsider);

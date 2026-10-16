@@ -24,6 +24,7 @@ public final class ClientSrdCombat {
     public static UUID hudEncounter() {return encounter;}
     public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear(); }
     public static void receive(SrdStatePayload payload) {
+        if(payload.code().equals("RECEIPT")){message=payload.message();return;} // Closed encounter receipt never reconstructs world/combat state.
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)) clear(); message=payload.message(); return;
         }

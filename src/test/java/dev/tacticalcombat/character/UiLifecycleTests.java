@@ -43,9 +43,9 @@ public final class UiLifecycleTests {
         check(new CharacterRepository(path).controller(id).equals(substitute.id()),"assignment/binding reload atomically");
         repo.unbind(dm,substitute.id());check(api.handle(dm,ASSIGNMENT_CLEAR,args("character",id,"revision",2)).code().equals("OK"),"restore original owner while unbound");
         check(repo.controller(id).equals(owner.id()),"owner controller restored");
-        var old=JsonParser.parseString(Files.readString(path)).getAsJsonObject();old.addProperty("schema",2);old.remove("assignments");var legacy=dir.resolve("legacy.json");Files.writeString(legacy,old.toString());
+        var old=JsonParser.parseString(Files.readString(path)).getAsJsonObject();old.addProperty("schema",2);old.remove("assignments");old.remove("manualRevisions");old.remove("receipts");var legacy=dir.resolve("legacy.json");Files.writeString(legacy,old.toString());
         var migrated=new CharacterRepository(legacy);check(migrated.character(id).id().equals(id) && migrated.controller(id).equals(owner.id()),"schema2 adds empty assignment metadata without changing identities");
-        migrated.approve(dm,id,2);check(JsonParser.parseString(Files.readString(legacy)).getAsJsonObject().get("schema").getAsInt()==4,"next durable write migrates to schema4");
+        migrated.approve(dm,id,2);check(JsonParser.parseString(Files.readString(legacy)).getAsJsonObject().get("schema").getAsInt()==5,"next durable write migrates to schema5");
         var forged=args("character",id);forged.addProperty("admin",true);check(!api.handle(outsider,CHARACTER_GET,forged).code().equals("OK"),"unknown privilege fields rejected");
         var copySheet=repo.effectiveSheet(repo.character(copy));var changed=copySheet.deepCopy();SrdAuthoring.data(changed).addProperty("hp",4);
         repo.edit(owner,copy,1,0,CharacterEdits.diff(copySheet,changed));

@@ -27,8 +27,9 @@ public final class CharacterRepository {
     public record Assignment(UUID character,UUID controller,UUID offered,Decision decision,long revision,List<ControlChange> history) {
         public Assignment {history=List.copyOf(history);}
     }
-    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments,Map<UUID,Long> manualRevisions) {
-        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings);assignments=Map.copyOf(assignments); manualRevisions=Map.copyOf(manualRevisions); }
+    public record State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments,Map<UUID,Long> manualRevisions,Map<UUID,GameplayReceipt> receipts) {
+        public State { campaigns=Map.copyOf(campaigns); characters=Map.copyOf(characters); bindings=Map.copyOf(bindings);assignments=Map.copyOf(assignments); manualRevisions=Map.copyOf(manualRevisions);receipts=Map.copyOf(receipts); }
+        public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments,Map<UUID,Long> manualRevisions){this(campaigns,characters,bindings,assignments,manualRevisions,Map.of());}
         public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings,Map<UUID,Assignment> assignments) {this(campaigns,characters,bindings,assignments,Map.of());}
         public State(Map<UUID,Campaign> campaigns,Map<UUID,Character> characters,Map<UUID,UUID> bindings) {this(campaigns,characters,bindings,Map.of());}
     }
@@ -169,6 +170,7 @@ public final class CharacterRepository {
     }
     private void edit(Principal p,UUID id,long revision,long runtimeRevision,JsonObject changes,boolean explicitStatCommand,Long manualExpected) throws IOException {
         Character c=visible(p,id); require(c.owner.equals(p.id) || manages(p,c.campaign),"Only owner or campaign DM edits character data"); require(c.revision==revision,"Stale character revision; refresh and reconcile");
+        requireUnreserved(id);
         require(binding(id)==null,"Unbind the character before editing its approved stats");
         if(changes.size()==0) return;
         if(changes.keySet().stream().anyMatch(k->Set.of("collections.ui_trackers","collections.ui_features","collections.ui_spellbook").contains(k)))
@@ -329,6 +331,7 @@ public final class CharacterRepository {
      * not permission to reroll/retry a consumed action against a fresh revision.
      */
     public SrdSnapshot commitSrdHealth(SrdSnapshot expected,dev.tacticalcombat.rules.srd.SrdHealth health) throws IOException {
+        requireUnreserved(expected.character);
         SrdSnapshot current=srdSnapshot(expected.actor,expected.campaign);
         require(current.equals(expected),"Stale SRD runtime snapshot; effect not committed");
         require(health.maximum()==current.stats().maximumHp(),"Runtime effects cannot change approved maximum HP");
@@ -353,6 +356,7 @@ public final class CharacterRepository {
      */
     public List<SrdSnapshot> commitSrdAction(SrdSnapshot attacker,SrdSnapshot target,dev.tacticalcombat.rules.srd.SrdHealth health,
             dev.tacticalcombat.rules.srd.SrdEquipment.Weapon weapon,dev.tacticalcombat.rules.srd.SrdRules.AttackMode mode) throws IOException {
+        requireUnreserved(attacker.character);requireUnreserved(target.character);
         require(!attacker.actor.equals(target.actor) && attacker.campaign.equals(target.campaign),"Invalid action participants");
         require(srdSnapshot(attacker.actor,attacker.campaign).equals(attacker) && srdSnapshot(target.actor,target.campaign).equals(target),"Stale SRD action snapshot");
         require(health.maximum()==target.stats().maximumHp(),"Runtime effects cannot change maximum HP");
@@ -378,9 +382,78 @@ public final class CharacterRepository {
         commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions));
         return List.of(srdSnapshot(attacker.actor,attacker.campaign),srdSnapshot(target.actor,target.campaign));
     }
-    private void commit(State next) throws IOException {
+    private void commit(State next) throws IOException {commit(next,state.receipts);}
+    private void commit(State next,Map<UUID,GameplayReceipt> receipts) throws IOException {
+        next=new State(next.campaigns,next.characters,next.bindings,next.assignments,next.manualRevisions,receipts);
+        State published=next;
         String json=encode(next); file.write(json,CharacterRepository::decode); state=next; viewGeneration++;
-        parsedSrd.entrySet().removeIf(e->next.characters.get(e.getKey())!=e.getValue().source);
+        parsedSrd.entrySet().removeIf(e->published.characters.get(e.getKey())!=e.getValue().source);
+    }
+    public static final int MAX_GAMEPLAY_RECEIPTS=1024,MAX_PREPARED_ACTIONS=64;
+    public GameplayReceipt gameplayReceipt(UUID operation){return state.receipts.get(operation);}
+    public boolean reserved(UUID character){return state.receipts.values().stream().anyMatch(r->r.status()==GameplayReceipt.Status.PREPARED&&r.plan().participants().stream().anyMatch(p->p.character().equals(character)));}
+    public void requireUnreserved(UUID character){require(!reserved(character),"Unresolved prepared gameplay operation; DM review required");}
+    public GameplayReceipt visibleReceipt(Principal who,UUID operation){
+        var receipt=state.receipts.get(operation);require(receipt!=null,"Gameplay receipt unavailable");var plan=receipt.plan();
+        require(member(who,plan.campaign())&&(manages(who,plan.campaign())||who.id.equals(plan.requester())&&controller(plan.attacker().character()).equals(who.id)),"Gameplay result permission denied");
+        return receipt;
+    }
+    private void authorizePlan(Principal who,GameplayActionPlan plan){
+        require(member(who,plan.campaign())&&(manages(who,plan.campaign())||who.id.equals(plan.requester())&&controller(plan.attacker().character()).equals(who.id)),"Gameplay action permission denied");
+        for(var p:plan.participants()){
+            var c=character(p.character());require(c.campaign.equals(plan.campaign())&&c.approved&&c.profile.equals(RulesProfiles.SRD)&&c.profileVersion==1&&member(new Principal(c.owner,false),plan.campaign()),"Approved SRD participant required");
+            require(Objects.equals(state.bindings.get(p.actor()),p.character())&&controller(p.character()).equals(p.controller()),"Participant binding or controller changed");
+            require(c.revision==p.revision()&&c.runtimeRevision==p.runtimeRevision()&&srdInputs(c).equals(p.before()),"Stale gameplay participant snapshot");
+        }
+    }
+    public void requireGameplayCapacity(){require(state.receipts.size()<MAX_GAMEPLAY_RECEIPTS,"Gameplay receipt history full; no safe eviction is supported");require(state.receipts.values().stream().filter(r->r.status()==GameplayReceipt.Status.PREPARED).count()<MAX_PREPARED_ACTIONS,"Prepared action capacity reached");}
+    public GameplayReceipt prepareGameplay(Principal who,GameplayActionPlan plan)throws IOException{
+        var existing=state.receipts.get(plan.operation());if(existing!=null){visibleReceipt(who,plan.operation());require(existing.plan().equals(plan),"Operation identity reused with altered parameters");return existing;}
+        authorizePlan(who,plan);require(state.receipts.size()<MAX_GAMEPLAY_RECEIPTS,"Gameplay receipt history full; no safe eviction is supported");
+        require(state.receipts.values().stream().filter(r->r.status()==GameplayReceipt.Status.PREPARED).count()<MAX_PREPARED_ACTIONS,"Prepared action capacity reached");
+        for(var p:plan.participants())requireUnreserved(p.character());
+        var receipt=GameplayReceipt.prepared(plan);var receipts=new HashMap<>(state.receipts);receipts.put(plan.operation(),receipt);commit(state,receipts);return receipt;
+    }
+    public GameplayReceipt commitGameplay(Principal who,UUID operation,String fingerprint)throws IOException{
+        var receipt=visibleReceipt(who,operation);require(receipt.plan().fingerprint().equals(fingerprint),"Operation fingerprint mismatch");
+        if(receipt.status()==GameplayReceipt.Status.COMMITTED)return receipt;
+        require(receipt.status()==GameplayReceipt.Status.PREPARED,"Cancelled operation cannot execute");authorizePlan(who,receipt.plan());
+        var records=new HashMap<>(state.characters);
+        for(var p:receipt.plan().participants()){
+            var c=character(p.character());var sheet=JsonParser.parseString(c.sheet).getAsJsonObject();var data=dev.tacticalcombat.rules.srd.SrdAuthoring.data(sheet);var after=p.after();
+            data.addProperty("hp",after.hp());data.addProperty("temporary_hp",after.temporaryHp());
+            // Preserve optional legacy stock fields unless this operation changes that quantity.
+            if(after.arrows()!=p.before().arrows())data.addProperty("arrows",after.arrows());
+            if(after.bolts()!=p.before().bolts())data.addProperty("bolts",after.bolts());
+            if(after.daggers()!=p.before().daggers())data.addProperty("daggers",after.daggers());
+            dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
+            records.put(c.id,new Character(c.id,c.campaign,c.owner,c.profile,c.profileVersion,sheet.toString(),c.stats,c.approved,c.revision,c.runtimeRevision+1));
+        }
+        var committed=receipt.committed();var receipts=new HashMap<>(state.receipts);receipts.put(operation,committed);
+        commit(new State(state.campaigns,records,state.bindings,state.assignments,state.manualRevisions),receipts);return committed;
+    }
+    public GameplayReceipt cancelGameplay(Principal who,UUID operation,String reason)throws IOException{
+        var receipt=visibleReceipt(who,operation);require(manages(who,receipt.plan().campaign()),"Only campaign managers resolve prepared operations");
+        require(receipt.status()==GameplayReceipt.Status.PREPARED,"Operation is already terminal");
+        var cancelled=receipt.cancelled(who.id,reason);var receipts=new HashMap<>(state.receipts);receipts.put(operation,cancelled);commit(state,receipts);return cancelled;
+    }
+    /** Strict transaction metadata prevents a newer writer's fields from being silently discarded. */
+    private static void strictTransactionFields(JsonElement value,Class<?> type){
+        if(type.isEnum()&&!value.isJsonNull()&&java.util.Arrays.stream(type.getEnumConstants()).noneMatch(e->((Enum<?>)e).name().equals(value.getAsString())))throw new UnsupportedOperationException("Unknown gameplay enum value");
+        if(type.isRecord()){
+            if(type==GameplayReceipt.class||type==GameplayActionPlan.class){
+                var object=value.getAsJsonObject();if(!object.has("version")||object.get("version").getAsBigDecimal().intValueExact()!=1)throw new UnsupportedOperationException("Unknown gameplay metadata version");
+                if(type==GameplayReceipt.class&&(!object.has("status")||java.util.Arrays.stream(GameplayReceipt.Status.values()).noneMatch(s->s.name().equals(object.get("status").getAsString()))))throw new UnsupportedOperationException("Unknown gameplay receipt status");
+                if(type==GameplayActionPlan.class)require(object.has("fingerprint")&&!object.get("fingerprint").isJsonNull()&&object.get("fingerprint").getAsString().matches("[0-9a-f]{64}"),"Missing gameplay fingerprint");
+            }
+            if(!value.isJsonObject())throw new IllegalArgumentException("Invalid transaction object");var expected=new HashSet<String>();for(var c:type.getRecordComponents())expected.add(c.getName());
+            if(!expected.equals(value.getAsJsonObject().keySet()))throw new UnsupportedOperationException("Unknown or missing transaction fields");
+            for(var c:type.getRecordComponents()){var child=value.getAsJsonObject().get(c.getName());if(!child.isJsonNull()&&(c.getType().isRecord()||c.getType().isEnum()))strictTransactionFields(child,c.getType());
+                if(c.getGenericType() instanceof java.lang.reflect.ParameterizedType generic&&generic.getActualTypeArguments()[0] instanceof Class<?> element&&element.isEnum()){
+                    if(java.util.Set.class.isAssignableFrom(c.getType()))for(var entry:child.getAsJsonArray())strictTransactionFields(entry,element);
+                    else if(java.util.Map.class.isAssignableFrom(c.getType()))for(var key:child.getAsJsonObject().keySet())strictTransactionFields(new JsonPrimitive(key),element);
+                }}
+        }
     }
     public static void validateStats(Map<String,Double> stats) {
         require(stats.size()<=64,"Too many stats");
@@ -424,15 +497,17 @@ public final class CharacterRepository {
     }
     private static void require(boolean value,String message) { if(!value) throw new IllegalArgumentException(message); }
     private static String encode(State s) {
-        JsonObject root=new JsonObject(); root.addProperty("schema",4);
+        JsonObject root=new JsonObject(); root.addProperty("schema",5);root.add("receipts",new GsonBuilder().serializeNulls().create().toJsonTree(new ArrayList<>(s.receipts.values())));
         root.add("campaigns",GSON.toJsonTree(new ArrayList<>(s.campaigns.values()))); root.add("characters",GSON.toJsonTree(new ArrayList<>(s.characters.values())));
-        root.add("manualRevisions",GSON.toJsonTree(s.manualRevisions)); root.add("assignments",GSON.toJsonTree(new ArrayList<>(s.assignments.values()))); root.add("bindings",GSON.toJsonTree(s.bindings)); return GSON.toJson(root);
+        root.add("manualRevisions",GSON.toJsonTree(s.manualRevisions)); root.add("assignments",GSON.toJsonTree(new ArrayList<>(s.assignments.values()))); root.add("bindings",GSON.toJsonTree(s.bindings)); return new GsonBuilder().setPrettyPrinting().serializeNulls().create().toJson(root);
     }
     private static State decode(String json) {
         checkDepth(json,24);
         JsonObject root=JsonParser.parseString(json).getAsJsonObject();
-        int schema=root.get("schema").getAsInt();
-        if(schema!=1 && schema!=2 && schema!=3 && schema!=4) throw new UnsupportedOperationException("Unsupported save schema");
+        int schema=root.get("schema").getAsBigDecimal().intValueExact();
+        if(schema!=1 && schema!=2 && schema!=3 && schema!=4 && schema!=5) throw new UnsupportedOperationException("Unsupported save schema");
+        Set<String> rootFields=new HashSet<>(Set.of("schema","campaigns","characters","bindings"));if(schema>=3)rootFields.add("assignments");if(schema>=4)rootFields.add("manualRevisions");if(schema>=5)rootFields.add("receipts");
+        if(!rootFields.containsAll(root.keySet()))throw new UnsupportedOperationException("Unknown campaign store fields; refusing metadata loss");
         var campaigns=new HashMap<UUID,Campaign>(); var characters=new HashMap<UUID,Character>(); var bindings=new HashMap<UUID,UUID>();
         require(root.getAsJsonArray("campaigns").size()<=64 && root.getAsJsonArray("characters").size()<=1024,"Save limits exceeded");
         for(JsonElement e:root.getAsJsonArray("campaigns")) {
@@ -473,6 +548,17 @@ public final class CharacterRepository {
                 long revision=Long.parseLong(value);require(revision>=0,"Invalid manual revision");manualRevisions.put(id,revision);
             }
         }
-        return new State(campaigns,characters,bindings,assignments,manualRevisions);
+        var receipts=new HashMap<UUID,GameplayReceipt>();
+        if(schema>=5){
+            require(root.has("receipts")&&root.getAsJsonArray("receipts").size()<=MAX_GAMEPLAY_RECEIPTS,"Invalid receipt collection");
+            for(var row:root.getAsJsonArray("receipts")){
+                strictTransactionFields(row,GameplayReceipt.class);var receipt=GSON.fromJson(row,GameplayReceipt.class);
+                require(campaigns.containsKey(receipt.plan().campaign()),"Receipt campaign missing");
+                require(receipts.put(receipt.plan().operation(),receipt)==null,"Duplicate gameplay receipt");
+            }
+            require(receipts.values().stream().filter(r->r.status()==GameplayReceipt.Status.PREPARED).count()<=MAX_PREPARED_ACTIONS,"Too many prepared operations");
+            var reserved=new HashSet<UUID>();for(var receipt:receipts.values())if(receipt.status()==GameplayReceipt.Status.PREPARED)for(var participant:receipt.plan().participants())require(characters.containsKey(participant.character())&&reserved.add(participant.character()),"Conflicting prepared reservations");
+        }
+        return new State(campaigns,characters,bindings,assignments,manualRevisions,receipts);
     }
 }

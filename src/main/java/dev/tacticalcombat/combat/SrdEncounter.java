@@ -34,18 +34,20 @@ public final class SrdEncounter implements Encounter {
     private int turnIndex,round=1;
     private long revision;
     private SrdMovementTurn movement;
-    private boolean actionUsed;
+    private SrdActionBudget budget=new SrdActionBudget();
     private Intent intent;
     private Transaction transaction;
     private final SrdRules.Dice dice;
+    // Package-local fault seam, never supplied by a client. Runs strictly after the durable commit.
+    Runnable afterDurableCommit=()->{};
     record Intent(UUID id,UUID requester,long turn,UUID actor,UUID target,SrdEquipment.Weapon weapon,
                   SrdCharacter.Ability ability,boolean twoHands,CharacterRepository.SrdSnapshot attacker,
                   CharacterRepository.SrdSnapshot defender,Vec3d from,Vec3d to,SrdRules.AttackPlan plan,SrdTargeting.Target geometry) {}
     enum TransactionState { PREPARED, SAVE_FAILED, COMMITTED }
     static final class Transaction {
-        final Intent intent; final SrdRules.AttackResult roll; final SrdHealth health;
+        final Intent intent; final SrdRules.AttackResult roll; final SrdHealth health; final GameplayActionPlan plan;
         TransactionState state=TransactionState.PREPARED;
-        Transaction(Intent intent,SrdRules.AttackResult roll,SrdHealth health) { this.intent=intent; this.roll=roll; this.health=health; }
+        Transaction(Intent intent,SrdRules.AttackResult roll,SrdHealth health,GameplayActionPlan plan) { this.intent=intent; this.roll=roll; this.health=health;this.plan=plan; }
     }
 
     private SrdEncounter(ServerWorld world,UUID campaign,List<LivingEntity> actors,SrdRules.Dice dice) {
@@ -91,6 +93,7 @@ public final class SrdEncounter implements Encounter {
             require(!actor.hasVehicle() && !actor.hasPassengers() && !actor.isSwimming() && !actor.isFallFlying(),"Unsupported movement mode");
             require(!CombatManager.isInCombat(actor),"Actor already belongs to an encounter");
             var snapshot=CharacterService.srdStats(actor,campaign);
+            CharacterService.repository().requireUnreserved(snapshot.character());
             require(snapshot.stats().hp()>0,"Zero-HP actor needs adjudication before admission");
             require(CharacterService.mayJoin(actor,campaign,RulesProfiles.get(RulesProfiles.SRD)),"Incompatible campaign or ruleset");
             var terrain=new SrdTerrain(actor,snapshot.stats()); var cell=terrain.currentCell();
@@ -109,7 +112,7 @@ public final class SrdEncounter implements Encounter {
     public long turn() { return requests.turn(); }
     public long revision() { return revision; }
     public int round() { return round; }
-    public boolean actionUsed() { return actionUsed; }
+    public boolean actionUsed() { return budget.used(); }
     public LivingEntity current() { return order.isEmpty()?null:actor(order.get(turnIndex)); }
     private LivingEntity actor(UUID id) { return actors.stream().filter(a->a.getUuid().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("Actor is not in this encounter")); }
     private void thread() { require(world.getServer().isOnThread(),"Server thread required"); }
@@ -164,7 +167,7 @@ public final class SrdEncounter implements Encounter {
     }
     private void establishOrder() { order=groups.stream().flatMap(Collection::stream).toList(); turnIndex=0; beginTurn(); }
     private void beginTurn() {
-        requests.nextTurn(); actionUsed=false; intent=null; transaction=null;
+        requests.nextTurn(); budget=new SrdActionBudget(); intent=null; transaction=null;
         state=State.ACTIVE; reason="Controlled public-position free-for-all; no reactions or death saves";
         try { movement=new SrdMovementTurn(current(),this::frame); }
         catch(IllegalArgumentException denied) { state=State.PAUSED; reason=denied.getMessage(); movement=null; }
@@ -221,7 +224,7 @@ public final class SrdEncounter implements Encounter {
         return preview(p,targetId,weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands) {
-        thread(); require(state==State.ACTIVE && controls(p,current()) && !actionUsed && !movement.moving(),"No eligible active action");
+        thread(); require(state==State.ACTIVE && controls(p,current()) && !budget.used() && !movement.moving(),"No eligible active action");
         var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
         var plan=a.rules().plan(weapon,mode,ability,twoHands);
         var geometry=legalTarget(attacker,target,plan);
@@ -229,7 +232,7 @@ public final class SrdEncounter implements Encounter {
         revision++; return intent;
     }
     Transaction confirm(CharacterRepository.Principal p,UUID intentId) {
-        thread(); require(state==State.ACTIVE && controls(p,current()) && !actionUsed && !movement.moving(),"No eligible active action");
+        thread(); require(state==State.ACTIVE && controls(p,current()) && !budget.used() && !movement.moving(),"No eligible active action");
         Intent selected=intent;
         require(selected!=null && selected.id.equals(intentId) && selected.requester.equals(p.id()) && selected.turn==turn(),"Stale or unauthorized attack intent");
         var attacker=actor(selected.actor); var target=actor(selected.target);
@@ -237,28 +240,41 @@ public final class SrdEncounter implements Encounter {
                 && selected.from.equals(attacker.getPos()) && selected.to.equals(target.getPos()),"Attack preview changed; preview again");
         require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target cover changed; preview again");
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
-        actionUsed=true; intent=null;
+        CharacterService.repository().requireGameplayCapacity();CharacterService.repository().requireUnreserved(selected.attacker.character());CharacterService.repository().requireUnreserved(selected.defender.character());
+        budget.reserve(); intent=null;
         var roll=selected.attacker.rules().attack(selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,
                 selected.defender.rules().armorClass()+selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage(),dice);
         var health=SrdHealth.of(selected.defender.stats()).damage(List.of(roll.damage()),selected.defender.stats());
-        transaction=new Transaction(selected,roll,health); persistTransaction(); return transaction;
+        var repo=CharacterService.repository();var attack=new GameplayActionPlan.Attack(selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage());
+        var plan=GameplayActionPlan.weapon(selected.id,p.id(),campaign,id,selected.turn,selected.attacker,repo.controller(selected.attacker.character()),selected.defender,repo.controller(selected.defender.character()),attack,roll);
+        transaction=new Transaction(selected,roll,health,plan); persistTransaction(p); return transaction;
     }
-    private void persistTransaction() {
+    private void persistTransaction(CharacterRepository.Principal requester) {
+        boolean wasCommitted=transaction.state==TransactionState.COMMITTED;
         try {
-            var saved=CharacterService.repository().commitSrdAction(transaction.intent.attacker,transaction.intent.defender,transaction.health,transaction.intent.weapon,transaction.intent.plan.mode());
-            for(var snapshot:saved) snapshots.put(snapshot.actor(),snapshot);
-            movement.reconcileResources(saved.getFirst()); transaction.state=TransactionState.COMMITTED;
+            var repo=CharacterService.repository();
+            repo.prepareGameplay(requester,transaction.plan);
+            repo.commitGameplay(requester,transaction.plan.operation(),transaction.plan.fingerprint());
+            // Persistence is authoritative even if a later movement/presentation update fails.
+            transaction.state=TransactionState.COMMITTED;
+            if(!wasCommitted)budget.committed();
+            afterDurableCommit.run();
+            var saved=List.of(repo.srdSnapshot(transaction.intent.actor,campaign),repo.srdSnapshot(transaction.intent.target,campaign));
+            for(var snapshot:saved)snapshots.put(snapshot.actor(),snapshot);
+            movement.reconcileResources(saved.getFirst());
             if(transaction.health.zeroHp()) { state=State.PAUSED; reason="Zero D&D HP: encounter paused for DM healing or termination; no death saves"; }
             else { state=State.ACTIVE; reason=transaction.roll.hit()?"Attack committed":"Miss committed; action spent"; }
         } catch(java.io.IOException failure) {
             transaction.state=TransactionState.SAVE_FAILED; state=State.PAUSED;
-            reason="Storage failed: action reserved, dice retained, no HP published. DM may retry the same transaction.";
-        } catch(IllegalArgumentException conflict) {
-            transaction.state=TransactionState.SAVE_FAILED; state=State.PAUSED;
-            reason="Resource conflict: no automatic rebase or reroll. End encounter and adjudicate.";
+            boolean durable=CharacterService.repository().gameplayReceipt(transaction.plan.operation())!=null;
+            reason=durable?"Prepared outcome saved; commit failed. Resources unchanged. DM may retry without reroll.":"Preparation failed; no durable accepted outcome. Resources unchanged. DM may retry retained dice while this encounter remains open.";
+        } catch(RuntimeException conflict) {
+            state=State.PAUSED;
+            if(transaction.state==TransactionState.COMMITTED)reason="Resources committed; presentation reconciliation failed. Refresh or end; do not retry spending.";
+            else {transaction.state=TransactionState.SAVE_FAILED;reason="Resource or permission conflict: no automatic rebase/reroll. End encounter and review prepared operations.";}
         }
         revision++;
-        if(transaction.state==TransactionState.COMMITTED) try {
+        if(transaction.state==TransactionState.COMMITTED&&!wasCommitted) try {
             var t=transaction;var r=t.roll.roll();
             var mode=SrdRules.rollMode(t.intent.geometry.advantage(),t.intent.geometry.disadvantage()||t.intent.plan.disadvantage());
             var roll=dev.tacticalcombat.uiapi.UiEvents.Roll.from(20,r.faces(),mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2,r.total()-r.chosen(),"SRD attack",t.roll.critical());
@@ -278,7 +294,8 @@ public final class SrdEncounter implements Encounter {
     }
     void retry(CharacterRepository.Principal p) {
         thread(); require(manager(p) && state==State.PAUSED && transaction!=null && transaction.state==TransactionState.SAVE_FAILED,"No failed transaction or permission denied");
-        persistTransaction();
+        fresh(actor(transaction.intent.actor));fresh(actor(transaction.intent.target));
+        persistTransaction(p);
     }
     void heal(CharacterRepository.Principal p,UUID target,int amount) throws java.io.IOException {
         thread(); require(manager(p) && state==State.PAUSED,"Healing adjudication requires a paused encounter and campaign manager");
@@ -348,7 +365,7 @@ public final class SrdEncounter implements Encounter {
         authorizeViewer(p);
         var data=new JsonObject(); data.addProperty("state",state.name()); data.addProperty("turn",turn()); data.addProperty("round",round);
         data.addProperty("campaign",campaign.toString()); data.addProperty("manager",manager(p));
-        data.addProperty("reason",reason); data.addProperty("actionUsed",actionUsed);
+        data.addProperty("reason",reason); data.addProperty("actionUsed",budget.used());
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         var entries=new JsonArray();

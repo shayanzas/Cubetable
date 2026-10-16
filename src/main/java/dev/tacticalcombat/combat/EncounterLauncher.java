@@ -22,7 +22,7 @@ public final class EncounterLauncher {
     private static final Map<UUID,PanelWatch> panels=new HashMap<>();
     public static void forget(UUID player){discoveries.remove(player);panels.remove(player);}
     public static void close(UUID player,UUID token){var watch=panels.get(player);if(watch!=null&&watch.token.equals(token))panels.remove(player);}
-    private static void panel(ServerPlayerEntity p,JsonObject out,UUID campaign,UUID character,boolean manager,boolean self){var repo=CharacterService.repository();UUID token=UUID.randomUUID();panels.put(p.getUuid(),new PanelWatch(token,campaign,character,manager,self,repo.viewGeneration(),CharacterService.principal(p).admin(),combatStamp(campaign)));out.addProperty("panelToken",token.toString());}
+    static void panel(ServerPlayerEntity p,JsonObject out,UUID campaign,UUID character,boolean manager,boolean self){var repo=CharacterService.repository();UUID token=UUID.randomUUID();panels.put(p.getUuid(),new PanelWatch(token,campaign,character,manager,self,repo.viewGeneration(),CharacterService.principal(p).admin(),combatStamp(campaign)));out.addProperty("panelToken",token.toString());}
     private static String combatStamp(UUID campaign){return CombatManager.encounters().stream().filter(e->e instanceof SrdEncounter s&&s.campaign().equals(campaign)).map(e->(SrdEncounter)e).map(e->e.id()+":"+e.revision()).sorted().collect(java.util.stream.Collectors.joining(","));}
     public static void synchronize(net.minecraft.server.MinecraftServer server){
         var repo=CharacterService.repository();

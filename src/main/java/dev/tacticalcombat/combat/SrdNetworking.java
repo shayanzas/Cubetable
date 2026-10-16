@@ -85,6 +85,11 @@ public final class SrdNetworking {
             if(!LIMIT.allow(player.getUuid(),player.getServer().getOverworld().getTime())) throw new IllegalArgumentException("Rate limit: wait before retrying");
             if(request.json().length()>SrdRequestPayload.LIMIT) throw new IllegalArgumentException("Request too large");
             CharacterRepository.checkDepth(request.json(),8); JsonObject args=JsonParser.parseString(request.json()).getAsJsonObject();
+            if(request.operation().equals("confirm")){
+                if(!args.keySet().equals(Set.of("intent")))throw new IllegalArgumentException("Confirmation accepts only its server intent identity");
+                var receipt=CharacterService.repository().gameplayReceipt(UUID.fromString(args.get("intent").getAsString()));
+                if(receipt!=null)return replay(player,request,receipt);
+            }
             SrdEncounter encounter=find(request.encounter()); if(encounter==null) throw new IllegalArgumentException("Encounter unavailable");
             var p=CharacterService.principal(player); encounter.authorizeViewer(p); // Authorize without constructing a discarded snapshot.
             revision=encounter.revision();
@@ -161,6 +166,20 @@ public final class SrdNetworking {
             String text=denied.getMessage()==null?"Invalid SRD request":denied.getMessage();
             return new SrdStatePayload(request.encounter(),revision,"REJECTED",text.substring(0,Math.min(256,text.length())),"{}");
         }
+    }
+    private static SrdStatePayload replay(ServerPlayerEntity player,SrdRequestPayload request,GameplayReceipt raw){
+        var repo=CharacterService.repository();var who=CharacterService.principal(player);var receipt=repo.visibleReceipt(who,raw.plan().operation());var plan=receipt.plan();
+        if(!plan.encounter().equals(request.encounter())||plan.turn()!=request.turn())throw new IllegalArgumentException("Operation identity reused with altered encounter or turn");
+        var extra=new JsonObject();extra.addProperty("operation",plan.operation().toString());extra.addProperty("status",receipt.status().name());
+        if(receipt.status()==GameplayReceipt.Status.COMMITTED)extra.add("result",result(plan));
+        var encounter=find(request.encounter());String message="Stored gameplay operation: "+receipt.status()+"; no resources spent again";
+        if(encounter!=null){encounter.authorizeViewer(who);selectWatch(player,encounter.id());return state(encounter,who,receipt.status()==GameplayReceipt.Status.COMMITTED?"RESULT":"SAVE_FAILED",message,extra);}
+        return new SrdStatePayload(request.encounter(),0,"RECEIPT",message,extra.toString());
+    }
+    static JsonObject result(GameplayActionPlan plan){
+        var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("action",plan.operation().toString());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
+        var faces=new JsonArray();outcome.roll().faces().forEach(faces::add);roll.add("faces",faces);var damage=new JsonArray();outcome.damageFaces().forEach(damage::add);roll.add("damageFaces",damage);
+        var attack=plan.attack();var mode=SrdRules.rollMode(attack.advantage(),attack.disadvantage()||SrdRules.plan(plan.attacker().before(),attack.weapon(),attack.mode(),attack.ability(),attack.twoHands()).disadvantage());roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);return roll;
     }
     private static void rejection(SrdEncounter encounter,ServerPlayerEntity player,SrdRequestPayload request) {
         dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(dev.tacticalcombat.uiapi.UiEvents.derived(request.request(),player.getUuid()+":rejection"),encounter.campaign(),encounter.id(),request.turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.REJECTION,java.util.List.of(player.getUuid()),"Admitted SRD operation rejected; inspect the direct response for details",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,java.util.Set.of(player.getUuid()));

@@ -116,7 +116,7 @@ public final class CharacterSyncTests {
             check(restored.character(auto).stats().equals(repo.character(auto).stats()),"normal repository restart preserves runtime stats");
             check(restored.campaign(campaign).policy().equals(oldPolicy),"approval policy survives restart");
             // A schema-1 fixture upgrades in memory with secure defaults, identities preserved.
-            var legacy=JsonParser.parseString(Files.readString(dir.resolve("state.json"))).getAsJsonObject(); legacy.addProperty("schema",1);
+            var legacy=JsonParser.parseString(Files.readString(dir.resolve("state.json"))).getAsJsonObject(); legacy.addProperty("schema",1);legacy.remove("assignments");legacy.remove("manualRevisions");legacy.remove("receipts");
             legacy.getAsJsonArray("campaigns").forEach(c->c.getAsJsonObject().remove("policy"));
             legacy.getAsJsonArray("characters").forEach(c->c.getAsJsonObject().remove("runtimeRevision"));
             Path legacyFile=dir.resolve("legacy.json"); Files.writeString(legacyFile,legacy.toString());
@@ -124,7 +124,7 @@ public final class CharacterSyncTests {
             check(migrated.campaign(campaign).policy().equals(ApprovalPolicy.secureDefault()),"schema-1 migration uses secure approval default");
             check(migrated.character(id).id().equals(id) && migrated.character(auto).runtimeRevision()==0,"migration preserves identity and initializes HP revision");
             migrated.policy(owner,campaign,migrated.campaign(campaign).revision(),permissive);
-            check(JsonParser.parseString(Files.readString(legacyFile)).getAsJsonObject().get("schema").getAsInt()==4,"first mutation writes schema 4 with independent manual revisions");
+            check(JsonParser.parseString(Files.readString(legacyFile)).getAsJsonObject().get("schema").getAsInt()==5,"first mutation writes schema 5 with independent manual revisions and receipts");
             Files.delete(legacyFile);
             check(new CharacterRepository(legacyFile).recoveredFromBackup(),"missing primary recovers valid schema-1 backup");
             var revoked=JsonParser.parseString(Files.readString(dir.resolve("state.json"))).getAsJsonObject();

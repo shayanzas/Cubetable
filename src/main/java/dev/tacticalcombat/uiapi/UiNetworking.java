@@ -93,6 +93,7 @@ public final class UiNetworking {
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
+            case GAMEPLAY_RECOVERY, GAMEPLAY_CANCEL -> out=GameplayRecovery.handle(p,op,a);
             case ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
             case ACTIVE -> {
                 fields(a,"");var restored=CharacterService.restoreSelection(p);if(restored!=null&&restored.character()!=null)SELECTED.put(p.getUuid(),restored.character());try {UUID campaign=CharacterService.selected(p);if(repo.member(who,campaign)) out.addProperty("campaign",campaign.toString());} catch(IllegalArgumentException none) { }

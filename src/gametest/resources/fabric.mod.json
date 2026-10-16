@@ -24,7 +24,8 @@
       "dev.tacticalcombat.combat.UiFoundationGameTests",
       "dev.tacticalcombat.combat.HubGatewayGameTests",
       "dev.tacticalcombat.combat.ManagementGatewayGameTests",
-      "dev.tacticalcombat.combat.EncounterLauncherGameTests"
+      "dev.tacticalcombat.combat.EncounterLauncherGameTests",
+      "dev.tacticalcombat.combat.GameplayTransactionGameTests"
     ]
   },
   "depends": {

@@ -11,10 +11,14 @@ public final class AtomicJsonFile {
     private final Path path;
     @FunctionalInterface interface BeforeReplace { void run(Path destination) throws IOException; }
     private final BeforeReplace beforeReplace;
+    enum WriteStep { BEFORE_TEMP_WRITE, AFTER_TEMP_FORCE }
+    @FunctionalInterface interface WriteFault { void run(WriteStep step,Path destination)throws IOException; }
+    private final WriteFault writeFault;
     private boolean recovered;
     public boolean recoveredFromBackup() { return recovered; }
     public AtomicJsonFile(Path path) { this(path,destination->{}); }
-    AtomicJsonFile(Path path,BeforeReplace beforeReplace) { this.path=path; this.beforeReplace=beforeReplace; }
+    AtomicJsonFile(Path path,BeforeReplace beforeReplace) { this(path,beforeReplace,(step,destination)->{}); }
+    AtomicJsonFile(Path path,BeforeReplace beforeReplace,WriteFault writeFault) { this.path=path;this.beforeReplace=beforeReplace;this.writeFault=writeFault; }
     public <T> T read(Function<String,T> decode, T empty) throws IOException {
         if(!Files.exists(path) && !Files.exists(backup())) return empty;
         Exception primary;
@@ -45,8 +49,10 @@ public final class AtomicJsonFile {
     private void replace(Path destination,String text) throws IOException {
         Path temp=Files.createTempFile(path.getParent(),".cubetable-", ".tmp");
         try {
+            writeFault.run(WriteStep.BEFORE_TEMP_WRITE,destination);
             Files.writeString(temp,text,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING);
             try(FileChannel channel=FileChannel.open(temp,StandardOpenOption.WRITE)) { channel.force(true); }
+            writeFault.run(WriteStep.AFTER_TEMP_FORCE,destination);
             // Refuse an unsafe fallback on filesystems lacking atomic replacement.
             beforeReplace.run(destination);
             Files.move(temp,destination,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);

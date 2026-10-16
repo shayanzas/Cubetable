@@ -118,5 +118,6 @@ public final class FoundationTests {
         SrdAuthoringTests.run();
         dev.tacticalcombat.character.SrdResourceFaultTests.run();
         dev.tacticalcombat.character.GameplayTransactionBaselineTests.run();
+        dev.tacticalcombat.character.GameplayTransactionTests.run();
     }
 }
