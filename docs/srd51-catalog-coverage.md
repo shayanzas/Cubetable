@@ -1,76 +1,68 @@
-# SRD 5.1 reference catalog coverage — J2.5
+# SRD 5.1 reference catalog coverage — J2.5C2
 
-This is a **source-verified batched catalog**, not a claim that the entire SRD has been fully structured or implemented. There are **623 entries across 18 categories**. Every entry is read-only reference data; presence does not grant traits, cast spells, equip items, execute monster actions or change saved characters.
+The catalog contains **1806 entries across 19 categories**, up from 623. All are static references. D2's separate executable monster adapter still permits exactly Zombie, Skeleton and Goblin, with its existing partial support. No catalog presence grants equipment, class/race features, spells, levels or monster actions.
 
 ## Source and elected license
 
-Rules reference: user-uploaded `SRD-OGL_V5.1.pdf`, 403 pages, System Reference Document 5.1 (2014 rules). SHA-256: `d3f94417d2532f42a5abaec07e71a59007bf6cc46992c6458be6667f7a9f1e34`. PDF page numbers in entries refer to that supplied edition, not shifted page numbers in another layout. OGL legal pages 1–2 and running legal/footer text are excluded from distributed catalog content. The uploaded PDF itself has not been relabeled.
+The user-supplied `SRD-OGL_V5.1.pdf` is the 403-page **2014 SRD 5.1 OGL-layout reference**, SHA-256 `d3f94417d2532f42a5abaec07e71a59007bf6cc46992c6458be6667f7a9f1e34`. The new upload matches the previous source exactly. It has not been relabeled as a CC PDF. Pages 1–2 and running license/footer material are excluded from extracted content. Catalog page numbers refer to this layout.
 
-Distribution elects **Creative Commons Attribution 4.0 International (CC BY 4.0)** following the user's supplied confirmation that Wizards makes the full SRD 5.1 available under either license. Attribution:
+Distribution retains the elected **CC BY 4.0** license, consistent with the user's official dual-license confirmation:
 
 > This work includes material taken from the System Reference Document 5.1 (SRD 5.1) by Wizards of the Coast LLC and available at https://www.dndbeyond.com/srd. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
-Changes: typography/hyphens and whitespace normalized, structured metadata and stable IDs added. No endorsement is implied. Attribution is also packaged in `SRD-5.1-NOTICE.txt`, catalog source metadata and the reference interface.
+The notice also remains packaged in `SRD-5.1-NOTICE.txt` and displayed in the browser. Changes are extraction/typographic normalization, structured annotations and stable IDs. No endorsement is implied.
 
-Verification attempts: supplied D&D Beyond PDF URL, Wizards media PDF, `https://www.dndbeyond.com/srd`, and the supplied Wikimedia archive page returned HTTP 403 in this environment; the official PDF was also retried through approved escalation. Independent CC-edition text comparison remains pending. The source/license record explicitly preserves that limitation. No 5.2 content, OGL license text or external non-SRD text was imported.
+The official CC URL `https://media.dndbeyond.com/compendium-images/srd/5.1/SRD_CC_v5.1.pdf` returned HTTP 403 again, including the escalated retry. The alternative Wizards CC URL also returned 403. Independent CC-edition text comparison therefore remains **pending**; no differences between editions are claimed to have been checked. Source/license metadata explicitly preserves this limitation. No SRD 5.2 or outside source was substituted.
 
-- Official dual-license page: https://www.dndbeyond.com/srd
-- Official CC edition: https://media.dndbeyond.com/compendium-images/srd/5.1/SRD_CC_v5.1.pdf
-- Wizards edition URL: https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf
-- User-supplied archive: https://commons.wikimedia.org/wiki/File:SRD5.1-CCBY4.0License.pdf
+## Category population
 
-## Category coverage
+“Eligible” below counts a defined source inventory, not implemented mechanics. A dash means no independent exhaustive category universe is claimed.
 
-| Category | Entries | Verified extent and remaining work |
-| --- | ---: | --- |
-| advancement | 1 | Beyond 1st Level source section, including the printed advancement table as text. Structured per-class progression/HP/choice transactions remain deferred. |
-| armor | 13 | 12 armor rows plus shield (13/13), including AC category/formula, Strength, stealth, price/weight and don/doff metadata. No auto-equipping or AC changes. |
-| classes | 12 | All 12 class identities and Hit Dice. Full progression, choice/slot/grant tables and executable class entitlements are NOT complete. |
-| combat | 2 | Two source sections: Actions in Combat and Attack Rolls. Not a complete structured combat rules index. |
-| conditions | 15 | 15/15 condition headings across source pages 358–359, including exhaustion. Descriptive; no new condition engine. |
-| equipment | 133 | 133 price/weight rows extracted from the printed adventuring-gear and tools tables on pages 69–70. Special uses, pack contents, mounts, services and vehicles are not a complete structured catalog. |
-| feats | 1 | Grappler, the SRD feat, with STR 13 prerequisite and source text. No feat execution. |
-| features | 47 | 47 legacy feature names matched to exact headings inside their source class chapter; source text and existing minimum levels/legacy IDs retained. 14 unmatched summary labels listed below. Full level-1–20 progression and prerequisites remain incomplete. |
-| magic-items | 3 | Three source sections: Bag of Holding, Potion of Healing, Wand of Magic Missiles. Other magic items and fully structured item effects remain uncovered. |
-| monsters | 3 | Three complete basic stat blocks: Goblin, Skeleton, Zombie, including ability scores, defenses, senses/languages, traits/actions and spellcasting absence. Remaining SRD monsters are not populated; no monster adapter. |
-| movement | 2 | Two source sections: Movement and combat Difficult Terrain. Not a complete movement/reference rules index or new movement mechanics. |
-| races | 9 | Nine source race-family descriptions with size/speed and trait text. No automatic ASIs, traits or grants; individual trait predicates are not fully structured. |
-| rests | 2 | Short Rest and Long Rest source sections. No automatic resource recovery. |
-| spell-lists | 8 | All eight printed class lists cross-checked against imported spell identities. Domain/patron expanded lists and class preparation rules are not entitlements. |
-| spells | 319 | 319/319 printed description headings, required metadata and reciprocal membership in the printed spell lists. Full text/scaling retained; not castable. |
-| subclasses | 12 | 12 authorized SRD subclass opening sections, class links and minimum levels. Subsequent feature details are separately indexed where matched, not a complete subclass entitlement model. |
-| subraces | 4 | Four source subrace descriptions (Hill Dwarf, High Elf, Lightfoot, Rock Gnome), linked to parent races. No automatic grants. |
-| weapons | 37 | 37/37 rows in the printed weapon table, with damage types/dice, properties, ranges, versatility, price and weight. Existing executable weapon subset is unchanged. |
+| Category | Before | After | Eligible source inventory | Structural extent and limitations |
+| --- | ---: | ---: | ---: | --- |
+| advancement | 1 | 1 | — | Beyond 1st Level preserved; class tables are now separately structured. No advancement transaction changes. |
+| armor | 13 | 13 | 13 | 13/13 printed armor/shield rows preserved. No automatic AC/loadout behavior. |
+| classes | 12 | 12 | 12 | 12 chapters; all 240 level/PB rows, printed resources/slots, ASI levels, source proficiencies/equipment and feature links. Some subsidiary choice/resource/dependency tables remain descriptive. |
+| combat | 2 | 3 | — | Existing sections retained and enriched, plus one additional source section. More combat reference sections are under rules. |
+| conditions | 15 | 15 | 15 | 15/15 printed conditions, including exhaustion. No condition engine. |
+| equipment | 133 | 200 | — | Original 133 gear/tool rows plus 67 mount/vehicle/service/pack records. Detailed prose where matched, seven packs with source contents. Not an exhaustive inventory of every priced trade-good/variant or typed special use. |
+| feats | 1 | 1 | 1 | Grappler, the one source feat; STR 13 prerequisite retained. |
+| features | 47 | 305 | 305 | 305 source feature/subsection headings, including choices and invocations. 108 feature levels remain explicitly unresolved; no default level is invented. Original legacy IDs/levels are retained. |
+| magic-items | 3 | 240 | 240 | 240 independent italic type/rarity anchors in pp.207–253, including Orb of Dragonkind. Rarity/attunement metadata; source charge index and restrictions. Variant rarity tables and effect semantics remain descriptive. |
+| monsters | 3 | 317 | 317 | 317 independent Armor Class anchors in pp.261–357 and 366–403. Core statistics, defenses and full trait/action text retained; spell references are text mentions requiring review. Only the separate D2 trio can be prepared. |
+| movement | 2 | 3 | — | Existing sections retained and enriched, plus one additional source section. More exploration rules are under rules. |
+| races | 9 | 9 | 9 | 9 source families, reviewed base ability adjustments, languages/trait text and conditional context. Base traits separated from included subrace prose. |
+| rests | 2 | 2 | — | Both Short/Long Rest source sections retained; no automatic recovery. |
+| rules | 0 | 305 | — | 305 additional source headings across ability checks, skills, equipment, combat, spellcasting, adjudication, monster rules and appendices. Heading-bounded text, not exhaustive typed rule predicates. |
+| spell-lists | 8 | 8 | 8 | 8 printed class lists with reciprocal membership. Domain/patron entitlement tables remain descriptive in class text. |
+| spells | 319 | 319 | 319 | 319/319 printed descriptions and original metadata preserved. No spell execution. |
+| subclasses | 12 | 12 | 12 | 12 SRD-only subclasses; full source section text and section-bounded child links. Conditional grants and some feature levels still require review. |
+| subraces | 4 | 4 | 4 | 4 SRD subraces, parent links and reviewed adjustments. No automatic inherited grant system. |
+| weapons | 37 | 37 | 37 | 37/37 printed rows preserved; properties/dice/ranges/cost/weight. No executable weapon changes. |
 
-Only the spell headings/class lists, condition headings, weapon table and armor table have a full independent expected-count gate in this delivery. Do not extrapolate those complete table checks to all magic items, monsters, class progression or the whole SRD. Population of the remaining material should continue in source-checked batches; no unknown entries are invented.
+## Evidence, completeness and unresolved material
 
-## Specific unmatched legacy feature summaries
+`source-inventory-v1.json` preserves the original spell/list, condition, weapon, armor and gear row inventories, extended for the additional equipment records. `source-coverage-v1.json` adds bounded source candidates with page/line spans and source-text hashes, imported record fingerprints, all 623 retained IDs, frozen baseline description/data checks and per-category status/counts. Its `unresolvedRelationships` array names all 108 feature-level ambiguities. Zero stat-block parsing failures does not mean all monster mechanics are structured or executable.
 
-These existing summary labels did not exactly match a source heading in their class chapter, so they were not imported as newly verified feature entries. Existing character data/reference summaries are retained. Several correspond to separately imported subclass entries; that does not establish an executable grant or alias.
+Monster/item eligible totals are based on independent source labels, then compared to imported records. Class progression requires exactly levels 1–20 in order and correct printed PB/slot/resource structures. General headings and gear prose are explicitly bounded scans: the catalog does not claim 100% structured coverage of every table cell, prerequisite, variant, damage formula, lair effect, charge condition or rule predicate in the entire SRD.
 
-- barbarian: Primal Path · Berserker
-- fighter: Martial Archetype · Champion
-- bard: Bard College · Lore
-- cleric: Divine Domain · Life
-- cleric: Turn Undead
-- cleric: Preserve Life
-- druid: Druid Circle · Land
-- monk: Monastic Tradition · Open Hand
-- paladin: Sacred Oath · Devotion
-- ranger: Ranger Archetype · Hunter
-- rogue: Roguish Archetype · Thief
-- sorcerer: Sorcerous Origin · Draconic Bloodline
-- warlock: Otherworldly Patron · Fiend
-- wizard: Arcane Tradition · Evocation
+The original 14 unmatched legacy summary labels remain in the prior source inventory. New source headings such as Channel Divinity: Turn Undead are indexed by their printed names; no invented automatic alias or executable grant replaces an old character reference.
 
-All newly imported entries have `PDF_TEXT_VERIFIED` provenance against the supplied PDF; independent CC-edition comparison is pending at the source level. The unmatched summaries above and incomplete categories are explicitly distinguished from imported verified text.
+## Reproduction and validation
 
-## Format, generation and validation
+With PyMuPDF 1.26.6 and the exact reference PDF, from the repository root:
 
-Versioned mod resources: `data/tacticalcombat/reference/catalog-v1.json` and `source-inventory-v1.json`. IDs are stable source-qualified category/name slugs. Category metadata and related IDs are validated by `SrdReferenceCatalog`; no reference corpus is copied wholesale into characters. Library schema 2, campaign schema 5 and SRD combat v1 remain unchanged.
+```sh
+python3 tools/build_srd51_reference.py /path/to/SRD-OGL_V5.1.pdf
+python3 tools/expand_srd51_reference.py /path/to/SRD-OGL_V5.1.pdf
+python3 tools/verify_srd51_source.py /path/to/SRD-OGL_V5.1.pdf
+bash ./gradlew --no-daemon --max-workers=4 build runGametest validateSrdCatalog validateSrdCoverage
+```
 
-The maintainer script `tools/build_srd51_reference.py <uploaded-SRD-5.1.pdf>` requires PyMuPDF and reproduces these batches from the exact source hash. Minecraft and normal Gradle builds require neither a PDF parser nor network access. Review any generated changes against the source; do not rerun against an arbitrary or 5.2 document as if it were this manifest.
+The expansion deliberately requires the baseline 623-entry output first. The verifier runs both importers in an isolated temporary tree and compares all three artifacts byte-for-byte. Minecraft/normal Java builds need neither a PDF parser nor network access.
 
-Run `bash ./gradlew --no-daemon --max-workers=4 validateSrdCatalog`. It checks packaged JSON, version/source/attribution, unique IDs/names, fields/types, references, levels/prerequisites, damage/property types, full inventoried spell/condition/weapon/armor names, the extracted equipment inventory and both directions of printed spell-list membership. Negative fixtures verify malformed data is rejected.
+Validation covers unique IDs/names, required fields/types, source/edition/attribution, complete defined inventories, reciprocal spell lists, all class progression rows, typed references, monster stats, item metadata and source fingerprints. Negative fixtures alter descriptions, omit records, corrupt levels/slots, forge numeric types and remove required metadata; they must fail. Frozen old source data and the unchanged three-monster allowlist protect gameplay compatibility.
 
-Actual result: **2,614 catalog checks passed**, **623 entries validated**. Machine-readable report: `build/reports/srd51-catalog.json`. The same catalog suite is retained in foundation tests; the dedicated Gradle check runs it separately and must not be double-counted as additional foundation assertions.
+See `docs/srd51-reference-completion-checkpoint-j25c2.md` for actual final test counts, artifact checksum and delivery identity. The machine-readable build report is `build/reports/srd51-catalog.json`. Dedicated task reruns are not counted twice as foundation assertions.
+
+Library schema 2, campaign schema 5, SRD combat v1 and D2 stage schema 1 are unchanged. No save migration or character reinterpretation is performed. Graphical Minecraft acceptance remains pending.
