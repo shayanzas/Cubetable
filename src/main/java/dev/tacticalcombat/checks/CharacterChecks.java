@@ -22,6 +22,9 @@ public final class CharacterChecks {
     public static Modifier resolve(String raw,Key key) {
         var rules=CharacterRules.read(raw);var sheet=JsonParser.parseString(raw).getAsJsonObject();
         int base=rules.modifiers().get(SrdCharacter.Ability.valueOf(key.ability().toUpperCase(Locale.ROOT))),multiple=0;
+        var monster=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(sheet);
+        if(monster!=null){String source=monster.get("source").getAsString();int bonus=key.category()==Category.SAVE&&key.id().equals("wis")&&source.endsWith(":zombie")?2:key.category()==Category.SKILL&&key.id().equals("Stealth")&&source.endsWith(":goblin")?4:0;
+            return new Modifier(key.ability(),base,2,bonus/2,base+bonus,"Reviewed monster adapter v1: "+source);}
         if(key.category()!=Category.ABILITY){
             require(CreationRules.enrolled(sheet),"Historical/manual proficiency provenance unavailable; use an ordinary ability or Manual Roll");
             String clazz=CreationRules.clazz(sheet);

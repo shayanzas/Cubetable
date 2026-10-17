@@ -26,8 +26,8 @@ public final class SrdAuthoring {
         fields.add(new Field("shield","Shield equipped",List.of("false","true"),false));
         fields.add(new Field("shield_proficient","Shield proficiency",List.of("false","true"),false));
         fields.add(new Field("armor_proficiencies","Armor proficiencies",names(ArmorKind.values()),true));
-        fields.add(new Field("weapons","Available weapons",names(Weapon.values()),true));
-        fields.add(new Field("weapon_proficiencies","Weapon proficiencies",names(Weapon.values()),true));
+        fields.add(new Field("weapons","Available weapons",names(java.util.Arrays.stream(Weapon.values()).filter(w->w!=Weapon.SLAM).toArray(Weapon[]::new)),true));
+        fields.add(new Field("weapon_proficiencies","Weapon proficiencies",names(java.util.Arrays.stream(Weapon.values()).filter(w->w!=Weapon.SLAM).toArray(Weapon[]::new)),true));
         for(String key:List.of("resistances","immunities","vulnerabilities")) fields.add(new Field(key,key,names(DamageType.values()),true));
         return List.copyOf(fields);
     }

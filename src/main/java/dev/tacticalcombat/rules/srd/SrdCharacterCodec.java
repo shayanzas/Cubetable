@@ -18,6 +18,7 @@ public final class SrdCharacterCodec {
     public static SrdCharacter parseSheet(String sheet) {
         CharacterRepository.validateSheet(sheet);
         JsonObject root=JsonParser.parseString(sheet).getAsJsonObject();
+        MonsterProfiles.validate(root);
         require(root.has("collections") && root.getAsJsonObject("collections").has("srd_combat"),
                 "Missing collections.srd_combat; explicit SRD statistics are required");
         JsonArray entries=root.getAsJsonObject("collections").getAsJsonArray("srd_combat");

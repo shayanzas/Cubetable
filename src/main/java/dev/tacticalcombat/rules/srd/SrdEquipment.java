@@ -32,7 +32,9 @@ public final class SrdEquipment {
         GREATSWORD(2,6,0,DamageType.SLASHING,false,0,0,0,Property.HEAVY,Property.TWO_HANDED),
         SHORTBOW(1,6,0,DamageType.PIERCING,true,80,320,0,Property.AMMUNITION,Property.TWO_HANDED),
         LONGBOW(1,8,0,DamageType.PIERCING,true,150,600,0,Property.AMMUNITION,Property.HEAVY,Property.TWO_HANDED),
-        LIGHT_CROSSBOW(1,8,0,DamageType.PIERCING,true,80,320,0,Property.AMMUNITION,Property.LOADING,Property.TWO_HANDED);
+        LIGHT_CROSSBOW(1,8,0,DamageType.PIERCING,true,80,320,0,Property.AMMUNITION,Property.LOADING,Property.TWO_HANDED),
+        SLAM(1,6,0,DamageType.BLUDGEONING,false,0,0,0),
+        SCIMITAR(1,6,0,DamageType.SLASHING,false,0,0,0,Property.FINESSE,Property.LIGHT);
         public final int dice, sides, flat, normalRangeFeet, longRangeFeet, versatileSides;
         public final DamageType damageType;
         public final boolean ranged;

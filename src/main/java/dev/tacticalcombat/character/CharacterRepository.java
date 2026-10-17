@@ -102,6 +102,7 @@ public final class CharacterRepository {
         commit(new State(campaigns,state.characters,state.bindings,state.assignments,state.manualRevisions));
     }
     public UUID submit(Principal p,UUID campaign,String profile,String sheet) throws IOException {
+        require(dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(sheet).getAsJsonObject())==null,"Use authenticated monster preparation for NPC identity");
         require(member(p,campaign),"Join this campaign before submitting a character");
         require(state.characters.size()<1024,"Character limit reached");
         require(state.characters.values().stream().filter(c->c.owner.equals(p.id)).count()<32,"Owner character limit reached");
@@ -130,6 +131,23 @@ public final class CharacterRepository {
     public Character visible(Principal p,UUID id) {
         Character c=state.characters.get(id);
         require(c!=null && member(p,c.campaign) && (c.owner.equals(p.id) || manages(p,c.campaign) || controller(id).equals(p.id)),"Character permission denied"); return c;
+    }
+    /** One campaign-file transaction creates the explicit NPC, approval and binding. Operation ID is the persistent character ID. */
+    public UUID prepareMonster(Principal p,UUID campaign,UUID operation,String source,UUID actor) throws IOException {
+        require(manages(p,campaign)&&member(new Principal(p.id,false),campaign),"Only current campaign DMs prepare monsters");
+        require(campaign(campaign).profile.equals(RulesProfiles.SRD),"Selected campaign requires the SRD profile");
+        var sheet=dev.tacticalcombat.rules.srd.MonsterProfiles.sheet(source,operation,actor);
+        if(state.characters.containsKey(operation)){
+            var old=character(operation);var identity=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(old.sheet).getAsJsonObject());
+            require(old.campaign.equals(campaign)&&old.owner.equals(p.id)&&identity!=null&&identity.equals(dev.tacticalcombat.rules.srd.MonsterProfiles.identity(sheet)),"Preparation ID reused with different parameters");
+            requireUnreserved(old.id);return old.id;
+        }
+        require(state.characters.size()<1024,"Character limit reached");require(!state.bindings.containsKey(actor),"Entity already bound");
+        dev.tacticalcombat.rules.srd.SrdCharacterCodec.parseSheet(sheet.toString());
+        var profile=dev.tacticalcombat.rules.srd.MonsterProfiles.get(source);
+        var records=new HashMap<>(state.characters);records.put(operation,new Character(operation,campaign,p.id,RulesProfiles.SRD,1,sheet.toString(),Map.of("hp",(double)profile.hp(),"hp_max",(double)profile.hp(),"ac",(double)profile.ac(),"movement_blocks",profile.speed()/5d),true,1));
+        var bindings=new HashMap<>(state.bindings);bindings.put(actor,operation);
+        commit(new State(state.campaigns,records,bindings,state.assignments,state.manualRevisions));return operation;
     }
     public JsonObject effectiveSheet(Character c) {
         JsonObject sheet=JsonParser.parseString(c.sheet).getAsJsonObject();
@@ -181,6 +199,8 @@ public final class CharacterRepository {
         if(c.profile.equals(RulesProfiles.SRD) && changes.has("collections.srd_combat"))
             require(c.runtimeRevision==runtimeRevision,"Stale SRD health revision; refresh and reconcile before replacing combat data");
         JsonObject sheet=CharacterEdits.apply(effectiveSheet(c),changes); validateSheet(sheet.toString());
+        require(Objects.equals(dev.tacticalcombat.rules.srd.MonsterProfiles.identity(effectiveSheet(c)),dev.tacticalcombat.rules.srd.MonsterProfiles.identity(sheet)),"Monster source identity cannot be edited or imported");
+        dev.tacticalcombat.rules.srd.MonsterProfiles.validate(sheet);
         dev.tacticalcombat.uiapi.CreationRules.transition(effectiveSheet(c),sheet);
         int oldInspiration=dev.tacticalcombat.uiapi.SheetSections.read(effectiveSheet(c),"trackers").get("inspiration").getAsInt(),newInspiration=dev.tacticalcombat.uiapi.SheetSections.read(sheet,"trackers").get("inspiration").getAsInt();
         require(newInspiration<=oldInspiration||manages(p,c.campaign),"Only campaign DM may award Inspiration");
@@ -256,6 +276,8 @@ public final class CharacterRepository {
     }
     public void bind(Principal p,UUID id,long revision,UUID entity,UUID playerOwner) throws IOException {
         Character c=character(id); require(manages(p,c.campaign),"Only campaign DMs bind characters");
+        requireUnreserved(id);
+        require(playerOwner==null||dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(c.sheet).getAsJsonObject())==null,"Monster records bind only to NPCs");
         require(c.revision==revision,"Stale character revision"); require(c.approved,"Character needs DM approval");
         require(member(new Principal(c.owner,false),c.campaign),"Owner campaign membership required");
         require(member(new Principal(controller(id),false),c.campaign),"Controller campaign membership required");
@@ -275,6 +297,7 @@ public final class CharacterRepository {
         var c=character(id);require(manages(p,c.campaign),"Only campaign DMs assign characters");
         require(c.revision==revision,"Stale character revision");require(binding(id)==null,"Unbind before changing control; live takeover unavailable");
         require(member(new Principal(target,false),c.campaign),"Target campaign membership required");
+        if(dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(c.sheet).getAsJsonObject())!=null) require(manages(new Principal(target,false),c.campaign),"Monster controllers must be campaign DMs");
         var old=state.assignments.get(id);require((old==null?0:old.revision)==assignmentRevision,"Stale assignment revision");
         require(assignmentRevision<Long.MAX_VALUE,"Assignment revision exhausted");
         saveAssignment(new Assignment(id,old==null?c.owner:old.controller,target,Decision.PENDING,assignmentRevision+1,history(old,p.id,target,Decision.PENDING)));
