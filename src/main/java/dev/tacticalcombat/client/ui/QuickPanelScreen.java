@@ -34,6 +34,7 @@ public final class QuickPanelScreen extends RpgScreen {
     }
     private void sheetBody(){y=CompactSheet.draw(canvas,data,y);
         action("Abilities, Skills & Saves",()->client.setScreen(new CharacterRollMenuScreen(this,data)));
+        action("Roll Requests & Results",()->client.setScreen(new CheckInboxScreen(this)));
         action("Manual Dice",()->client.setScreen(new DiceToolbarScreen(this,true)));
         if(ClientSrdCombat.hudEncounter()!=null)action("Combat Controls",()->client.setScreen(new SrdCombatScreen(this)));
         action("Full Character Sheet",()->client.setScreen(PlayerNavigation.sheet(this,new DashboardSource(false,text(data,"id")))));

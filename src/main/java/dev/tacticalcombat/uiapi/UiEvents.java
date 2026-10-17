@@ -5,7 +5,7 @@ import static dev.tacticalcombat.uiapi.SheetSections.require;
 
 /** Server-only bounded session history. No C2S publish operation exists. */
 public final class UiEvents {
-    public enum Kind { ATTACK, DAMAGE, HEALING, TURN, CONDITION, APPROVAL, ASSIGNMENT, DM_ACTION, REST, RESOURCE, REJECTION, DICE, ZERO_HP }
+    public enum Kind { CHARACTER_CHECK, ATTACK, DAMAGE, HEALING, TURN, CONDITION, APPROVAL, ASSIGNMENT, DM_ACTION, REST, RESOURCE, REJECTION, DICE, ZERO_HP }
     public enum Visibility { CAMPAIGN, DM, RECIPIENTS_AND_DM }
     public record Roll(int sides,List<Integer> faces,List<Integer> kept,int modifier,int total,String purpose,boolean critical) {
         public Roll {
@@ -27,6 +27,7 @@ public final class UiEvents {
     public record Page(UUID session,List<Event> events,long cursor,long oldest,boolean historyLost) {public Page {events=List.copyOf(events);}}
     public static final UiEvents SESSION=new UiEvents();
     private final LinkedHashMap<UUID,Event> events=new LinkedHashMap<>();
+    private final Map<UUID,java.util.function.Predicate<CharacterRepository.Principal>> checkAccess=new HashMap<>();
     private long sequence;
     private UUID session=UUID.randomUUID();
     public static UUID derived(UUID transaction,String kind) {return UUID.nameUUIDFromBytes((transaction+":"+kind).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
@@ -43,8 +44,15 @@ public final class UiEvents {
         Objects.requireNonNull(id);Objects.requireNonNull(campaign);Objects.requireNonNull(kind);Objects.requireNonNull(visibility);
         if(events.containsKey(id)) return false;
         var e=new Event(id,++sequence,System.currentTimeMillis(),campaign,encounter,turn,kind,actors,summary,roll,visibility,recipients);
-        if(events.size()>=512) events.remove(events.keySet().iterator().next());events.put(id,e);return true;
+        if(events.size()>=512) {UUID oldest=events.keySet().iterator().next();events.remove(oldest);checkAccess.remove(oldest);}events.put(id,e);return true;
     }
+    /** Character-check events have an additional live authorization gate; absent gates fail closed. */
+    public void checked(UUID id,UUID campaign,UUID encounter,List<UUID> actors,String summary,Roll roll,Visibility visibility,Set<UUID> recipients,java.util.function.Predicate<CharacterRepository.Principal> access) {
+        checkAccess.put(id,access);
+        safePublish(id,campaign,encounter,0,Kind.CHARACTER_CHECK,actors,summary,roll,visibility,recipients);
+        if(!events.containsKey(id))checkAccess.remove(id);
+    }
+    private boolean checkAllowed(CharacterRepository.Principal p,Event e){if(e.kind()!=Kind.CHARACTER_CHECK)return true;try{return checkAccess.containsKey(e.id())&&checkAccess.get(e.id()).test(p);}catch(RuntimeException revoked){return false;}}
     /** Presentation failures must never roll back or relabel an already committed gameplay action. */
     public void safePublish(UUID id,UUID campaign,UUID encounter,long turn,Kind kind,List<UUID> actors,String summary,Roll roll,Visibility visibility,Set<UUID> recipients) {
         try {publish(id,campaign,encounter,turn,kind,actors,summary,roll,visibility,recipients);}
@@ -54,11 +62,11 @@ public final class UiEvents {
         require(repo.member(who,campaign),"Campaign event permission denied");require(cursor>=0,"Invalid event cursor");if(cursor>sequence)cursor=0;var result=new ArrayList<Event>();long next=cursor;
         for(var e:events.values()) if(e.sequence>cursor) {
             next=e.sequence;
-            if(e.campaign.equals(campaign) && (filter==null || filter==e.kind) && (e.visibility==Visibility.CAMPAIGN || repo.manages(who,campaign) || e.visibility==Visibility.RECIPIENTS_AND_DM && e.recipients.contains(who.id()) && currentCharacterAccess(repo,who,e))) result.add(e);
+            if(checkAllowed(who,e) && e.campaign.equals(campaign) && (filter==null || filter==e.kind) && (e.visibility==Visibility.CAMPAIGN || repo.manages(who,campaign) || e.visibility==Visibility.RECIPIENTS_AND_DM && e.recipients.contains(who.id()) && currentCharacterAccess(repo,who,e))) result.add(e);
             if(result.size()==16) break;
         }
         long oldest=events.isEmpty()?sequence+1:events.values().iterator().next().sequence;
         return new Page(session,result,next,oldest,cursor>0 && cursor<oldest-1);
     }
-    public void clear() {events.clear();sequence=0;session=UUID.randomUUID();}
+    public void clear() {events.clear();checkAccess.clear();sequence=0;session=UUID.randomUUID();}
 }

@@ -47,7 +47,7 @@ public final class UiNetworking {
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{forget(handler.player.getUuid());});
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{EncounterLauncher.clear();watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{EncounterLauncher.clear();dev.tacticalcombat.checks.CheckGateway.clear();watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
         require(player.getServer().isOnThread(),"UI operations require server thread");
@@ -93,6 +93,7 @@ public final class UiNetworking {
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
+            case CHECK_TARGETS, CHECK_OPTIONS, CHECK_PREPARE, CHECK_EXECUTE, CHECK_INBOX, CHECK_REQUEST, CHECK_DISMISS -> out=dev.tacticalcombat.checks.CheckGateway.handle(p,op,a);
             case GAMEPLAY_RECOVERY, GAMEPLAY_CANCEL -> out=GameplayRecovery.handle(p,op,a);
             case ACTOR_CHARACTERS, ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
             case ACTIVE -> {
