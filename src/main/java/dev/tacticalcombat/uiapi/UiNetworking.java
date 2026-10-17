@@ -22,7 +22,7 @@ public final class UiNetworking {
     private static CharacterWatchService watches(){var repo=CharacterService.repository();require(library!=null,"Library service unavailable");if(watches==null||!watches.matches(repo,library))watches=new CharacterWatchService(repo,library);return watches;}
 
     private UiNetworking() {}
-    public static void forget(UUID player){SESSIONS.forget(player);EncounterLauncher.forget(player);SELECTED.remove(player);WATCH_LIMIT.forget(player);if(watches!=null)watches.forget(player);}
+    public static void forget(UUID player){SESSIONS.forget(player);EncounterStages.forget(player);EncounterLauncher.forget(player);SELECTED.remove(player);WATCH_LIMIT.forget(player);if(watches!=null)watches.forget(player);}
     public static void register() {
         PayloadTypeRegistry.playC2S().register(RulesWatchPayload.ID,RulesWatchPayload.CODEC);
         PayloadTypeRegistry.playS2C().register(RulesChangedPayload.ID,RulesChangedPayload.CODEC);
@@ -46,8 +46,9 @@ public final class UiNetworking {
             catch(Exception e) {library=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI library unavailable; existing combat storage preserved",e);}});
         ServerLifecycleEvents.SERVER_STARTED.register(server->{try {workflows=new UiWorkflowStore(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/ui-workflows.json"));if(workflows.recoveredFromBackup()) dev.tacticalcombat.TacticalCombatMod.LOGGER.warn("UI workflows recovered from validated backup");}
             catch(Exception e) {workflows=null;dev.tacticalcombat.TacticalCombatMod.LOGGER.error("UI workflows unavailable",e);}});
+        ServerLifecycleEvents.SERVER_STARTED.register(server->{try{EncounterStages.initialize(server.getSavePath(WorldSavePath.ROOT).resolve("tacticalcombat/encounter-stages.json"));}catch(Exception e){dev.tacticalcombat.TacticalCombatMod.LOGGER.error("Stage storage unavailable; existing campaign unchanged",e);}});
         ServerPlayConnectionEvents.DISCONNECT.register((handler,server)->{forget(handler.player.getUuid());});
-        ServerLifecycleEvents.SERVER_STOPPING.register(server->{EncounterLauncher.clear();dev.tacticalcombat.checks.CheckGateway.clear();watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{EncounterLauncher.clear();EncounterStages.clear();dev.tacticalcombat.checks.CheckGateway.clear();watches=null;WATCH_LIMIT.clear();library=null;workflows=null;UiEvents.SESSION.clear();SESSIONS.clear();SELECTED.clear();});
     }
     public static UiReplyPayload handle(ServerPlayerEntity player,UiRequestPayload request) {
         require(player.getServer().isOnThread(),"UI operations require server thread");
@@ -93,6 +94,8 @@ public final class UiNetworking {
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();
         switch(op) {
+            case STAGE_ROLE, STAGE_EDIT, STAGE_LIST, STAGE_CREATE, STAGE_GET, STAGE_CAPTURE, STAGE_DELETE, STAGE_VALIDATE, STAGE_ACTIVATE -> out=EncounterStages.handle(p,op,a);
+            case MONSTER_OPTIONS, MONSTER_PREPARE -> out=MonsterPreparation.handle(p,op,a);
             case CHECK_TARGETS, CHECK_OPTIONS, CHECK_PREPARE, CHECK_EXECUTE, CHECK_INBOX, CHECK_REQUEST, CHECK_DISMISS -> out=dev.tacticalcombat.checks.CheckGateway.handle(p,op,a);
             case GAMEPLAY_RECOVERY, GAMEPLAY_CANCEL -> out=GameplayRecovery.handle(p,op,a);
             case ACTOR_CHARACTERS, ENCOUNTER_DISCOVER, ENCOUNTER_START, ENCOUNTER_LIST, ENCOUNTER_WATCH, ENCOUNTER_END, QUICK_SHEET, DM_QUICK -> out=EncounterLauncher.handle(p,op,a);
