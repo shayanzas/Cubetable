@@ -86,6 +86,7 @@ public final class FoundationTests {
         }
         System.out.println("Foundation regression checks passed: " + count);
         CharacterRepositoryTests.run();
+        dev.tacticalcombat.character.MonsterStageTests.run();
         dev.tacticalcombat.character.UiLibraryTests.run();
         dev.tacticalcombat.character.UiLifecycleTests.run();
         dev.tacticalcombat.character.UiRpgRecordTests.run();

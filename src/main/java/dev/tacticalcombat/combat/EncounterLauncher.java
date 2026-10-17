@@ -73,6 +73,7 @@ public final class EncounterLauncher {
                     var row=new JsonObject();row.addProperty("actor",actor.getUuidAsString());row.addProperty("name",name(actor));row.addProperty("kind",player?"Player":"NPC");row.addProperty("type",net.minecraft.registry.Registries.ENTITY_TYPE.getId(actor.getType()).toString());
                     row.addProperty("x",actor.getX());row.addProperty("z",actor.getZ());row.addProperty("distance",Math.round(Math.sqrt(actor.squaredDistanceTo(p))*10)/10d);row.addProperty("position",actor.getBlockX()+", "+actor.getBlockY()+", "+actor.getBlockZ());
                     row.addProperty("bound",bound!=null);row.addProperty("approved",same&&bound.approved());row.addProperty("characterName",same?UiApiService.name(bound.sheet()):"");row.addProperty("eligible",snapshot!=null);row.addProperty("reason",reason);
+                    if(same){var monster=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(bound.sheet()).getAsJsonObject());if(monster!=null)row.addProperty("monsterSupport",dev.tacticalcombat.rules.srd.MonsterProfiles.get(monster.get("source").getAsString()).limitations());}
                     row.addProperty("canBind",!player&&actor instanceof net.minecraft.entity.mob.MobEntity&&bound==null&&!CombatManager.isInCombat(actor));
                     if(snapshot!=null)valid.put(actor.getUuid(),snapshot);rows.add(row);
                 }

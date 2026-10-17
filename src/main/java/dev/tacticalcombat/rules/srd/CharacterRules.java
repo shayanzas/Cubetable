@@ -8,7 +8,16 @@ public final class CharacterRules {
     public static final int PROJECTION_VERSION=1;
     public static final String RULES_VERSION="srd_5_1_legacy_v1";
     private CharacterRules() {}
-    public static DerivedRulesState read(String sheet) { return derive(LegacySrdInputs.read(sheet)); }
+    public static DerivedRulesState read(String sheet) {
+        var rules=derive(LegacySrdInputs.read(sheet));
+        var identity=MonsterProfiles.identity(com.google.gson.JsonParser.parseString(sheet).getAsJsonObject());
+        if(identity==null)return rules;
+        var profile=MonsterProfiles.get(identity.get("source").getAsString());var sources=new LinkedHashMap<>(rules.provenance());
+        sources.put("monster",List.of(source(PERSISTED_INPUT,"collections.srd_monster",profile.id()+" · catalog v1 · "+profile.limitations())));
+        sources.put("proficiency",List.of(source(PERSISTED_INPUT,"collections.srd_monster","Reviewed monster proficiency +2; internal effective level is not a player class")));
+        sources.put("ac",List.of(source(PERSISTED_INPUT,"collections.srd_monster","Reviewed fixed stat-block AC "+profile.ac()+"; equipment changes are not implemented")));
+        return new DerivedRulesState(rules.inputs(),rules.modifiers(),rules.proficiency(),rules.initiativeModifier(),rules.armorClass(),rules.walkingSpeedFeet(),rules.resources(),sources);
+    }
     public static DerivedRulesState derive(SrdCharacter c) {
         var modifiers=new EnumMap<SrdCharacter.Ability,Integer>(SrdCharacter.Ability.class);
         for(var ability:SrdCharacter.Ability.values()) modifiers.put(ability,c.modifier(ability));
