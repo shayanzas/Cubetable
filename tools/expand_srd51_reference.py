@@ -183,7 +183,7 @@ def expand(path):
    minimum=old['data']['minimumLevel'] if old else int(numbers[0]) if numbers else None
    prerequisites=' '.join(l['text'] for l in ls[idx+1:stop] if l['text'].startswith('Prerequisite'))
    if minimum is None and re.search(r'Prerequisite[^:]*: (\d+)(?:st|nd|rd|th) level',body):minimum=int(re.search(r'Prerequisite[^:]*: (\d+)(?:st|nd|rd|th) level',body)[1])
-   d=dict(characterClass=parent,minimumLevel=minimum,levelStatus='SOURCE_EXPLICIT' if minimum is not None else 'UNRESOLVED',featureKind='conditional-or-choice' if re.search(r'choose|choice|if |while ',body,re.I) else 'ordinary',prerequisitesText=prerequisites,automated=False,referenceOnly=True)
+   d=dict(characterClass=parent,minimumLevel=minimum,levelStatus='LEGACY_RETAINED' if old else 'SOURCE_EXPLICIT' if minimum is not None else 'UNRESOLVED',featureKind='conditional-or-choice' if re.search(r'choose|choice|if |while ',body,re.I) else 'ordinary',prerequisitesText=prerequisites,automated=False,referenceOnly=True)
    f=entry('features',name+': '+title,idx,stop,d,[parent]);features.append(f['id']);sections.append(dict(heading=title,feature=f['id'],pages=source.pages(idx,stop)))
   # Keep original class ID/hitdie, replacing only the previously incomplete reference summary with source text.
   hit=index[parent]['data']['hitDie'];fulltext=source.body(start+1,end)
@@ -212,7 +212,7 @@ def expand(path):
     matches=[f for f in features if index[f]['name'].split(': ',1)[1]==stem]
     row['featureUnlocks'].append(dict(label=label,references=matches,linkStatus='MATCHED_HEADING' if matches else 'TABLE_LABEL_OR_CONDITIONAL'))
  # General rules/gear: source headings determine boundaries, including chapter/table context.
- ranges=[(55,104),(194,206),(251,260),(363,365)]
+ ranges=[(55,104),(194,206),(251,260),(360,365)]
  starts=[i for i,l in enumerate(ls) if any(a<=l['page']<=b for a,b in ranges) and l['heading'] and l['size']>=11.5]
  seen=set()
  for n,start in enumerate(starts):
@@ -252,7 +252,8 @@ def expand(path):
    # Most subclasses end at chapter end; invocations/pact choices remain explicitly source text.
    e['data']['fullDescription']=source.body(start+1,chapterend);e['data']['featureReferences']=[f for f in features if any(v['id']==f and v['startLine']>start for v in inventory)];e['data']['featureLinkStatus']='SOURCE_SECTION_BOUNDED';e['data']['featureLevels']=[dict(feature=f,minimumLevel=index[f]['data'].get('minimumLevel'),status=index[f]['data'].get('levelStatus','LEGACY_VERIFIED')) for f in e['data']['featureReferences']]
   if e['category'] in ['equipment','weapons','armor']:
-   leads=[i for i,l in enumerate(ls) if 62<=l['page']<=74 and l['text'].startswith(e['name']+'.')]
+   shortname=re.sub(r' \([^)]*\)','',e['name']).replace('’',"'").lower()
+   leads=[i for i,l in enumerate(ls) if 62<=l['page']<=74 and l['text'].replace('’',"'").lower().startswith(shortname+'.')]
    if leads:
     i=leads[0];end=next((j for j in range(i+1,len(ls)) if ls[j]['heading'] or ls[j]['font']=='Cambria-Bold' and re.match(r'^[A-Z][^.]+\. ',ls[j]['text'])),i+1)
     e['data']['descriptionText']=source.body(i,end);e['data']['descriptionPages']=source.pages(i,end)

@@ -104,3 +104,10 @@ tasks.register('validateSrdCatalog', JavaExec) {
     args layout.buildDirectory.file('reports/srd51-catalog.json').get().asFile.absolutePath
 }
 tasks.named('check') { dependsOn tasks.named('validateSrdCatalog') }
+
+// Source inventory, reviewed fingerprints and progression completeness; offline static-data gate.
+tasks.register('validateSrdCoverage', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.tacticalcombat.reference.CatalogCompletionTests'
+}
