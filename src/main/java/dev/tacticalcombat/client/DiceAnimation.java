@@ -1,315 +1,111 @@
 package dev.tacticalcombat.client;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import dev.tacticalcombat.dice.DiceType;
+import dev.tacticalcombat.client.dicevisual.*;
 import dev.tacticalcombat.net.DiceRollPayload;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
-import dev.tacticalcombat.mixin.client.ChatHudAccessor;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.*;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.Identifier;
-import net.minecraft.client.gui.hud.ChatHud;
-import net.minecraft.client.gui.hud.ChatHudLine;
-import net.minecraft.client.gui.screen.ChatScreen;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.BufferRenderer;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.RotationAxis;
+import net.minecraft.util.Identifier;
 import org.joml.Matrix4f;
+import java.util.*;
 
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Random;
-
-/**
- * 2D dice roll overlay: the dice tumble across the screen (not in the 3D world), settle on the server's result,
- * and the result is then printed in the chat. Rolls that arrive while one is playing wait in a queue.
- */
+/** Client-only projection of authorized results. The face and total are fixed before the first frame. */
 public final class DiceAnimation {
-	private static final int TUMBLE_TICKS = 40;
-	private static final int HOLD_TICKS = 40;
-
-	private static final dev.tacticalcombat.core.BoundedQueue<DiceRollPayload> QUEUE = new dev.tacticalcombat.core.BoundedQueue<>(16);
-	private static DiceRollPayload current;
-	/** The clatter that plays while the dice tumble: assets/tacticalcombat/sounds/dice_roll.ogg (see sounds.json). */
-	public static final SoundEvent DICE_SOUND = SoundEvent.of(Identifier.of("tacticalcombat", "dice_roll"));
-	private static int age;
-	private static boolean printed;
-	private static Random random = new Random();
-
-	private DiceAnimation() {}
-
-	public static void enqueue(DiceRollPayload roll) {
-		DiceRollPayload skipped = QUEUE.add(roll);
-        if (skipped != null) printResult(MinecraftClient.getInstance(), skipped);
-	}
-
-	public static void clear() {
-		QUEUE.clear();
-		current = null;
-	}
-
-	public static void tick(MinecraftClient client) {
-		if (client.player == null) {
-			clear();
-			return;
-		}
-		if (current == null) {
-			current = QUEUE.poll();
-			age = 0;
-			printed = false;
-			if (current == null) return;
-			random = new Random(System.nanoTime());
-			client.getSoundManager().play(PositionedSoundInstance.master(DICE_SOUND, 1.0f, 1.0f));
-		}
-		age++;
-		if (!printed && age >= TUMBLE_TICKS) {
-			printed = true;
-			printResult(client, current);
-		}
-		if (age >= TUMBLE_TICKS + HOLD_TICKS) {
-			current = null;
-		}
-	}
-
-	private static void printResult(MinecraftClient client, DiceRollPayload roll) {
-        if(!dev.tacticalcombat.client.ui.CubetableHud.options().diceChat()) return;
-		int kept = roll.keptIndex();
-		StringBuilder list = new StringBuilder();
-		for (int i = 0; i < roll.results().length; i++) {
-			if (i > 0) list.append(", ");
-			list.append(roll.results()[i]);
-		}
-		int rolled = kept >= 0 ? 1 : roll.results().length;
-		String spec = (rolled > 1 ? String.valueOf(rolled) : "") + roll.type().label
-				+ (roll.modifier() > 0 ? "+" + roll.modifier() : roll.modifier() < 0 ? String.valueOf(roll.modifier()) : "");
-		String what = roll.label().isEmpty() ? spec : roll.label() + " (" + spec + ")";
-		if (roll.keep() == 1) what += " with advantage";
-		if (roll.keep() == 2) what += " with disadvantage";
-
-		Text text = Text.literal(roll.roller()).formatted(Formatting.YELLOW)
-				.append(Text.literal(" rolled " + what + ": ").formatted(Formatting.GRAY))
-				.append(Text.literal("[" + list + "]").formatted(Formatting.WHITE));
-		if (roll.modifier() != 0 || roll.results().length > 1) {
-			text = text.copy().append(Text.literal(" = ").formatted(Formatting.GRAY))
-					.append(Text.literal(String.valueOf(roll.total())).formatted(Formatting.GOLD, Formatting.BOLD));
-		}
-		if (roll.type() == DiceType.D20 && rolled == 1) {
-			int face = roll.results()[Math.max(kept, 0)];
-			if (face == 20) text = text.copy().append(Text.literal("  Natural 20").formatted(Formatting.GREEN));
-			if (face == 1) text = text.copy().append(Text.literal("  Natural 1").formatted(Formatting.RED));
-		}
-		client.inGameHud.getChatHud().addMessage(text);
-	}
-
-	public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
-		DiceRollPayload roll = current;
-		if (roll == null) return;
-		MinecraftClient mc = MinecraftClient.getInstance();
-		TextRenderer tr = mc.textRenderer;
-
-		float t = age + tickCounter.getTickDelta(false);
-		float p = Math.min(t / TUMBLE_TICKS, 1.0f);
-		float ease = 1.0f - (1.0f - p) * (1.0f - p) * (1.0f - p);
-
-		// d% is a pair of d10: tens (00..90) and ones (0..9)
-		boolean percent = roll.type() == DiceType.D100;
-		int slots = roll.results().length * (percent ? 2 : 1);
-		int perRow = Math.min(slots, 6);
-		int rows = (slots + perRow - 1) / perRow;
-		int size = 34;
-		int spacing = size * 2 + 6;
-		int h = ctx.getScaledWindowHeight();
-
-		// The dice live in a panel in the bottom-left corner, directly above the chat. The chat grows upwards
-		// when it is opened (or fills with lines), so the panel's bottom edge follows the top of the chat.
-		int gridW = perRow * spacing;
-		int gridH = rows * spacing;
-		int resultW = 70;
-		int left = 4;
-		int bottom = Math.round(chatTop(mc, h)) - 2;
-		int top = bottom - gridH;
-
-		int keptDie = roll.keptIndex();
-		for (int slot = 0; slot < slots; slot++) {
-			int die = percent ? slot / 2 : slot;
-			boolean tens = percent && slot % 2 == 0;
-			int result = roll.results()[die];
-			int row = slot / perRow;
-			float cx = left + spacing / 2f + (slot % perRow) * spacing;
-			float cy = top + row * spacing + spacing / 2f;
-
-			// each die gets its own phase so they do not tumble in lockstep
-			float phase = slot * 1.7f;
-			float bounce = Math.abs((float) Math.sin(p * Math.PI * 3 + phase * 0.3)) * (1.0f - p) * 70.0f;
-			float rotation = (1.0f - ease) * (6.0f + phase) * (slot % 2 == 0 ? 1 : -1);
-			float flip = (1.0f - ease) * (9.0f + phase);
-			float squash = p >= 1.0f ? 1.0f : 0.45f + 0.55f * Math.abs((float) Math.cos(flip));
-
-			boolean settled = p >= 0.85f;
-			String label;
-			DiceType shape = percent ? DiceType.D10 : roll.type();
-			if (settled) {
-				label = faceLabel(roll.type(), result, tens);
-			} else {
-				int fake = roll.type().roll(new Random((long) (t / 2) * 31 + slot * 97L));
-				label = faceLabel(roll.type(), fake, tens);
-			}
-			drawDie(ctx, tr, shape, tens ? 0xFFB07CFF : colorOf(roll.type()), cx, cy - bounce, size,
-					rotation, squash, label, p >= 1.0f, p >= 1.0f && keptDie >= 0 && die != keptDie);
-		}
-
-		if (p >= 1.0f) {
-			String text = roll.results().length > 1 || roll.modifier() != 0
-					? "= " + roll.total() : String.valueOf(roll.results()[0]);
-			ctx.getMatrices().push();
-			float scale = 1.6f;
-			ctx.getMatrices().translate(left + gridW + resultW / 2f, top + gridH / 2f - 8, 0);
-			ctx.getMatrices().scale(scale, scale, 1);
-			ctx.drawCenteredTextWithShadow(tr, Text.literal(text).formatted(Formatting.GOLD, Formatting.BOLD), 0, 0, 0xFFFFFF);
-			ctx.getMatrices().pop();
-		}
-	}
-
-	/** Y of the top edge of the chat as it is drawn right now (open chat = full height, closed = only fresh lines). */
-	private static float chatTop(MinecraftClient mc, int screenHeight) {
-		ChatHud chat = mc.inGameHud.getChatHud();
-		boolean open = mc.currentScreen instanceof ChatScreen;
-		List<ChatHudLine.Visible> lines = ((ChatHudAccessor) chat).tacticalcombat$getVisibleMessages();
-		double scale = mc.options.getChatScale().getValue();
-		int lineH = Math.max(1, (int) (9.0 * (mc.options.getChatLineSpacing().getValue() + 1.0)));
-		double heightOption = open ? mc.options.getChatHeightFocused().getValue() : mc.options.getChatHeightUnfocused().getValue();
-		int maxLines = ChatHud.getHeight(heightOption) / lineH;
-		int now = mc.inGameHud.getTicks();
-		int count = 0;
-		for (ChatHudLine.Visible line : lines) {
-			if (count >= maxLines) break;
-			if (!open && now - line.addedTime() >= 200) break; // closed chat hides lines after 10 seconds
-			count++;
-		}
-		return (screenHeight - 40) - count * lineH * (float) scale - 4;
-	}
-
-	private static String faceLabel(DiceType type, int value, boolean tens) {
-		if (type != DiceType.D100) return String.valueOf(value);
-		int tensValue = value == 100 ? 0 : (value / 10) * 10;
-		int onesValue = value == 100 ? 0 : value % 10;
-		return tens ? String.format("%02d", tensValue) : String.valueOf(onesValue);
-	}
-
-	private static int colorOf(DiceType type) {
-		return switch (type) {
-			case D4 -> 0xFF4CD964;
-			case D6 -> 0xFFE0E0E0;
-			case D8 -> 0xFF4DA3FF;
-			case D10, D100 -> 0xFFFF7A59;
-			case D12 -> 0xFFFFC857;
-			case D20 -> 0xFFC83232;
-		};
-	}
-
-	/** Unit-radius outline of each die as a 2D silhouette (x right, y down). */
-	private static float[][] outline(DiceType type) {
-		return switch (type) {
-			case D4 -> regular(3, -90, 1.0f, 1.0f);
-			case D6 -> regular(4, 45, 1.0f, 1.0f);
-			case D8 -> regular(4, 0, 0.78f, 1.0f);
-			case D10, D100 -> new float[][]{{0, -1}, {0.85f, -0.2f}, {0, 1}, {-0.85f, -0.2f}};
-			case D12 -> regular(5, -90, 1.0f, 1.0f);
-			case D20 -> regular(6, -90, 1.0f, 1.0f);
-		};
-	}
-
-	/** A lighter inner facet to give the die some shape (triangle for d20, pentagon for d12, ...). */
-	private static float[][] facet(DiceType type) {
-		return switch (type) {
-			case D20 -> regular(3, -90, 0.55f, 0.55f);
-			case D12 -> regular(5, 90, 0.55f, 0.55f);
-			case D8 -> new float[][]{{0, -1}, {0.78f, 0}, {-0.78f, 0}};
-			case D10, D100 -> new float[][]{{0, -1}, {0.85f, -0.2f}, {-0.85f, -0.2f}};
-			default -> null;
-		};
-	}
-
-	private static float[][] regular(int n, float startDeg, float rx, float ry) {
-		float[][] pts = new float[n][2];
-		for (int i = 0; i < n; i++) {
-			double a = Math.toRadians(startDeg + 360.0 * i / n);
-			pts[i][0] = (float) Math.cos(a) * rx;
-			pts[i][1] = (float) Math.sin(a) * ry;
-		}
-		return pts;
-	}
-
-	private static void drawDie(DrawContext ctx, TextRenderer tr, DiceType shape, int color, float cx, float cy, int size,
-								float rotation, float squash, String label, boolean settled, boolean dim) {
-		if (dim) color = (color & 0x00FFFFFF) | 0x55000000;
-		var ms = ctx.getMatrices();
-		ms.push();
-		ms.translate(cx, cy, 0);
-		ms.multiply(RotationAxis.POSITIVE_Z.rotation(rotation));
-		ms.scale(squash, 1.0f, 1.0f);
-
-		Matrix4f m = ms.peek().getPositionMatrix();
-		RenderSystem.enableBlend();
-		RenderSystem.defaultBlendFunc();
-		RenderSystem.disableCull();
-		RenderSystem.setShader(GameRenderer::getPositionColorProgram);
-
-		float[][] out = outline(shape);
-		fan(m, out, size, dim ? 0x55101010 : 0xFF101010);
-		fan(m, out, size * 0.9f, color);
-		float[][] facet = facet(shape);
-		if (facet != null) {
-			fan(m, facet, size * 0.9f, lighten(color));
-		}
-		RenderSystem.enableCull();
-		RenderSystem.disableBlend();
-
-		ms.push();
-		float textScale = size / 14.0f;
-		ms.scale(textScale, textScale, 1.0f);
-		int tw = tr.getWidth(label);
-		// settle highlight: number turns gold once the die has stopped
-		ctx.drawText(tr, label, -tw / 2, -4, dim ? 0x66FFFFFF : settled ? 0xFFFFE066 : 0xFFFFFFFF, true);
-		ms.pop();
-		ctx.draw(); // flush the text now so the next die's polygon is layered on top of it
-		ms.pop();
-	}
-
-	private static int lighten(int argb) {
-		int r = Math.min(255, ((argb >> 16) & 0xFF) + 40);
-		int g = Math.min(255, ((argb >> 8) & 0xFF) + 40);
-		int b = Math.min(255, (argb & 0xFF) + 40);
-		return 0xFF000000 | (r << 16) | (g << 8) | b;
-	}
-
-	private static void fan(Matrix4f m, float[][] pts, float radius, int argb) {
-		float cx = 0, cy = 0;
-		for (float[] pt : pts) {
-			cx += pt[0];
-			cy += pt[1];
-		}
-		cx /= pts.length;
-		cy /= pts.length;
-		float a = ((argb >> 24) & 0xFF) / 255f;
-		float r = ((argb >> 16) & 0xFF) / 255f;
-		float g = ((argb >> 8) & 0xFF) / 255f;
-		float b = (argb & 0xFF) / 255f;
-		BufferBuilder buf = Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_COLOR);
-		buf.vertex(m, cx * radius, cy * radius, 0).color(r, g, b, a);
-		for (int i = 0; i <= pts.length; i++) {
-			float[] pt = pts[i % pts.length];
-			buf.vertex(m, pt[0] * radius, pt[1] * radius, 0).color(r, g, b, a);
-		}
-		BufferRenderer.drawWithGlobalProgram(buf.end());
-	}
+    private static final PresentationQueue QUEUE=new PresentationQueue(12,4096);
+    private static PresentationRoll current;
+    private static DicePresentationSettings settings;
+    private static int ticks;
+    private static long manualSequence;
+    private static boolean clattered,landed,bounced,settled;
+    private static final SoundEvent MOVE=sound("dice_move"),CLATTER=sound("dice_clatter"),IMPACT=sound("dice_impact"),BOUNCE=sound("dice_bounce"),SETTLE=sound("dice_settle");
+    private DiceAnimation(){}
+    private static SoundEvent sound(String name){return SoundEvent.of(Identifier.of("tacticalcombat",name));}
+    public static DicePresentationSettings settings(){if(settings==null){try{settings=DicePresentationSettings.load();}catch(Exception ignored){settings=DicePresentationSettings.defaults();}}return settings;}
+    public static boolean settings(DicePresentationSettings updated){try{updated.save();settings=updated;return true;}catch(Exception failure){return false;}}
+    public static void enqueue(DiceRollPayload payload){enqueue(PresentationRoll.manual(payload,++manualSequence));}
+    public static void enqueueCheck(com.google.gson.JsonObject authorizedResult){if(authorizedResult!=null)enqueue(PresentationRoll.check(authorizedResult));}
+    public static void enqueueEvent(dev.tacticalcombat.client.ui.HudSession.Line line){if(line.roll()!=null)enqueue(PresentationRoll.event(line.id(),line.kind(),line.summary(),line.roll()));}
+    public static void enqueue(PresentationRoll roll){if(roll==null)return;
+        if(QUEUE.seen(roll.identity())&&current!=null&&current.identity().equals(roll.identity())&&roll.official()&&!roll.source().equals("CHARACTER_CHECK"))current=roll;
+        var omitted=QUEUE.offer(roll);if(omitted!=null)accessible(MinecraftClient.getInstance(),omitted,true);
+    }
+    public static void clear(){QUEUE.clear();current=null;ticks=0;}
+    public static void invalidatePrivate(){QUEUE.invalidatePrivate();if(current!=null&&current.official()){current=null;ticks=0;}}
+    public static void skip(){if(current!=null)ticks=Math.max(ticks,(int)Math.ceil((tumble(current)+.20)*20/settings().speed()));}
+    private static double tumble(PresentationRoll roll){return (roll.official()?settings().checkMode():settings().manualMode())==DicePresentationSettings.Mode.QUICK?.48:1.15;}
+    private static double lifetime(PresentationRoll roll){return (settings().reducedMotion()?0:tumble(roll)+.20)+settings().holdSeconds()+.25;}
+    public static void tick(MinecraftClient mc){if(mc.player==null){clear();return;}if(current==null){current=QUEUE.poll();ticks=0;clattered=landed=bounced=settled=false;if(current!=null&&!settings().reducedMotion())play(mc,MOVE);}
+        if(current==null)return;ticks++;double seconds=ticks/20d*settings().speed(),tumble=tumble(current);
+        if(!settings().reducedMotion()){
+            if(!clattered&&seconds>=.13){play(mc,CLATTER);clattered=true;}
+            if(!landed&&seconds>=tumble){play(mc,IMPACT);landed=true;}
+            if(!bounced&&seconds>=tumble+.09){play(mc,BOUNCE);bounced=true;}
+            if(!settled&&seconds>=tumble+.20){play(mc,SETTLE);settled=true;}
+        }
+        if(seconds>=lifetime(current)){accessible(mc,current,false);current=null;}
+    }
+    private static void play(MinecraftClient mc,SoundEvent event){if(settings().sound()&&settings().volume()>0)mc.getSoundManager().play(PositionedSoundInstance.master(event,1f,(float)settings().volume()));}
+    private static void accessible(MinecraftClient mc,PresentationRoll roll,boolean forced){if(mc.player!=null&&(forced||dev.tacticalcombat.client.ui.CubetableHud.options().diceChat()))mc.inGameHud.getChatHud().addMessage(Text.literal(roll.title()+" · "+roll.calculation()));}
+    public static void render(DrawContext g,RenderTickCounter counter){if(MinecraftClient.getInstance().currentScreen!=null)return;draw(g,counter.getTickDelta(false));}
+    public static void drawOverScreen(DrawContext g,float delta){var screen=MinecraftClient.getInstance().currentScreen;if(screen instanceof dev.tacticalcombat.client.ui.RpgScreen||screen instanceof TacticalScreen)draw(g,delta);}
+    private static void draw(DrawContext g,float delta){var roll=current;if(roll==null)return;var mc=MinecraftClient.getInstance();int w=g.getScaledWindowWidth(),h=g.getScaledWindowHeight();
+        boolean quick=(roll.official()?settings().checkMode():settings().manualMode())==DicePresentationSettings.Mode.QUICK;
+        int count=Math.min(roll.faces().size()*(roll.sides()==100?2:1),6),perRow=Math.min(count,3),rows=(count+perRow-1)/perRow;
+        int die=(int)Math.clamp((quick?31:44)*settings().size(),22,58),spacing=die*2+8;
+        int pw=Math.min(w-8,Math.max(quick?170:230,perRow*spacing+24)),ph=Math.min(h-8,54+rows*spacing+38+(roll.official()?20:0));
+        if(pw<100||ph<85)return;
+        int x=quick?Math.max(4,w-pw-6):(w-pw)/2,y=quick?Math.max(4,h-ph-42):Math.max(4,(h-ph)/3);
+        double elapsed=(ticks+delta)/20d*settings().speed(),tumble=tumble(roll);
+        var pose=RollMotion.at(elapsed,tumble,settings().holdSeconds(),settings().reducedMotion(),0);
+        int alpha=(int)(225*pose.opacity());if(alpha<=0)return;
+        g.fill(x,y,x+pw,y+ph,(alpha<<24)|0x14191E);
+        g.fill(x,y,x+pw,y+1,0xFFD4AD60);g.fill(x,y+ph-1,x+pw,y+ph,0xFF775C36);
+        var tr=mc.textRenderer;
+        g.drawTextWithShadow(tr,tr.trimToWidth(roll.title(),pw-14),x+7,y+6,0xFFECD6A4);
+        g.drawText(tr,tr.trimToWidth(roll.source(),pw-14),x+7,y+18,0xFFB4ADA0,false);
+        for(int slot=0;slot<count;slot++){
+            int index=roll.sides()==100?slot/2:slot,value=roll.faces().get(index);
+            int shown=roll.sides()==100?(slot%2==0?(value==100?10:(value/10)%10):(value==100?10:value%10)):value;
+            double cx=x+pw/2d+(slot%perRow-(perRow-1)/2d)*spacing,cy=y+39+(slot/perRow)*spacing+die;
+            var p=RollMotion.at(elapsed,tumble,settings().holdSeconds(),settings().reducedMotion(),slot);
+            renderDie(g,cx+p.x(),cy+p.y(),die,roll.sides()==100?10:roll.sides(),shown,p,roll.retained(index),slot,roll.sides()==100?slot%2==0?"TENS":"ONES":null);
+        }
+        if(pose.phase()==RollMotion.Phase.REVEAL||pose.phase()==RollMotion.Phase.DISMISS||settings().reducedMotion()){
+            int yy=y+ph-(roll.official()?38:27);
+            g.drawTextWithShadow(tr,tr.trimToWidth(roll.calculation(),pw-14),x+7,yy,0xFFFFD875);
+            if(roll.official())g.drawText(tr,tr.trimToWidth(roll.breakdown(),pw-14),x+7,yy+11,0xFFE2D7BC,false);
+            if(roll.dc()!=null&&roll.success()!=null)g.drawTextWithShadow(tr,"DC "+roll.dc()+" · "+(roll.success()?"SUCCESS":"FAILURE"),x+7,y+ph-14,roll.success()?0xFF91D9A4:0xFFFFAB9A);
+        }
+    }
+    private record FaceDraw(int index,double depth,double[][] points,int color,double cx,double cy){}
+    private static void renderDie(DrawContext g,double cx,double cy,int radius,int sides,int face,RollMotion.Pose motion,boolean kept,int slot,String percentile){
+        var mesh=PolyhedralMesh.forSides(sides);int target=(face-1)%mesh.faceCount();var normal=mesh.normal(target);
+        // Rotate the selected face normal to the viewer, then add damped three-axis tumbling.
+        double[][] align=DieOrientation.align(normal),spin=DieOrientation.rotation(motion.rx(),motion.ry(),motion.rz());
+        double[][] projected=new double[mesh.vertices().size()][3];
+        for(int i=0;i<projected.length;i++){var v=mesh.vertices().get(i);double[] a=DieOrientation.mul(spin,DieOrientation.mul(align,new double[]{v.x(),v.y(),v.z()}));double scale=2.8/(2.8-a[2]);projected[i]=new double[]{cx+a[0]*radius*scale,cy-motion.lift()-a[1]*radius*scale,a[2]};}
+        int shadow=(int)(Math.clamp(motion.shadow(),0,1)*75);g.fill((int)(cx-radius*.8),(int)(cy+radius*.75),(int)(cx+radius*.8),(int)(cy+radius*.75+2),(shadow<<24)|0x030304);
+        var visible=new ArrayList<FaceDraw>();var faces=mesh.faces();
+        for(int fi=0;fi<faces.size();fi++){int[] f=faces.get(fi);var n=DieOrientation.mul(spin,DieOrientation.mul(align,DieOrientation.vector(mesh.normal(fi))));if(n[2]<=.015)continue;double[][] pts=new double[f.length][2];double dep=0,fx=0,fy=0;for(int j=0;j<f.length;j++){var pt=projected[f[j]];pts[j][0]=pt[0];pts[j][1]=pt[1];dep+=pt[2];fx+=pt[0];fy+=pt[1];}dep/=f.length;double shade=.47+.38*Math.max(0,n[0]*-.35+n[1]*.55+n[2]*.65);int base=(int)(28*shade),gold=(int)(19*shade);int color=((int)(255*motion.opacity())<<24)|((base+gold)<<16)|((base+gold/2)<<8)|base;visible.add(new FaceDraw(fi,dep,pts,color,fx/f.length,fy/f.length));}
+        visible.sort(Comparator.comparingDouble(FaceDraw::depth));
+        g.draw();RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.disableCull();RenderSystem.setShader(GameRenderer::getPositionColorProgram);
+        Matrix4f matrix=g.getMatrices().peek().getPositionMatrix();
+        for(var f:visible)polygon(matrix,f.points(),f.color());
+        var edges=Tessellator.getInstance().begin(VertexFormat.DrawMode.LINES,VertexFormats.POSITION_COLOR);
+        int ec=kept?0xFFAD8847:0xFF756A5C;float er=((ec>>>16)&255)/255f,eg=((ec>>>8)&255)/255f,eb=(ec&255)/255f;
+        for(var f:visible){double[][] p=f.points();for(int i=0;i<p.length;i++){double[] a=p[i],b=p[(i+1)%p.length];edges.vertex(matrix,(float)a[0],(float)a[1],.01f).color(er,eg,eb,1f);edges.vertex(matrix,(float)b[0],(float)b[1],.01f).color(er,eg,eb,1f);}}
+        BufferRenderer.drawWithGlobalProgram(edges.end());
+        RenderSystem.enableCull();RenderSystem.disableBlend();g.draw();
+        boolean revealed=motion.phase()==RollMotion.Phase.REVEAL||motion.phase()==RollMotion.Phase.DISMISS;
+        var front=revealed?visible.stream().filter(f->f.index()==target).findFirst():visible.stream().max(Comparator.comparingDouble(FaceDraw::depth));
+        if(front.isPresent()){var f=front.get();int numbered=f.index()+1;String label=percentile==null?Integer.toString(numbered):percentile.equals("TENS")?(numbered==10?"00":Integer.toString(numbered*10)):Integer.toString(numbered==10?0:numbered);
+            g.drawCenteredTextWithShadow(MinecraftClient.getInstance().textRenderer,label,(int)f.cx(),(int)f.cy()-4,revealed?(kept?0xFFFFD779:0xFFAAA49A):0xFFC9C0A9);}
+        if(!kept)g.drawText(MinecraftClient.getInstance().textRenderer,"DISCARDED",(int)(cx-radius),(int)(cy+radius+2),0xFF8C8883,false);
+        else if(visible.size()>0&&motion.phase()==RollMotion.Phase.REVEAL&&slot<2)g.drawText(MinecraftClient.getInstance().textRenderer,"KEPT",(int)(cx-radius/2),(int)(cy+radius+2),0xFFE6C273,false);
+    }
+    private static void polygon(Matrix4f m,double[][] p,int c){float a=((c>>>24)&255)/255f,r=((c>>>16)&255)/255f,g=((c>>>8)&255)/255f,b=(c&255)/255f;var buf=Tessellator.getInstance().begin(VertexFormat.DrawMode.TRIANGLE_FAN,VertexFormats.POSITION_COLOR);for(var q:p)buf.vertex(m,(float)q[0],(float)q[1],0).color(r,g,b,a);buf.vertex(m,(float)p[0][0],(float)p[0][1],0).color(r,g,b,a);BufferRenderer.drawWithGlobalProgram(buf.end());}
 }

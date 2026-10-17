@@ -1,6 +1,8 @@
 {
-  "dice_roll": {
-    "category": "master",
-    "sounds": ["tacticalcombat:dice_roll"]
-  }
+  "dice_roll": {"category":"master","sounds":["tacticalcombat:dice_roll"]},
+  "dice_move": {"category":"master","sounds":["tacticalcombat:dice_move"]},
+  "dice_clatter": {"category":"master","sounds":["tacticalcombat:dice_clatter"]},
+  "dice_impact": {"category":"master","sounds":["tacticalcombat:dice_impact"]},
+  "dice_bounce": {"category":"master","sounds":["tacticalcombat:dice_bounce"]},
+  "dice_settle": {"category":"master","sounds":["tacticalcombat:dice_settle"]}
 }

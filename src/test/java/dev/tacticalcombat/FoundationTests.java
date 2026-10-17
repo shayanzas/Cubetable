@@ -120,6 +120,7 @@ public final class FoundationTests {
         dev.tacticalcombat.character.GameplayTransactionBaselineTests.run();
         dev.tacticalcombat.character.GameplayTransactionTests.run();
         dev.tacticalcombat.client.ui.CheckpointJ25Tests.run();
+        dev.tacticalcombat.client.ui.CinematicDiceTests.run();
         dev.tacticalcombat.reference.CatalogValidationTests.run();
         dev.tacticalcombat.checks.CharacterCheckTests.run();
     }

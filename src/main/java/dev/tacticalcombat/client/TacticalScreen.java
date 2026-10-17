@@ -107,6 +107,7 @@ public final class TacticalScreen extends Screen {
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
 		MinecraftClient mc = MinecraftClient.getInstance();
+		if (TacticalCombatClient.SKIP_DICE_KEY.matchesKey(keyCode, scanCode)) {DiceAnimation.skip();return true;}
 
 		if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
 			mc.setScreen(new GameMenuScreen(true));

@@ -20,7 +20,7 @@ public final class ClientRulesWatch {
     public static void panel(Object owner,UUID token,Consumer<Boolean> changed){close(owner);active=new Watch(owner,token,false,new UUID(0,0),"",changed);}
     public static void receive(RulesChangedPayload message){
         var watch=active;if(watch==null||!watch.token.equals(message.token()))return;
-        if(message.revoked())active=null;
+        if(message.revoked()){active=null;DiceAnimation.invalidatePrivate();}
         watch.changed.accept(message.revoked());
     }
     public static void close(Object owner){var watch=active;if(watch==null||watch.owner!=owner)return;active=null;if(ClientPlayNetworking.canSend(RulesWatchPayload.ID))ClientPlayNetworking.send(new RulesWatchPayload(watch.token,watch.library,watch.character,"",true));}

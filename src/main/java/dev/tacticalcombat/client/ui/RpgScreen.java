@@ -23,6 +23,7 @@ public abstract class RpgScreen extends Screen {
     @Override public void removed() {saveFlow.invalidate();generation++;}
     @Override public void close() {client.setScreen(parent);}
     @Override public boolean shouldPause() {return false;}
+    @Override public boolean keyPressed(int key,int scan,int modifiers){if(key==org.lwjgl.glfw.GLFW.GLFW_KEY_O&&!(getFocused() instanceof TextFieldWidget)){dev.tacticalcombat.client.DiceAnimation.skip();return true;}return super.keyPressed(key,scan,modifiers);}
     @Override public void renderBackground(DrawContext g,int mx,int my,float delta) { }
     protected RpgButton button(String title,String detail,int x,int y,int w,int h,Runnable action) {return addDrawableChild(new RpgButton(x,y,w,h,title,detail,action));}
     protected TextFieldWidget search(int x,int y,int w,String value,Consumer<String> listener) {
