@@ -288,6 +288,7 @@ public final class CharacterRepository {
     public void unbind(Principal p,UUID entity) throws IOException {
         UUID id=state.bindings.get(entity); require(id!=null,"Entity is not bound");
         require(manages(p,character(id).campaign),"Campaign permission denied");
+        requireUnreserved(id);
         var bindings=new HashMap<>(state.bindings); bindings.remove(entity); commit(new State(state.campaigns,state.characters,bindings,state.assignments,state.manualRevisions));
     }
     /** Controller never changes ownership. All control changes require an unbound character. */
@@ -307,6 +308,7 @@ public final class CharacterRepository {
         require(old!=null && old.decision==Decision.PENDING && p.id.equals(old.offered) && member(p,c.campaign),"Pending assignment recipient permission required");
         require(old.revision==revision,"Stale assignment revision");require(binding(id)==null,"Unbind before changing control; live takeover unavailable");
         require(revision<Long.MAX_VALUE,"Assignment revision exhausted");
+        if(accept && dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(c.sheet).getAsJsonObject())!=null)require(manages(new Principal(p.id,false),c.campaign),"Monster controller DM authority revoked");
         if(accept) require(state.characters.values().stream().noneMatch(other->!other.id.equals(id) && controller(other.id).equals(p.id) && (state.assignments.containsKey(other.id) && state.assignments.get(other.id).decision==Decision.ACCEPTED || binding(other.id)!=null)),"Player is already controlling another character");
         var decision=accept?Decision.ACCEPTED:Decision.DECLINED;
         saveAssignment(new Assignment(id,accept?p.id:old.controller,null,decision,revision+1,history(old,p.id,p.id,decision)));
@@ -422,6 +424,7 @@ public final class CharacterRepository {
         return receipt;
     }
     private void authorizePlan(Principal who,GameplayActionPlan plan){
+        if(dev.tacticalcombat.rules.srd.MonsterProfiles.identity(JsonParser.parseString(character(plan.attacker().character()).sheet).getAsJsonObject())!=null)require(manages(who,plan.campaign()),"Current DM authority required for monster actions");
         require(member(who,plan.campaign())&&(manages(who,plan.campaign())||who.id.equals(plan.requester())&&controller(plan.attacker().character()).equals(who.id)),"Gameplay action permission denied");
         for(var p:plan.participants()){
             var c=character(p.character());require(c.campaign.equals(plan.campaign())&&c.approved&&c.profile.equals(RulesProfiles.SRD)&&c.profileVersion==1&&member(new Principal(c.owner,false),plan.campaign()),"Approved SRD participant required");

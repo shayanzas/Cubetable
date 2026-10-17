@@ -231,6 +231,8 @@ public final class SrdEncounter implements Encounter {
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands) {
         thread(); require(state==State.ACTIVE && controls(p,current()) && !budget.used() && !movement.moving(),"No eligible active action");
         var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
+        var monster=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(a.character()).sheet()).getAsJsonObject());
+        if(monster!=null){require(a.stats().weapons().contains(weapon),"Monster action is not supported");require(ability==(monster.get("source").getAsString().endsWith(":zombie")?SrdCharacter.Ability.STR:SrdCharacter.Ability.DEX),"Use the reviewed monster attack ability");}
         var plan=a.rules().plan(weapon,mode,ability,twoHands);
         var geometry=legalTarget(attacker,target,plan);
         intent=new Intent(UUID.randomUUID(),p.id(),turn(),attacker.getUuid(),targetId,weapon,ability,twoHands,a,b,attacker.getPos(),target.getPos(),plan,geometry);
@@ -384,7 +386,8 @@ public final class SrdEncounter implements Encounter {
             if(controls(p,actor)) {
                 entry.addProperty("hp",stats.hp()); entry.addProperty("maximumHp",stats.maximumHp()); entry.addProperty("temporaryHp",stats.temporaryHp());
                 entry.addProperty("arrows",stats.arrows());entry.addProperty("bolts",stats.bolts());entry.addProperty("daggers",stats.daggers());
-                var weapons=new JsonArray(); weapons.add("UNARMED"); stats.weapons().forEach(w->weapons.add(w.name())); entry.add("weapons",weapons);
+                var monsterIdentity=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(snapshots.get(id).character()).sheet()).getAsJsonObject());
+                var weapons=new JsonArray(); if(monsterIdentity==null)weapons.add("UNARMED");else {entry.addProperty("monsterAbility",monsterIdentity.get("source").getAsString().endsWith(":zombie")?"STR":"DEX");entry.addProperty("monsterSupport",dev.tacticalcombat.rules.srd.MonsterProfiles.get(monsterIdentity.get("source").getAsString()).limitations());} stats.weapons().forEach(w->weapons.add(w.name())); entry.add("weapons",weapons);
             }
             entries.add(entry);
         }

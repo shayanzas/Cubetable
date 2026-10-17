@@ -54,6 +54,7 @@ public final class SrdCombatScreen extends Screen {
     }
     private String weapon() { var weapons=weapons(); return weapons.get(Math.floorMod(weaponIndex,weapons.size())); }
     private void attackControls(int x,int w,int half) {
+        var current=ClientSrdCombat.current();if(current!=null&&current.has("monsterAbility"))dex=current.get("monsterAbility").getAsString().equals("DEX");
         if(ClientSrdCombat.preview!=null) {
             button("Confirm attack (spends action)",x,142,w,()->{
                 var args=new JsonObject(); args.addProperty("intent",ClientSrdCombat.preview.get("id").getAsString()); ClientSrdCombat.preview=null; ClientSrdCombat.send("confirm",args); init();
