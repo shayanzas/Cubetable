@@ -116,6 +116,11 @@ public final class SrdNetworking {
                     var result=encounter.move(p,request.request(),new SrdMovement.Cell(integer(args,"x"),integer(args,"z"),args.get("y").getAsDouble()),args.has("stepTicks")?integer(args,"stepTicks"):1);
                     message=result.message(); if(!result.accepted()) code="REJECTED";
                 }
+                case "dash" -> {
+                    if(!args.keySet().equals(Set.of("campaign","actor","revision")))throw new IllegalArgumentException("Dash accepts only expected campaign, actor and revision");
+                    encounter.dash(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact());
+                    SrdGridJobs.cancel(player.getUuid());message=encounter.reason();code="DASH";
+                }
                 case "cancel" -> {SrdGridJobs.cancel(player.getUuid());encounter.cancelMove(p);}
                 case "preview" -> {
                     var intent=encounter.preview(p,UUID.fromString(args.get("target").getAsString()),SrdEquipment.Weapon.valueOf(args.get("weapon").getAsString()),

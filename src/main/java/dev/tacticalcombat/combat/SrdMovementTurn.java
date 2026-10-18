@@ -28,7 +28,8 @@ public final class SrdMovementTurn {
     private CharacterRepository.SrdSnapshot snapshot;
     private final SrdTerrain terrain;
     private final TurnRequests requests;
-    private final int budget;
+    private final int speed;
+    private int budget;
     private int spent;
     private int stepTicks=1,waitTicks;
     private Cell anchor;
@@ -65,7 +66,15 @@ public final class SrdMovementTurn {
         terrain=new SrdTerrain(actor,snapshot.stats()); anchor=terrain.currentCell();
         if(actor.getPos().squaredDistanceTo(terrain.position(anchor))>1e-6 || terrain.landing(anchor)!=Reason.OK)
             throw new IllegalArgumentException("SRD movement requires a supported, centered starting footprint");
-        budget=snapshot.rules().walkingSpeedFeet(); requests=new TurnRequests(initial.encounter); requests.nextTurn();
+        speed=snapshot.rules().walkingSpeedFeet(); budget=speed; requests=new TurnRequests(initial.encounter); requests.nextTurn();
+    }
+    public int speedFeet() { return speed; }
+    /** Encounter spends the normal action in the same server-thread operation. Never moves/refunds. */
+    void dash(CharacterRepository.Principal principal) {
+        validatePreview(principal);
+        int expanded=Math.addExact(budget,speed);
+        if(expanded>SrdMovement.MAX_TURN_FEET)throw new IllegalArgumentException("Movement turn allowance exceeds supported bounds");
+        budget=expanded;completedPreview=null;
     }
     public int spentFeet() { return spent; }
     public int remainingFeet() { return budget-spent; }

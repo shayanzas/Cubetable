@@ -50,11 +50,13 @@ public final class SrdMovementTests {
         check(SrdMovement.search(start,5,(from,dx,dz)->new Step(new Cell(from.x()+dx,from.z()+dz,from.y()-1),5,Reason.OK))
                 .reachable().containsKey(new Cell(1,1,0)),"descent arithmetic normal cost");
         rejects(()->SrdMovement.search(start,-1,flat),"negative allowance");
-        rejects(()->SrdMovement.search(start,301,flat),"bounded search allowance");
+        rejects(()->SrdMovement.search(start,601,flat),"bounded search allowance including one Dash");
         rejects(()->new Cell(0,0,Double.NaN),"invalid height");
         rejects(()->new Cell(Integer.MIN_VALUE,0,1),"coordinate overflow");
         rejects(()->new Step(start,6,Reason.OK),"unsupported fractional grid charge");
         rejects(()->SrdMovement.search(start,5,(from,dx,dz)->new Step(new Cell(from.x()+2,from.z(),1),5,Reason.OK)),"terrain cannot return a client teleport");
+        var dashBounded=SrdMovement.search(start,600,flat);
+        check(dashBounded.remainingFeet()==600&&dashBounded.reachable().size()<=SrdMovement.MAX_NODES&&dashBounded.truncated(),"maximum speed plus Dash preserves bounded truncated search");
         var bounded=SrdMovement.search(start,300,flat);
         check(bounded.truncated() && bounded.reachable().size()==SrdMovement.MAX_NODES,"search cap explicit");
         check(bounded.status(new Cell(100,100,1))==Reason.SEARCH_LIMIT,"truncation not falsely reported as blocked geometry");

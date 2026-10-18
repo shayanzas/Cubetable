@@ -6,6 +6,8 @@ import java.util.*;
 public final class SrdMovement {
     private SrdMovement() {}
     public static final int MAX_NODES=4096;
+    /** Maximum supported speed (300) plus one normal-action Dash. Search work stays node-bounded. */
+    public static final int MAX_TURN_FEET=600;
     public record Cell(int x,int z,double y) {
         public Cell {
             if(Math.abs((long)x)>30000000 || Math.abs((long)z)>30000000 || !Double.isFinite(y) || Math.abs(y)>4096)
@@ -28,7 +30,7 @@ public final class SrdMovement {
     public record Preview(Cell start,int remainingFeet,Map<Cell,Node> reachable,List<Boundary> boundaries,boolean truncated) {
         public Preview {
             reachable=Map.copyOf(reachable); boundaries=List.copyOf(boundaries);
-            if(remainingFeet<0 || remainingFeet>300 || reachable.size()>MAX_NODES || boundaries.size()>MAX_NODES*8
+            if(remainingFeet<0 || remainingFeet>MAX_TURN_FEET || reachable.size()>MAX_NODES || boundaries.size()>MAX_NODES*8
                     || !reachable.containsKey(start)) throw new IllegalArgumentException("Invalid SRD preview bounds");
             for(var entry:reachable.entrySet()) {
                 Node node=entry.getValue();
@@ -70,7 +72,7 @@ public final class SrdMovement {
         private int neighbor;
         private boolean truncated,done;
         public Search(Cell start,int remainingFeet) {
-        if(remainingFeet<0 || remainingFeet>300) throw new IllegalArgumentException("Invalid movement allowance");
+        if(remainingFeet<0 || remainingFeet>MAX_TURN_FEET) throw new IllegalArgumentException("Invalid movement allowance");
         this.start=Objects.requireNonNull(start);this.remainingFeet=remainingFeet;
         Node first=new Node(start,0,null); nodes.put(start,first); queue.add(first);
         }

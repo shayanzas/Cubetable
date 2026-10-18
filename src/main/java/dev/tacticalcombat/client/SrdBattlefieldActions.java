@@ -5,6 +5,15 @@ import java.util.*;
 /** Only intent fields leave the UI. Server replies alone provide costs, dice, damage and HP. */
 public final class SrdBattlefieldActions {
     private SrdBattlefieldActions() {}
+    public static boolean canDash(JsonObject state,String pending){
+        return pending.isEmpty() && SrdViewPolicy.canControl(state) && state.has("dashFeet") && state.get("dashFeet").getAsInt()>0
+            && !state.get("actionUsed").getAsBoolean() && !state.get("moving").getAsBoolean();
+    }
+    public static JsonObject dash(JsonObject state,long revision,String pending){
+        if(!canDash(state,pending))throw new IllegalArgumentException("Dash requires your available normal action and no pending route/request");
+        var args=new JsonObject();args.addProperty("campaign",state.get("campaign").getAsString());
+        args.addProperty("actor",state.get("active").getAsString());args.addProperty("revision",revision);return args;
+    }
     public static JsonObject preview(JsonObject state,String target,SrdAttackChoices.Choice choice){
         var actor=SrdViewPolicy.current(state);
         if(!SrdViewPolicy.canControl(state)||actor==null||!actor.has("weapons")

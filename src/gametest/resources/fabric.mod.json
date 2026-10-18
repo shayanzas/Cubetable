@@ -8,6 +8,7 @@
     "fabric-gametest": [
       "dev.tacticalcombat.combat.MonsterStageGameTests",
       "dev.tacticalcombat.combat.DmWorkspaceGameTests",
+      "dev.tacticalcombat.combat.SrdDashGameTests",
       "dev.tacticalcombat.combat.SrdWorldInteractionGameTests",
       "dev.tacticalcombat.combat.AuthorityGameTests",
       "dev.tacticalcombat.combat.PhaseOneGameTests",

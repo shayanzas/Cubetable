@@ -206,6 +206,19 @@ public final class SrdEncounter implements Encounter {
         var result=movement.request(p,new SrdMovementTurn.Request(id,campaign,RulesProfiles.SRD,turn(),current().getUuid(),request,destination),stepTicks);
         revision++; return result;
     }
+    int dash(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision) {
+        thread();
+        require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
+        require(campaign.equals(expectedCampaign) && current().getUuid().equals(expectedActor) && revision==expectedRevision,"Stale Dash scope or revision");
+        require(!budget.used() && movement!=null && !movement.moving(),"Dash requires an available normal action and no executing route");
+        require(transaction==null,"Resolve pending gameplay transaction first");
+        var latest=fresh(current());require(latest.stats().hp()>0,"Cannot Dash at zero HP");
+        CharacterService.repository().requireUnreserved(latest.character());
+        // Every check precedes mutation; neither grant nor action spending performs IO or callbacks.
+        movement.dash(p);budget.spend();intent=null;revision++;
+        reason="Dash accepted: +"+movement.speedFeet()+" ft; "+movement.remainingFeet()+" ft remaining; normal action spent";
+        return movement.speedFeet();
+    }
     void cancelMove(CharacterRepository.Principal p) {
         thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required"); movement.cancel(p); revision++;
     }
@@ -377,6 +390,7 @@ public final class SrdEncounter implements Encounter {
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         data.addProperty("moving",movement!=null && movement.moving());
+        if(current()!=null && controls(p,current())) data.addProperty("dashFeet",movement==null?0:movement.speedFeet());
         data.addProperty("dimension",world.getRegistryKey().getValue().toString());
         var entries=new JsonArray();
         for(var id:order.isEmpty()?actors.stream().map(Entity::getUuid).toList():order) {

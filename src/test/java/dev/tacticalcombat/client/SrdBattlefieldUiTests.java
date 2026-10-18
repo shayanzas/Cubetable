@@ -30,6 +30,24 @@ public final class SrdBattlefieldUiTests {
         state.addProperty("actionUsed",true);denied=false;try{SrdBattlefieldActions.preview(state,"husk",SrdAttackChoices.forWeapon("UNARMED",null).getFirst());}catch(IllegalArgumentException expected){denied=true;}check(denied,"spent action disabled");
         state.addProperty("actionUsed",false);actors.get(0).getAsJsonObject().addProperty("controlled",false);denied=false;try{SrdBattlefieldActions.preview(state,"husk",SrdAttackChoices.forWeapon("UNARMED",null).getFirst());}catch(IllegalArgumentException expected){denied=true;}check(denied,"inspection grants no attack capability");
         actors.get(0).getAsJsonObject().addProperty("controlled",true);
+        state.addProperty("dashFeet",30);state.addProperty("campaign",UUID.randomUUID().toString());
+        check(SrdBattlefieldActions.canDash(state,""),"available normal action exposes Dash");
+        var dash=SrdBattlefieldActions.dash(state,42,"");
+        check(dash.keySet().equals(Set.of("campaign","actor","revision"))&&dash.get("revision").getAsLong()==42,"Dash sends scope and expected revision, never grant");
+        for(String pending:List.of("dash","move","confirm","endturn"))check(!SrdBattlefieldActions.canDash(state,pending),"pending mutation disables Dash");
+        state.addProperty("actionUsed",true);check(!SrdBattlefieldActions.canDash(state,""),"attack/reservation disables Dash");state.addProperty("actionUsed",false);
+        state.addProperty("moving",true);check(!SrdBattlefieldActions.canDash(state,""),"route disables Dash");state.addProperty("moving",false);
+        actors.get(0).getAsJsonObject().addProperty("controlled",false);check(!SrdBattlefieldActions.canDash(state,""),"revocation disables Dash");actors.get(0).getAsJsonObject().addProperty("controlled",true);
+        check(!SrdBattlefieldActions.canDash(new JsonObject(),""),"disconnect clears Dash capability");
+        state.remove("dashFeet");check(!SrdBattlefieldActions.canDash(state,""),"older server does not advertise Dash");
+        var budget=new dev.tacticalcombat.combat.SrdActionBudget();budget.spend();
+        check(budget.used()&&budget.action()==dev.tacticalcombat.combat.SrdActionBudget.Action.SPENT,"immediate action spends shared budget");
+        denied=false;try{budget.reserve();}catch(IllegalArgumentException expected){denied=true;}check(denied,"Dash excludes weapon reservation");
+        denied=false;try{budget.spend();}catch(IllegalArgumentException expected){denied=true;}check(denied,"double Dash forbidden");
+        budget=new dev.tacticalcombat.combat.SrdActionBudget();budget.reserve();denied=false;try{budget.spend();}catch(IllegalArgumentException expected){denied=true;}check(denied,"prepared weapon excludes Dash");
+        var refresh=new SrdGridRefresh();var encounter=UUID.randomUUID();refresh.requested(encounter,1,1,0);
+        check(!refresh.due(encounter,2,1,true,21)&&refresh.due(encounter,2,1,true,22),"Dash revision schedules paced read-only grid refresh");
+        refresh.requested(encounter,2,1,22);check(!refresh.due(encounter,2,1,true,100),"accepted Dash does not automatically repeat discovery or mutation");
         var start=new SrdMovement.Cell(0,0,0);var to=new SrdMovement.Cell(1,0,0);
         var grid=new SrdMovement.Preview(start,30,Map.of(start,new SrdMovement.Node(start,0,null),to,new SrdMovement.Node(to,5,start)),List.of(),false);
         check(SrdBattlefieldModel.retain(to,grid).equals(to),"same revision grid refresh retains legal destination");
@@ -46,8 +64,8 @@ public final class SrdBattlefieldUiTests {
             check(!overlap(l.status(),l.camera()),"header and camera separate");
             check(!overlap(l.context(),l.bar()),"context never hides primary actions");
             check(!overlap(l.toast(),l.bar()),"toast never hides End Turn");
-            int cols=l.narrow()?3:6,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
-            for(int i=0;i<6;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
+            int cols=l.narrow()?4:7,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
+            for(int i=0;i<7;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
         }
         System.out.println("SRD battlefield UI checks passed: "+count);
     }

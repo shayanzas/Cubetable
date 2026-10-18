@@ -18,7 +18,7 @@ public final class SrdBattlefieldScreen extends Screen {
     private final SrdBattlefieldModel model=new SrdBattlefieldModel();
     private static int stepTicks=4;
     private SrdBattlefieldModel.Layout layout;
-    private RpgButton move,attack,confirm,end,previewButton,confirmAttack;
+    private RpgButton move,attack,confirm,end,dash,previewButton,confirmAttack;
     private final List<SrdAttackChoices.Choice> choices=new ArrayList<>();
     private int choiceIndex,choicePage,scroll;
     private boolean history,options;
@@ -52,12 +52,12 @@ public final class SrdBattlefieldScreen extends Screen {
     private void rebuild(){
         if(layout==null)return;
         clearChildren();previewButton=confirmAttack=null;
-        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?3:6,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
-        String[] titles={"Move","Attack","Confirm move","End Turn","History","More"};
-        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();}};
-        for(int i=0;i<6;i++){
+        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?4:7,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
+        String[] titles={"Move","Attack","Confirm move","End Turn","History","More","Dash"};
+        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();},this::dash};
+        for(int i=0;i<7;i++){
             var b=button(titles[i],i==3?"End this SRD turn; never automatic":i==4?"Recent authorized movement, turns and outcomes":"",bar.x()+5+(i%cols)*(w+gap),bar.y()+4+(i/cols)*(h+2),w,h,actions[i]);
-            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);
+            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);if(i==6)dash=b;
         }
         var cam=layout.camera();int cw=(cam.w()-8)/2;
         if(!(height<240&&contextVisible())) {
@@ -94,6 +94,11 @@ public final class SrdBattlefieldScreen extends Screen {
         previewButton=button("Preview","No cost: request an authoritative attack preview",x,by,(inner-3)/2,18,this::requestPreview);
         button("Options "+(choicePage+1)+"/"+pages,"More supported weapon/ability/hand choices",x+(inner+3)/2,by,(inner-3)/2,18,()->{choicePage++;rebuild();});
     }
+    private void dash(){
+        if(!SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending))return;
+        ClientSrdCombat.send("dash",SrdBattlefieldActions.dash(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
+        ClientSrdCombat.preview=null;model.tool=SrdBattlefieldModel.Tool.MOVE;rebuild();
+    }
     private void confirmMove(){
         var cell=ClientSrdCombat.selected;if(!ready()||cell==null||ClientSrdCombat.movement.select(cell).costFeet().orElse(0)<=0)return;
         var args=new JsonObject();args.addProperty("x",cell.x());args.addProperty("y",cell.y());args.addProperty("z",cell.z());args.addProperty("stepTicks",stepTicks);
@@ -121,6 +126,9 @@ public final class SrdBattlefieldScreen extends Screen {
         String key=model.target+model.tool+ClientSrdCombat.canControl();
         if(!key.equals(built)||shownPreview!=ClientSrdCombat.preview){built=key;shownPreview=ClientSrdCombat.preview;rebuild();}
         boolean ready=ready();move.active=ready;attack.active=ready&&!ClientSrdCombat.state.get("actionUsed").getAsBoolean();
+        dash.active=SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending);
+        dash.setMessage(Text.literal("Dash"+(ClientSrdCombat.state.has("dashFeet")?" +"+ClientSrdCombat.state.get("dashFeet"):"")));
+        dash.hint(!ready?unavailable():dash.active?"Dash: +"+ClientSrdCombat.state.get("dashFeet")+" ft this turn; spends your normal action; does not move you":"Normal action unavailable");
         confirm.active=ready&&ClientSrdCombat.selected!=null&&ClientSrdCombat.movement.select(ClientSrdCombat.selected).costFeet().orElse(0)>0;
         end.active=ClientSrdCombat.canControl()&&ClientSrdCombat.pending.isEmpty();
         move.selected(model.tool==SrdBattlefieldModel.Tool.MOVE);attack.selected(model.tool==SrdBattlefieldModel.Tool.ATTACK);
