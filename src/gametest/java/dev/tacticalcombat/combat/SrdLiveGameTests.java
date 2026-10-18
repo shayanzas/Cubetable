@@ -93,6 +93,8 @@ public class SrdLiveGameTests implements FabricGameTest {
             var preview=SrdNetworking.handle(player,request(e,"preview",choice)); check(preview.code().equals("PREVIEW") && dice.rolls==2 && !e.actionUsed(),"selection previews without accepting client dice/damage or spending action");
             var confirm=new JsonObject(); confirm.addProperty("intent",data(preview).getAsJsonObject("preview").get("id").getAsString()); var packet=request(e,"confirm",confirm);
             var result=SrdNetworking.handle(player,packet); check(result.code().equals("RESULT") && e.actionUsed(),"confirmation commits before returning success");
+            var detail=data(result).getAsJsonObject("result");
+            check(detail.get("rolledDamage").getAsInt()==1 && !detail.has("hpBefore") && !detail.has("hpAfter") && !detail.has("zeroHp"),"ordinary attacker gets rolled damage but no private target HP/defeat fields");
             check(CharacterService.srdStats(mob,f.campaign).stats().hp()==9 && player.getHealth()==20,"forged fields cannot change authoritative damage");
             check(SrdNetworking.handle(player,packet).code().equals("RESULT") && dice.rolls==3 && CharacterService.srdStats(mob,f.campaign).stats().hp()==9,"duplicate result request returns durable result without reroll or damage");
             long old=e.turn(); check(SrdNetworking.handle(player,request(e,"endturn",new JsonObject())).code().equals("OK") && e.current()==mob,"player End Turn advances live encounter");
@@ -109,7 +111,9 @@ public class SrdLiveGameTests implements FabricGameTest {
             var a=f.actor(1,1,true); var b=f.actor(2,1,true);
             f.repo.commitSrdHealth(CharacterService.srdStats(b,f.campaign),new SrdHealth(1,10,0));
             var e=begin(f,new Dice(20,1,20),a,b);
-            var preview=e.preview(f.dm,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false); e.confirm(f.dm,preview.id());
+            var preview=e.preview(f.dm,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false); var committed=e.confirm(f.dm,preview.id());
+            var feedback=SrdNetworking.result(committed.plan,f.dm);
+            check(feedback.get("zeroHp").getAsBoolean()&&feedback.get("hpAfter").getAsInt()==0&&feedback.get("target").getAsString().equals(b.getUuidAsString()),"authorized outcome identifies exactly which target reached zero HP");
             check(e.state()==SrdEncounter.State.PAUSED && b.isAlive() && b.getHealth()==20 && CharacterService.srdStats(b,f.campaign).stats().hp()==0,"zero D&D HP pauses instead of vanilla death");
             check(dev.tacticalcombat.uiapi.UiEvents.SESSION.query(f.repo,f.dm,f.campaign,0,dev.tacticalcombat.uiapi.UiEvents.Kind.ZERO_HP).events().size()==1,"committed zero HP emits one event");
             rejects(()->e.preview(f.dm,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false),"ordinary actions prohibited at adjudication pause");

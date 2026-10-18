@@ -30,6 +30,7 @@ public final class SrdMovementTurn {
     private final TurnRequests requests;
     private final int budget;
     private int spent;
+    private int stepTicks=1,waitTicks;
     private Cell anchor;
     private List<Cell> route=List.of();
     private CharacterRepository.Principal controller;
@@ -112,9 +113,12 @@ public final class SrdMovementTurn {
             throw new IllegalArgumentException("Invalid movement anchor");
         return terrain.search(anchor,remainingFeet());
     }
-    public Result request(CharacterRepository.Principal principal,Request request) {
+    public Result request(CharacterRepository.Principal principal,Request request) {return request(principal,request,1);}
+    /** Optional bounded cadence changes wall-clock pacing only. Revalidation still runs every server tick. */
+    public Result request(CharacterRepository.Principal principal,Request request,int stepTicks) {
         requireServerThread();
         String error=invalid(); if(error!=null) return result(false,error);
+        if(stepTicks<1 || stepTicks>6)return result(false,"Movement cadence must be 1–6 server ticks");
         if(request==null || !permitted(principal) || !actor.getUuid().equals(request.actor)
                 || !initial.encounter.equals(request.encounter) || !initial.campaign.equals(request.campaign)
                 || !initial.profile.equals(request.profile) || initial.turn!=request.turn || request.request==null || request.destination==null)
@@ -132,7 +136,7 @@ public final class SrdMovementTurn {
         } catch(IllegalArgumentException rejected) { return result(false,rejected.getMessage()); }
         List<Cell> path=preview.pathTo(request.destination);
         if(path.isEmpty()) return result(false,request.destination.equals(anchor)?"Already at destination":preview.status(request.destination).name());
-        route=path; completedPreview=null; controller=principal; return result(true,"Route accepted; steps revalidate before execution");
+        route=path; this.stepTicks=stepTicks;waitTicks=0; completedPreview=null; controller=principal; return result(true,"Route accepted; steps revalidate before execution");
     }
     private Result result(boolean accepted,String message) { return new Result(accepted,message,spent,remainingFeet()); }
     public Result cancel(CharacterRepository.Principal principal) {
@@ -161,7 +165,8 @@ public final class SrdMovementTurn {
             total+=step.feet(); if(firstCost==0) firstCost=step.feet(); previous=next;
         }
         if(total>remainingFeet()) { route=List.of(); return result(false,"Remaining route exceeds movement allowance"); }
-        Cell next=route.getFirst(); place(next); anchor=next; spent+=firstCost;
+        if(waitTicks>0){waitTicks--;return result(true,"Paced movement; next step pending");}
+        Cell next=route.getFirst(); place(next); anchor=next; spent+=firstCost;waitTicks=stepTicks-1;
         route=List.copyOf(route.subList(1,route.size()));
         return result(true,"Step completed");
     }

@@ -113,7 +113,7 @@ public final class SrdNetworking {
                     }
                 }
                 case "move" -> {
-                    var result=encounter.move(p,request.request(),new SrdMovement.Cell(integer(args,"x"),integer(args,"z"),args.get("y").getAsDouble()));
+                    var result=encounter.move(p,request.request(),new SrdMovement.Cell(integer(args,"x"),integer(args,"z"),args.get("y").getAsDouble()),args.has("stepTicks")?integer(args,"stepTicks"):1);
                     message=result.message(); if(!result.accepted()) code="REJECTED";
                 }
                 case "cancel" -> {SrdGridJobs.cancel(player.getUuid());encounter.cancelMove(p);}
@@ -136,18 +136,13 @@ public final class SrdNetworking {
                 case "confirm" -> {
                     var result=encounter.confirm(p,UUID.fromString(args.get("intent").getAsString()));
                     if(result.state==SrdEncounter.TransactionState.COMMITTED) {
-                        var roll=new JsonObject(); roll.addProperty("action",result.intent.id().toString()); roll.addProperty("hit",result.roll.hit()); roll.addProperty("critical",result.roll.critical());
-                        roll.addProperty("chosen",result.roll.roll().chosen()); roll.addProperty("total",result.roll.roll().total());
-                        var faces=new JsonArray(); result.roll.roll().faces().forEach(faces::add); roll.add("faces",faces);
-                        var damage=new JsonArray(); result.roll.damageFaces().forEach(damage::add); roll.add("damageFaces",damage);
-                        var mode=SrdRules.rollMode(result.intent.geometry().advantage(),result.intent.geometry().disadvantage()||result.intent.plan().disadvantage());
-                        roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);
-                        extra.add("result",roll); code="RESULT";
+                        extra.add("result",result(result.plan,p)); code="RESULT";
                         // Dice are private to the acting player and authorized watching managers.
                         for(var viewer:player.getServer().getPlayerManager().getPlayerList()) if(viewer!=player
                                 && encounter.id().equals(WATCHING.get(viewer.getUuid()))
                                 && (viewer.getUuid().equals(result.intent.actor()) || CharacterService.repository().manages(CharacterService.principal(viewer),encounter.campaign()))) {
-                            send(viewer,state(encounter,CharacterService.principal(viewer),"RESULT",encounter.reason(),extra));
+                            var privateExtra=new JsonObject();privateExtra.add("result",result(result.plan,CharacterService.principal(viewer)));
+                            send(viewer,state(encounter,CharacterService.principal(viewer),"RESULT",encounter.reason(),privateExtra));
                         }
                     } else code="SAVE_FAILED";
                     message=encounter.reason();
@@ -171,15 +166,25 @@ public final class SrdNetworking {
         var repo=CharacterService.repository();var who=CharacterService.principal(player);var receipt=repo.visibleReceipt(who,raw.plan().operation());var plan=receipt.plan();
         if(!plan.encounter().equals(request.encounter())||plan.turn()!=request.turn())throw new IllegalArgumentException("Operation identity reused with altered encounter or turn");
         var extra=new JsonObject();extra.addProperty("operation",plan.operation().toString());extra.addProperty("status",receipt.status().name());
-        if(receipt.status()==GameplayReceipt.Status.COMMITTED)extra.add("result",result(plan));
+        if(receipt.status()==GameplayReceipt.Status.COMMITTED)extra.add("result",result(plan,who));
         var encounter=find(request.encounter());String message="Stored gameplay operation: "+receipt.status()+"; no resources spent again";
         if(encounter!=null){encounter.authorizeViewer(who);selectWatch(player,encounter.id());return state(encounter,who,receipt.status()==GameplayReceipt.Status.COMMITTED?"RESULT":"SAVE_FAILED",message,extra);}
         return new SrdStatePayload(request.encounter(),0,"RECEIPT",message,extra.toString());
     }
-    static JsonObject result(GameplayActionPlan plan){
+    static JsonObject result(GameplayActionPlan plan,CharacterRepository.Principal viewer){
         var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("action",plan.operation().toString());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
         var faces=new JsonArray();outcome.roll().faces().forEach(faces::add);roll.add("faces",faces);var damage=new JsonArray();outcome.damageFaces().forEach(damage::add);roll.add("damageFaces",damage);
-        var attack=plan.attack();var mode=SrdRules.rollMode(attack.advantage(),attack.disadvantage()||SrdRules.plan(plan.attacker().before(),attack.weapon(),attack.mode(),attack.ability(),attack.twoHands()).disadvantage());roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);return roll;
+        var attack=plan.attack();var mode=SrdRules.rollMode(attack.advantage(),attack.disadvantage()||SrdRules.plan(plan.attacker().before(),attack.weapon(),attack.mode(),attack.ability(),attack.twoHands()).disadvantage());roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);
+        roll.addProperty("actor",plan.attacker().actor().toString());roll.addProperty("target",plan.target().actor().toString());
+        roll.addProperty("modifier",outcome.roll().total()-outcome.roll().chosen());
+        roll.addProperty("rolledDamage",outcome.damage().amount());roll.addProperty("damageType",outcome.damage().type().name());
+        var repo=CharacterService.repository();
+        if(repo.member(viewer,plan.campaign()) && (repo.manages(viewer,plan.campaign()) || plan.target().actor().equals(viewer.id()) && repo.controller(plan.target().character()).equals(viewer.id()))) {
+            roll.addProperty("hpBefore",plan.target().before().hp());roll.addProperty("hpAfter",plan.target().after().hp());
+            roll.addProperty("temporaryBefore",plan.target().before().temporaryHp());roll.addProperty("temporaryAfter",plan.target().after().temporaryHp());
+            roll.addProperty("zeroHp",plan.target().after().hp()==0);
+        }
+        return roll;
     }
     private static void rejection(SrdEncounter encounter,ServerPlayerEntity player,SrdRequestPayload request) {
         dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(dev.tacticalcombat.uiapi.UiEvents.derived(request.request(),player.getUuid()+":rejection"),encounter.campaign(),encounter.id(),request.turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.REJECTION,java.util.List.of(player.getUuid()),"Admitted SRD operation rejected; inspect the direct response for details",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,java.util.Set.of(player.getUuid()));

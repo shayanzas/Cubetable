@@ -199,10 +199,11 @@ public final class SrdEncounter implements Encounter {
     boolean budgetedGrid() {return movement!=null && movement.remainingFeet()>60;}
     dev.tacticalcombat.grid.SrdTerrain.Pending pendingGrid(CharacterRepository.Principal p) {validateGrid(p);return movement.pendingPreview(p);}
     void completedGrid(CharacterRepository.Principal p,SrdMovement.Preview preview) {validateGrid(p);movement.completePreview(p,preview);}
-    SrdMovementTurn.Result move(CharacterRepository.Principal p,UUID request,SrdMovement.Cell destination) {
+    SrdMovementTurn.Result move(CharacterRepository.Principal p,UUID request,SrdMovement.Cell destination) {return move(p,request,destination,1);}
+    SrdMovementTurn.Result move(CharacterRepository.Principal p,UUID request,SrdMovement.Cell destination,int stepTicks) {
         thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
         intent=null;
-        var result=movement.request(p,new SrdMovementTurn.Request(id,campaign,RulesProfiles.SRD,turn(),current().getUuid(),request,destination));
+        var result=movement.request(p,new SrdMovementTurn.Request(id,campaign,RulesProfiles.SRD,turn(),current().getUuid(),request,destination),stepTicks);
         revision++; return result;
     }
     void cancelMove(CharacterRepository.Principal p) {
@@ -375,6 +376,8 @@ public final class SrdEncounter implements Encounter {
         data.addProperty("reason",reason); data.addProperty("actionUsed",budget.used());
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
+        data.addProperty("moving",movement!=null && movement.moving());
+        data.addProperty("dimension",world.getRegistryKey().getValue().toString());
         var entries=new JsonArray();
         for(var id:order.isEmpty()?actors.stream().map(Entity::getUuid).toList():order) {
             var actor=actor(id); var entry=new JsonObject(); var stats=snapshots.get(id).stats();
