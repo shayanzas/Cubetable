@@ -32,14 +32,17 @@ public final class ClientSrdCombat {
     private ClientSrdCombat() {}
     public static JsonObject workspaceState(){return state.deepCopy();}
     public static void battlefield(){MinecraftClient.getInstance().setScreen(new SrdBattlefieldScreen());}
+    public static SrdMovementPreview.Details movementDetails(){return movement.details(selected!=null?selected:hover);}
     public static UUID hudEncounter() {return encounter;}
-    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";lastResultId="";activity.clear();pending="";reconciling=false;hover=null;unavailableHover=null;SrdCamera.clear(); }
+    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";lastResultId="";activity.clear();pending="";reconciling=false;hover=null;unavailableHover=null;SrdCamera.clear();SrdMotion.clear(); }
     public static void receive(SrdStatePayload payload) {
         if(payload.code().equals("RECEIPT")){message=payload.message();return;} // Closed encounter receipt never reconstructs world/combat state.
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)) clear(); message=payload.message(); return;
         }
-        if(payload.code().equals("REJECTED") || payload.code().equals("STORAGE_ERROR")) { message=payload.message(); preview=null; pending="";activity.add("denied:"+ticks,message,ticks); return; }
+        if(payload.code().equals("REJECTED") || payload.code().equals("STORAGE_ERROR")) { message=payload.message(); preview=null;
+            if(pending.equals("move")){grid=null;selected=null;hover=null;movement.clear();gridRequests.clear();refresh.clear();}
+            movement.context(revision,message,grid==null);pending="";activity.add("denied:"+ticks,message,ticks); return; }
         if(payload.encounter().equals(encounter) && payload.revision()<revision) return;
         try {
             CharacterRepository.checkDepth(payload.json(),12);
@@ -53,6 +56,7 @@ public final class ClientSrdCombat {
             if(data.has("remainingFeet") && state.has("remainingFeet") && Objects.equals(data.get("active"),state.get("active")) && data.get("remainingFeet").getAsInt()<state.get("remainingFeet").getAsInt())activity.add("move:"+payload.revision(),"Movement committed · "+data.get("remainingFeet")+" ft remaining",ticks);
             if(changed) { preview=null; grid=null; selected=null;hover=null; movement.clear(); }
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong();
+            SrdMotion.accept(encounter.toString(),data);
             if(currentGrid) message=payload.message();
             if((Set.of("OK","DASH","DODGE","POSTURE","PREVIEW","RESULT","SAVE_FAILED","PAUSED").contains(payload.code()) || payload.code().equals("STATE")&&reconciling)){pending="";reconciling=false;}
             if(!canControl()) {grid=null;selected=null;preview=null;movement.clear();}
@@ -82,9 +86,18 @@ public final class ClientSrdCombat {
                     var parent=n.size()==4?null:new SrdMovement.Cell(n.get(4).getAsInt(),n.get(5).getAsInt(),n.get(6).getAsDouble());
                     nodes.put(cell,new SrdMovement.Node(cell,n.get(3).getAsInt(),parent)); if(parent==null) start=cell;
                 }
-                grid=new SrdMovement.Preview(Objects.requireNonNull(start),data.get("remainingFeet").getAsInt(),nodes,List.of(),data.get("truncated").getAsBoolean());
+                var boundaries=new ArrayList<SrdMovement.Boundary>();
+                if(data.has("gridBoundaries")){
+                    var list=data.getAsJsonArray("gridBoundaries");if(list.size()>256)throw new IllegalArgumentException("Too many boundaries");
+                    for(var value:list){var b=value.getAsJsonArray();if(b.size()!=6)throw new IllegalArgumentException("Invalid boundary");
+                        int dx=b.get(3).getAsInt(),dz=b.get(4).getAsInt();if(Math.abs(dx)>1||Math.abs(dz)>1||dx==0&&dz==0)throw new IllegalArgumentException("Invalid boundary direction");
+                        boundaries.add(new SrdMovement.Boundary(new SrdMovement.Cell(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsDouble()),dx,dz,SrdMovement.Reason.valueOf(b.get(5).getAsString())));
+                    }
+                }
+                grid=new SrdMovement.Preview(Objects.requireNonNull(start),data.get("remainingFeet").getAsInt(),nodes,boundaries,data.get("truncated").getAsBoolean());
                 movement.apply(RulesProfiles.SRD,grid);selected=SrdBattlefieldModel.retain(selected,grid);
             }
+        movement.context(revision,data.has("routeStatus")?data.get("routeStatus").getAsString():moving()?"Executing":"Idle",grid==null);
         } catch(RuntimeException invalid) { clear(); message="Invalid SRD server state; refresh required"; }
     }
     static void send(String operation,JsonObject args) {

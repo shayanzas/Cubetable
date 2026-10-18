@@ -54,6 +54,10 @@ public final class SrdMovement {
             for(Cell p=destination;!p.equals(start);p=reachable.get(p).parent()) path.add(p);
             Collections.reverse(path); return List.copyOf(path);
         }
+        public List<Reason> approachReasons(Cell destination){
+            return boundaries.stream().filter(b->b.from.x+b.dx==destination.x&&b.from.z+b.dz==destination.z)
+                    .map(Boundary::reason).distinct().toList();
+        }
         public Reason status(Cell destination) {
             return reachable.containsKey(destination)?Reason.OK:truncated?Reason.SEARCH_LIMIT:Reason.UNREACHABLE;
         }
@@ -69,6 +73,10 @@ public final class SrdMovement {
         private final int remainingFeet;
         private final Map<Cell,Node> nodes=new LinkedHashMap<>();
         private final List<Boundary> boundaries=new ArrayList<>();
+        // Secondary presentation preferences never discount authoritative feet. All parents have
+        // strictly lower cost, so their best equal-cost route is settled before children expand.
+        private record Shape(int length,int turns,int dx,int dz) {}
+        private final Map<Cell,Shape> shapes=new HashMap<>();
         private final PriorityQueue<Node> queue=new PriorityQueue<>(Comparator.comparingInt(Node::costFeet)
                 .thenComparingInt(n->n.cell.x).thenComparingInt(n->n.cell.z).thenComparingDouble(n->n.cell.y));
         private Node current;
@@ -77,7 +85,7 @@ public final class SrdMovement {
         public Search(Cell start,int remainingFeet) {
         if(remainingFeet<0 || remainingFeet>MAX_TURN_FEET) throw new IllegalArgumentException("Invalid movement allowance");
         this.start=Objects.requireNonNull(start);this.remainingFeet=remainingFeet;
-        Node first=new Node(start,0,null); nodes.put(start,first); queue.add(first);
+        Node first=new Node(start,0,null); nodes.put(start,first); shapes.put(start,new Shape(0,0,0,0)); queue.add(first);
         }
         /** Cooperative deadline: one terrain edge is indivisible. No live world access is implied by this class. */
         public boolean advance(Terrain terrain,int maxEdges,long deadlineNanos) {
@@ -108,9 +116,15 @@ public final class SrdMovement {
                 int cost=current.costFeet+edge.feet;
                 if(cost>remainingFeet) { boundaries.add(new Boundary(current.cell,dx,dz,Reason.OUT_OF_BUDGET)); return; }
                 Node previous=nodes.get(edge.to);
-                if(previous!=null && previous.costFeet<=cost) return;
+                var parentShape=shapes.get(current.cell);
+                int length=parentShape.length+(dx!=0&&dz!=0?1414:1000);
+                int turns=parentShape.turns+(current.parent!=null&&(parentShape.dx!=dx||parentShape.dz!=dz)?1:0);
+                if(previous!=null){
+                    var old=shapes.get(edge.to);
+                    if(previous.costFeet<cost || previous.costFeet==cost&&(old.length<length || old.length==length&&old.turns<=turns))return;
+                }
                 if(previous==null && nodes.size()>=MAX_NODES) { truncated=true; return; }
-                Node next=new Node(edge.to,cost,current.cell); nodes.put(edge.to,next); queue.add(next);
+                Node next=new Node(edge.to,cost,current.cell); nodes.put(edge.to,next); shapes.put(edge.to,new Shape(length,turns,dx,dz)); queue.add(next);
         }
         public Preview result() {
             if(!done) throw new IllegalStateException("Search still pending");

@@ -432,7 +432,9 @@ public final class SrdEncounter implements Encounter {
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         data.addProperty("moving",movement!=null && movement.moving());
+        if(movement!=null&&movement.motion()!=null)data.add("motion",movement.motion());
         if(current()!=null&&controls(p,current())){
+            data.addProperty("routeStatus",movement==null?"Unavailable":movement.routeStatus());
             data.addProperty("prone",prone(current()));data.addProperty("standCost",movement==null?0:SrdMovement.standingCost(movement.speedFeet()));
             data.addProperty("canPosture",state==State.ACTIVE&&movement!=null&&!movement.moving()&&(transaction==null||transaction.state==TransactionState.COMMITTED)&&(!prone(current())||movement.speedFeet()>0&&movement.remainingFeet()>=SrdMovement.standingCost(movement.speedFeet())));
         }

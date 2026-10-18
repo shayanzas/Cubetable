@@ -12,6 +12,12 @@ public final class SrdMovementPreview {
                             List<Reason> boundaryReasons) {
         public Selection { path=List.copyOf(path); boundaryReasons=List.copyOf(boundaryReasons); }
     }
+    public record Details(Cell destination,Selection selection,long revision,boolean stale,String routeStatus) {}
+    private long revision=-1;
+    private boolean stale=true;
+    private String routeStatus="Unavailable";
+    public void context(long revision,String status,boolean stale){this.revision=revision;routeStatus=status;this.stale=stale;}
+    public Details details(Cell destination){return new Details(destination,select(destination),revision,stale,routeStatus);}
     private Preview preview;
     private List<Cell> window=List.of();
     private record CachedSelection(Selection selection,Set<Cell> pathCells) {}
@@ -19,12 +25,12 @@ public final class SrdMovementPreview {
     private final LinkedHashMap<Cell,CachedSelection> selections=new LinkedHashMap<>(64,.75f,true);
     public void apply(String profile,Preview serverPreview) {
         if(!RulesProfiles.SRD.equals(profile)) throw new IllegalArgumentException("SRD preview cannot consume another ruleset");
-        preview=Objects.requireNonNull(serverPreview);
+        preview=Objects.requireNonNull(serverPreview);stale=false;
         selections.clear();var start=preview.start();
         window=preview.reachable().keySet().stream().filter(c->Math.abs(c.x()-start.x())<=10 && Math.abs(c.z()-start.z())<=6)
                 .sorted(Comparator.comparingDouble(Cell::y)).toList();
     }
-    public void clear() { preview=null;window=List.of();selections.clear(); }
+    public void clear() { preview=null;stale=true;revision=-1;routeStatus="Unavailable";window=List.of();selections.clear(); }
     public List<Cell> localWindow() {return window;}
     public int retainedSelections() {return selections.size();}
     public Selection select(Cell destination) {
@@ -43,9 +49,7 @@ public final class SrdMovementPreview {
         if(node!=null) return new Selection(Reason.OK,preview.pathTo(destination),OptionalInt.of(node.costFeet()),
                 preview.remainingFeet()-node.costFeet(),List.of());
         // Reasons describe failed approach edges, not proof of a globally impassable destination.
-        List<Reason> reasons=preview.boundaries().stream()
-                .filter(b->b.from().x()+b.dx()==destination.x() && b.from().z()+b.dz()==destination.z())
-                .map(Boundary::reason).distinct().toList();
+        List<Reason> reasons=preview.approachReasons(destination);
         return new Selection(preview.status(destination),List.of(),OptionalInt.empty(),preview.remainingFeet(),reasons);
     }
 }

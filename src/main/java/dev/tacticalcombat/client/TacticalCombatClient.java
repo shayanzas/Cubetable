@@ -109,6 +109,8 @@ public class TacticalCombatClient implements ClientModInitializer {
         });
 		WorldRenderEvents.AFTER_TRANSLUCENT.register(GridRenderer::render);
 		WorldRenderEvents.AFTER_TRANSLUCENT.register(SrdGridRenderer::render);
+        WorldRenderEvents.BEFORE_ENTITIES.register(ctx->SrdMotion.rendering=true);
+        WorldRenderEvents.AFTER_ENTITIES.register(ctx->SrdMotion.rendering=false);
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			ClientCombatState.tick(client);

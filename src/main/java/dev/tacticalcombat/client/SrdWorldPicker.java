@@ -22,7 +22,7 @@ public final class SrdWorldPicker {
         var camera=mc.gameRenderer.getCamera();var eye=entity.getPos().add(0,entity.getHeight()*.85,0);
         var hit=mc.world.raycast(new RaycastContext(camera.getPos(),eye,RaycastContext.ShapeType.COLLIDER,RaycastContext.FluidHandling.NONE,mc.player));
         if(hit.getType()==HitResult.Type.BLOCK)return null;
-        var relative=entity.getPos().add(0,entity.getHeight()+.3,0).subtract(camera.getPos());
+        var relative=SrdMotion.position(entity,1).add(0,entity.getHeight()+.3,0).subtract(camera.getPos());
         var v=new Vector3f((float)relative.x,(float)relative.y,(float)relative.z).rotate(new Quaternionf(camera.getRotation()).conjugate());
         var clip=new Vector4f(v,1).mul(projection);if(clip.w<=0)return null;
         float x=clip.x/clip.w,y=clip.y/clip.w;if(Math.abs(x)>1||Math.abs(y)>1)return null;
@@ -40,7 +40,7 @@ public final class SrdWorldPicker {
         for(var value:ClientSrdCombat.actors()){
             var a=value.getAsJsonObject();var entity=mc.world.getEntityById(a.get("entity").getAsInt());
             if(entity==null || !entity.getUuidAsString().equals(a.get("id").getAsString()))continue;
-            var point=entity.getBoundingBox().raycast(origin,end);
+            var point=entity.getBoundingBox().offset(SrdMotion.position(entity,1).subtract(entity.getPos())).raycast(origin,end);
             if(point.isPresent() && point.get().distanceTo(origin)<distance){distance=point.get().distanceTo(origin);selected=a.get("id").getAsString();}
         }
         var grid=ClientSrdCombat.grid;

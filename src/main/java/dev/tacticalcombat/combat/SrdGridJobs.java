@@ -31,7 +31,15 @@ final class SrdGridJobs {
             var cell=new JsonArray();cell.add(n.cell().x());cell.add(n.cell().z());cell.add(n.cell().y());cell.add(n.costFeet());
             if(n.parent()!=null) {cell.add(n.parent().x());cell.add(n.parent().z());cell.add(n.parent().y());}cells.add(cell);
         }
-        extra.add("grid",cells);extra.addProperty("truncated",grid.truncated());return extra;
+        extra.add("grid",cells);extra.addProperty("truncated",grid.truncated());
+        var boundaries=new JsonArray();int bytes=extra.toString().length();
+        // Nearest-cost edges arrive first from Dijkstra. Keep packet headroom for actor snapshots.
+        for(var b:grid.boundaries()){
+            var a=new JsonArray();a.add(b.from().x());a.add(b.from().z());a.add(b.from().y());a.add(b.dx());a.add(b.dz());a.add(b.reason().name());
+            if(boundaries.size()>=256||bytes+a.toString().length()>SrdStatePayload.LIMIT-32768)break;
+            boundaries.add(a);bytes+=a.toString().length()+1;
+        }
+        extra.add("gridBoundaries",boundaries);extra.addProperty("boundariesTruncated",boundaries.size()<grid.boundaries().size());return extra;
     }
     static void tick(BiConsumer<ServerPlayerEntity,SrdStatePayload> send) {
         long began=System.nanoTime(),deadline=began+BUDGET_NANOS;

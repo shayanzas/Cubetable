@@ -32,7 +32,7 @@ public final class SrdCamera {
         engaged=true;
         String identity=ClientSrdCombat.encounter+":"+entity.getUuidAsString();
         if(!identity.equals(followed)){followed=identity;pan=Vec3d.ZERO;}
-        previousFocus=focus;focus=focus.lerp(entity.getPos().add(0,.9,0).add(pan),.2);
+        previousFocus=focus;focus=focus.lerp(SrdMotion.position(entity,1).add(0,.9,0).add(pan),.2);
         previousYaw=yaw;yaw+=MathHelper.wrapDegrees(yawTarget-yaw)*.25f;
         previousZoom=zoom;zoom+=(zoomTarget-zoom)*.25;
     }

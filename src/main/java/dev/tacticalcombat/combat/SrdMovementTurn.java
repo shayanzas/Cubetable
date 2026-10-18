@@ -33,6 +33,19 @@ public final class SrdMovementTurn {
     private int budget;
     private int spent;
     private int stepTicks=1,waitTicks;
+    private long stepSequence;
+    private int lastStepTicks;
+    private String routeStatus="Idle";
+    public String routeStatus(){return routeStatus;}
+    private Cell lastFrom,lastTo;
+    public com.google.gson.JsonObject motion(){
+        if(lastTo==null)return null;
+        var data=new com.google.gson.JsonObject();data.addProperty("sequence",stepSequence);data.addProperty("ticks",lastStepTicks);
+        var from=terrain.position(lastFrom);var to=terrain.position(lastTo);
+        var f=new com.google.gson.JsonArray();f.add(from.x);f.add(from.y);f.add(from.z);
+        var t=new com.google.gson.JsonArray();t.add(to.x);t.add(to.y);t.add(to.z);
+        data.add("from",f);data.add("to",t);return data;
+    }
     private Cell anchor;
     private List<Cell> route=List.of();
     private CharacterRepository.Principal controller;
@@ -154,10 +167,10 @@ public final class SrdMovementTurn {
             } else preview=preview(principal);
         } catch(IllegalArgumentException rejected) { return result(false,rejected.getMessage()); }
         List<Cell> path=preview.pathTo(request.destination);
-        if(path.isEmpty()) return result(false,request.destination.equals(anchor)?"Already at destination":preview.status(request.destination).name());
+        if(path.isEmpty()) return result(false,request.destination.equals(anchor)?"Already at destination":preview.status(request.destination).name()+"; approaches: "+preview.approachReasons(request.destination));
         route=path; this.stepTicks=stepTicks;waitTicks=0; completedPreview=null; controller=principal; return result(true,"Route accepted; steps revalidate before execution");
     }
-    private Result result(boolean accepted,String message) { return new Result(accepted,message,spent,remainingFeet()); }
+    private Result result(boolean accepted,String message) { routeStatus=message;return new Result(accepted,message,spent,remainingFeet()); }
     public Result cancel(CharacterRepository.Principal principal) {
         requireServerThread();
         if(!permitted(principal)) return result(false,"Movement permission denied");
@@ -185,7 +198,7 @@ public final class SrdMovementTurn {
         }
         if(total>remainingFeet()) { route=List.of(); return result(false,"Remaining route exceeds movement allowance"); }
         if(waitTicks>0){waitTicks--;return result(true,"Paced movement; next step pending");}
-        Cell next=route.getFirst(); place(next); anchor=next; spent+=firstCost;waitTicks=stepTicks-1;
+        Cell next=route.getFirst(); place(next); lastFrom=anchor;lastTo=next;lastStepTicks=stepTicks;stepSequence++; anchor=next; spent+=firstCost;waitTicks=stepTicks-1;
         route=List.copyOf(route.subList(1,route.size()));
         return result(true,"Step completed");
     }

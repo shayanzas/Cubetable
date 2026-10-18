@@ -10,7 +10,9 @@
     "InGameHudMixin",
     "KeyboardInputMixin",
     "NarrativeEditBoxAccessor",
-    "NarrativeSelectionAccessor"
+    "NarrativeSelectionAccessor",
+    "SrdEntityRenderMixin",
+    "SrdLivingRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

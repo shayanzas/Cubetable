@@ -38,7 +38,8 @@ public final class SrdGridRenderer {
         for(var value:ClientSrdCombat.actors()) {
             var a=value.getAsJsonObject();var actor=client.world.getEntityById(a.get("entity").getAsInt());
             if(actor==null||!actor.getUuidAsString().equals(a.get("id").getAsString()))continue;
-            float x=(float)actor.getX(),z=(float)actor.getZ(),y=(float)actor.getY()+.05f;
+            var shown=SrdMotion.position(actor,ctx.tickCounter().getTickDelta(false));
+            float x=(float)shown.x,z=(float)shown.z,y=(float)shown.y+.05f;
             boolean active=a.get("id").equals(ClientSrdCombat.state.get("active")),selected=actor.getId()==ClientSrdCombat.focusEntity;
             // Neutral other combatants; control is not an alliance or hostility declaration.
             int color=active?0xFFE3BD70:actor==client.player?0xEEFFFFFF:a.get("controlled").getAsBoolean()?0xCC62B9C5:0xCCAFADB2;
