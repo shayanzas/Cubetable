@@ -10,7 +10,7 @@ import static dev.tacticalcombat.uiapi.UiApiService.Operation.*;
 public final class EncounterStagesScreen extends ManagementScreen {
     private final String stage;
     public EncounterStagesScreen(Screen parent){this(parent,null);}
-    private EncounterStagesScreen(Screen parent,String stage){super(stage==null?"Saved encounter stages":"Encounter stage",parent);this.stage=stage;}
+    public EncounterStagesScreen(Screen parent,String stage){super(stage==null?"Saved encounter stages":"Encounter stage",parent);this.stage=stage;}
     @Override protected void refresh(){if(busy)return;clearRows();read(stage==null?STAGE_LIST:STAGE_GET,stage==null?args():args("stage",stage),data->{
         if(stage==null){
             row("Save new stage here","Uses your current dimension and location; does not move actors",true,"",()->edit(null));

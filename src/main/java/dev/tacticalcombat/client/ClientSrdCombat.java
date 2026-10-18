@@ -30,6 +30,8 @@ public final class ClientSrdCombat {
     static int focusEntity=-1;
     private static final LinkedHashSet<String> presented=new LinkedHashSet<>();
     private ClientSrdCombat() {}
+    public static JsonObject workspaceState(){return state.deepCopy();}
+    public static void battlefield(){MinecraftClient.getInstance().setScreen(new SrdBattlefieldScreen());}
     public static UUID hudEncounter() {return encounter;}
     public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";lastResultId="";activity.clear();pending="";reconciling=false;hover=null;unavailableHover=null;SrdCamera.clear(); }
     public static void receive(SrdStatePayload payload) {
