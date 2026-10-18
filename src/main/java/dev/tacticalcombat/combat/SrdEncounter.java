@@ -459,6 +459,7 @@ public final class SrdEncounter implements Encounter {
             entries.add(entry);
         }
         data.add("actors",entries);
+        var sequence=new JsonArray();order.forEach(id->sequence.add(id.toString()));data.add("initiativeOrder",sequence);
         var ties=new JsonArray(); for(var group:groups) if(group.size()>1) { var ids=new JsonArray(); group.forEach(id->ids.add(id.toString())); ties.add(ids); } data.add("ties",ties);
         return data;
     }

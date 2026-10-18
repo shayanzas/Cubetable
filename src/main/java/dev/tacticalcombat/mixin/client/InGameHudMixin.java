@@ -9,6 +9,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(InGameHud.class)
 public abstract class InGameHudMixin {
+    @Inject(method="renderHotbar",at=@At("HEAD"),cancellable=true)
+    private void cubetable$hideSrdHotbar(CallbackInfo ci){if(dev.tacticalcombat.client.ClientSrdCombat.hideVanillaHotbar())ci.cancel();}
 	/** The mouse is a free cursor in combat, so the screen-centre crosshair would only be misleading. */
 	@Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
 	private void tacticalcombat$hideCrosshair(CallbackInfo ci) {

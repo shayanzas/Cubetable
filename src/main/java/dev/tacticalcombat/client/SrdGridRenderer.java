@@ -28,7 +28,7 @@ public final class SrdGridRenderer {
         if(grid!=null)for(var cell:grid.reachable().keySet()) {
             float x=cell.x()+.04f,z=cell.z()+.04f,y=(float)cell.y()+.035f;
             boolean selected=cell.equals(destination),start=cell.equals(grid.start()),route=path.contains(cell);
-            int color=start?0xDDFFFFFF:selected?0xFFFFD070:route?0xDDD0AD60:0x885DA7B6;
+            int color=start?0xDDFFFFFF:selected?0xFFFFD070:route?0xDDD0AD60:0x665DA7B6;
             outline(buffer,matrix,x,y,z,.92f,selected?.07f:.025f,color);
             if(route&&!start)quad(buffer,matrix,x+.32f,y,z+.32f,.28f,.28f,color);
         }
@@ -44,6 +44,9 @@ public final class SrdGridRenderer {
             // Neutral other combatants; control is not an alliance or hostility declaration.
             int color=active?0xFFE3BD70:actor==client.player?0xEEFFFFFF:a.get("controlled").getAsBoolean()?0xCC62B9C5:0xCCAFADB2;
             outline(buffer,matrix,x-.44f,y,z-.44f,.88f,active?.06f:.035f,color);
+            if(SrdCombatEffects.hit(a.get("id").getAsString(),ClientSrdCombat.ticks))outline(buffer,matrix,x-.58f,y+.015f,z-.58f,1.16f,.065f,0xFFE5A66A);
+            if(active&&ClientSrdCombat.moving())outline(buffer,matrix,x-.48f,y+.008f,z-.48f,.96f,.035f,0xFF62B9C5);
+            if(actor.getId()==ClientSrdCombat.hoverEntity&&!selected)outline(buffer,matrix,x-.5f,y+.007f,z-.5f,1f,.025f,0xBBD4B0F2);
             if(selected)outline(buffer,matrix,x-.55f,y+.005f,z-.55f,1.1f,.045f,0xFFD4B0F2);
             if(active){quad(buffer,matrix,x-.12f,y,z-.62f,.24f,.12f,color);quad(buffer,matrix,x-.12f,y,z+.5f,.24f,.12f,color);}
         }

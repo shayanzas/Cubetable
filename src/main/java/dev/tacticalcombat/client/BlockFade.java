@@ -40,6 +40,7 @@ public final class BlockFade {
 	private static volatile Set<Long> seeThrough = Set.of();
 	private static int counter;
 	private static boolean force;
+    private static ClientWorld previousWorld;
 
 	private BlockFade() {}
 
@@ -61,8 +62,9 @@ public final class BlockFade {
 	}
 
 	public static void clear() {
-		faded = Set.of();
-		seeThrough = Set.of();
+		if(previousWorld!=null)apply(previousWorld,Set.of());
+        faded = Set.of();
+		seeThrough = Set.of();previousWorld=null;force=false;counter=0;
 	}
 
 	public static void tick(MinecraftClient mc) {
@@ -71,9 +73,10 @@ public final class BlockFade {
 			clear();
 			return;
 		}
-		boolean want = (ClientCombatState.active || SrdCamera.engaged()) && SrdCamera.cameraBlend(1.0f) > 0.5f;
+		if(previousWorld!=world){clear();previousWorld=world;}
+        boolean want = (ClientCombatState.active || SrdCamera.engaged()) && SrdCamera.cameraBlend(1.0f) > 0.5f;
 		if (!want && faded.isEmpty()) return;
-		if (!force && ++counter % INTERVAL != 0) return;
+		if (++counter % INTERVAL != 0 && want && !(ClientCombatState.active&&force)) return;
 		force = false;
 
 		Set<Long> next = Set.of();
@@ -82,7 +85,11 @@ public final class BlockFade {
 			Entity target = SrdCamera.followedEntity(mc);
 			if (target != null) {
 				from = mc.gameRenderer.getCamera().getPos();
-				next = computeFaded(world, from, target);
+				if(ClientCombatState.active)next=computeFaded(world,from,target);
+                    else{
+                        var to=SrdMotion.position(target,1);var candidates=SrdOcclusionMask.candidates(from.x,from.y,from.z,to.x,to.y+target.getHeight()*.6,to.z,to.y);
+                        var narrow=new HashSet<Long>();for(var c:candidates){var p=new BlockPos(c.x(),c.y(),c.z());if(world.isChunkLoaded(c.x()>>4,c.z()>>4)&&occludes(world,p))narrow.add(p.asLong());}next=Set.copyOf(narrow);
+                    }
 			}
 		}
 
@@ -209,7 +216,8 @@ public final class BlockFade {
 
 		faded = next; // publish first: the rebuild reads it
 		for (BlockPos p : sections.values()) {
-			BlockState s = world.getBlockState(p);
+			if(!world.isChunkLoaded(p.getX()>>4,p.getZ()>>4))continue;
+            BlockState s = world.getBlockState(p);
 			world.updateListeners(p, s, s, 0); // schedules a re-render of the section around p
 		}
 	}

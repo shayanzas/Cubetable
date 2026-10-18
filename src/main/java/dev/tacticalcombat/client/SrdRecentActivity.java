@@ -12,5 +12,7 @@ public final class SrdRecentActivity {
         if(entries.size()==32)entries.removeFirst();entries.addLast(new Event(id,text,tick));
     }
     public List<Event> newest(){var result=new ArrayList<>(entries);Collections.reverse(result);return List.copyOf(result);}
-    public Event toast(long tick){var event=entries.peekLast();return event!=null&&tick-event.tick()<200?event:null;}
+    private static int priority(String id){return id.startsWith("attack:")?3:id.startsWith("denied:")||id.startsWith("pause:")?2:id.startsWith("turn:")?1:0;}
+    public static String category(String id){return id.startsWith("attack:")?"ATTACK":id.startsWith("denied:")?"REJECTED":id.startsWith("turn:")?"TURN":id.startsWith("move:")?"MOVEMENT":id.startsWith("posture:")?"POSTURE":id.startsWith("dodge:")?"DODGE":id.startsWith("dash:")?"DASH":id.startsWith("preview:")?"PREVIEW":"STATUS";}
+    public Event toast(long tick){Event best=null;for(var event:entries)if(tick-event.tick()<200&&(best==null||priority(event.id())>=priority(best.id())))best=event;return best;}
 }

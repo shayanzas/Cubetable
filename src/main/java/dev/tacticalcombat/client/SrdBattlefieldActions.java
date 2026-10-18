@@ -39,6 +39,11 @@ public final class SrdBattlefieldActions {
         if(!permitted)throw new IllegalArgumentException("Attack choice is no longer available");
         var args=new JsonObject();args.addProperty("target",target);args.addProperty("weapon",choice.weapon().name());args.addProperty("ability",choice.ability().name());args.addProperty("mode",choice.mode().name());args.addProperty("twoHands",choice.twoHands());return args;
     }
+    public static boolean matchesPreview(JsonObject state,JsonObject preview,String target,long revision){
+        return preview!=null&&preview.has("actor")&&preview.has("target")&&preview.has("turn")&&preview.has("revision")&&state.has("active")&&state.has("turn")
+            &&preview.get("actor").equals(state.get("active"))&&preview.get("target").getAsString().equals(target)&&preview.get("turn").equals(state.get("turn"))&&preview.get("revision").getAsLong()==revision;
+    }
+    public static boolean canConfirm(JsonObject state,JsonObject preview,String target,long revision,String pending){return pending.isEmpty()&&SrdViewPolicy.canControl(state)&&!state.get("moving").getAsBoolean()&&!state.get("actionUsed").getAsBoolean()&&matchesPreview(state,preview,target,revision);}
     public static JsonObject confirmation(JsonObject serverPreview){
         if(serverPreview==null||!serverPreview.has("id"))throw new IllegalArgumentException("Request a server preview first");
         var args=new JsonObject();args.addProperty("intent",UUID.fromString(serverPreview.get("id").getAsString()).toString());return args;

@@ -138,8 +138,11 @@ public final class SrdNetworking {
                             args.has("mode")?SrdRules.AttackMode.valueOf(args.get("mode").getAsString()):SrdRules.AttackMode.MELEE,
                             SrdCharacter.Ability.valueOf(args.get("ability").getAsString()),args.get("twoHands").getAsBoolean());
                     var plan=intent.plan(); var preview=new JsonObject(); preview.addProperty("id",intent.id().toString());
+                    preview.addProperty("actor",intent.actor().toString());preview.addProperty("target",intent.target().toString());preview.addProperty("turn",intent.turn());preview.addProperty("revision",encounter.revision());
+                    extra.addProperty("previewRequest",request.request().toString());
                     preview.addProperty("weapon",plan.weapon().name()); preview.addProperty("modifier",plan.attackModifier());
                     var mode=SrdRules.rollMode(intent.geometry().advantage(),intent.geometry().disadvantage()||plan.disadvantage());
+                    preview.addProperty("rollMode",mode.name());
                     preview.addProperty("attack",(mode==SrdRules.RollMode.NORMAL?"1d20":mode==SrdRules.RollMode.ADVANTAGE?"2d20 keep highest":"2d20 keep lowest")+" + "+plan.attackModifier());
                     preview.addProperty("damage",plan.dice()==0?Integer.toString(plan.flatDamage()):plan.dice()+"d"+plan.sides()+" + "+plan.flatDamage());
                     preview.addProperty("type",plan.weapon().damageType.name()); preview.addProperty("minimum",plan.minimumDamage()); preview.addProperty("maximum",plan.maximumDamage());
@@ -170,25 +173,27 @@ public final class SrdNetworking {
                 default -> throw new IllegalArgumentException("Unsupported SRD operation");
             }
             if(code.equals("REJECTED")) rejection(encounter,player,request);
+            extra.addProperty("replyRequest",request.request().toString());
             selectWatch(player,encounter.id()); return state(encounter,p,code,message,extra);
-        } catch(java.io.IOException storage) { return new SrdStatePayload(request.encounter(),revision,"STORAGE_ERROR","Healing was not committed; refresh and retry","{}"); }
+        } catch(java.io.IOException storage) { return new SrdStatePayload(request.encounter(),revision,"STORAGE_ERROR","Healing was not committed; refresh and retry",replyIdentity(request)); }
         catch(RuntimeException denied) {
             if(admitted!=null) rejection(admitted,player,request);
             String text=denied.getMessage()==null?"Invalid SRD request":denied.getMessage();
-            return new SrdStatePayload(request.encounter(),revision,"REJECTED",text.substring(0,Math.min(256,text.length())),"{}");
+            return new SrdStatePayload(request.encounter(),revision,"REJECTED",text.substring(0,Math.min(256,text.length())),admitted==null?"{}":replyIdentity(request));
         }
     }
+    private static String replyIdentity(SrdRequestPayload request){var data=new JsonObject();data.addProperty("replyRequest",request.request().toString());return data.toString();}
     private static SrdStatePayload replay(ServerPlayerEntity player,SrdRequestPayload request,GameplayReceipt raw){
         var repo=CharacterService.repository();var who=CharacterService.principal(player);var receipt=repo.visibleReceipt(who,raw.plan().operation());var plan=receipt.plan();
         if(!plan.encounter().equals(request.encounter())||plan.turn()!=request.turn())throw new IllegalArgumentException("Operation identity reused with altered encounter or turn");
-        var extra=new JsonObject();extra.addProperty("operation",plan.operation().toString());extra.addProperty("status",receipt.status().name());
+        var extra=new JsonObject();extra.addProperty("replyRequest",request.request().toString());extra.addProperty("replayed",true);extra.addProperty("operation",plan.operation().toString());extra.addProperty("status",receipt.status().name());
         if(receipt.status()==GameplayReceipt.Status.COMMITTED)extra.add("result",result(plan,who));
         var encounter=find(request.encounter());String message="Stored gameplay operation: "+receipt.status()+"; no resources spent again";
         if(encounter!=null){encounter.authorizeViewer(who);selectWatch(player,encounter.id());return state(encounter,who,receipt.status()==GameplayReceipt.Status.COMMITTED?"RESULT":"SAVE_FAILED",message,extra);}
         return new SrdStatePayload(request.encounter(),0,"RECEIPT",message,extra.toString());
     }
     static JsonObject result(GameplayActionPlan plan,CharacterRepository.Principal viewer){
-        var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("action",plan.operation().toString());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
+        var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("action",plan.operation().toString());roll.addProperty("turn",plan.turn());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
         var faces=new JsonArray();outcome.roll().faces().forEach(faces::add);roll.add("faces",faces);var damage=new JsonArray();outcome.damageFaces().forEach(damage::add);roll.add("damageFaces",damage);
         var attack=plan.attack();var mode=SrdRules.rollMode(attack.advantage(),attack.disadvantage()||SrdRules.plan(plan.attacker().before(),attack.weapon(),attack.mode(),attack.ability(),attack.twoHands()).disadvantage());roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);
         roll.addProperty("actor",plan.attacker().actor().toString());roll.addProperty("target",plan.target().actor().toString());
