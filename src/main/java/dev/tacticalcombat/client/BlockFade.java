@@ -71,7 +71,7 @@ public final class BlockFade {
 			clear();
 			return;
 		}
-		boolean want = ClientCombatState.active && ClientCombatState.cameraBlend(1.0f) > 0.5f;
+		boolean want = (ClientCombatState.active || SrdCamera.engaged()) && SrdCamera.cameraBlend(1.0f) > 0.5f;
 		if (!want && faded.isEmpty()) return;
 		if (!force && ++counter % INTERVAL != 0) return;
 		force = false;
@@ -79,7 +79,7 @@ public final class BlockFade {
 		Set<Long> next = Set.of();
 		Vec3d from = null;
 		if (want) {
-			Entity target = ClientCombatState.activeEntity(mc);
+			Entity target = SrdCamera.followedEntity(mc);
 			if (target != null) {
 				from = mc.gameRenderer.getCamera().getPos();
 				next = computeFaded(world, from, target);

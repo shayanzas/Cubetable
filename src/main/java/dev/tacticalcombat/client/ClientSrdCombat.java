@@ -14,15 +14,19 @@ public final class ClientSrdCombat {
     static UUID encounter;
     static long revision=-1,turn;
     static JsonObject state=new JsonObject(),preview;
+    static String lastResult="";
     static String message="No SRD encounter selected";
     static final SrdMovementPreview movement=new SrdMovementPreview();
     static SrdMovement.Preview grid;
     private static final SrdGridRequests gridRequests=new SrdGridRequests();
+    private static final SrdGridRefresh refresh=new SrdGridRefresh();
+    private static long ticks;
+    static SrdMovement.Cell selected;
     static int focusEntity=-1;
     private static final LinkedHashSet<String> presented=new LinkedHashSet<>();
     private ClientSrdCombat() {}
     public static UUID hudEncounter() {return encounter;}
-    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear(); }
+    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";SrdCamera.clear(); }
     public static void receive(SrdStatePayload payload) {
         if(payload.code().equals("RECEIPT")){message=payload.message();return;} // Closed encounter receipt never reconstructs world/combat state.
         if(payload.code().equals("ENDED")) {
@@ -35,15 +39,17 @@ public final class ClientSrdCombat {
             var data=JsonParser.parseString(payload.json()).getAsJsonObject();
             boolean currentGrid=gridRequests.accepts(payload.encounter(),data.has("gridRequest")?data.get("gridRequest").getAsString():null);
             if(data.getAsJsonArray("actors").size()>16) throw new IllegalArgumentException("Too many SRD actors");
-            boolean changed=!payload.encounter().equals(encounter) || payload.revision()!=revision;
-            if(!payload.encounter().equals(encounter)) presented.clear();
-            if(changed) { preview=null; grid=null; movement.clear(); }
+            boolean changed=!payload.encounter().equals(encounter) || payload.revision()!=revision || !data.get("actors").equals(state.get("actors"));
+            if(!payload.encounter().equals(encounter)) {presented.clear();lastResult="";}
+            if(!SrdViewPolicy.permissions(data).equals(SrdViewPolicy.permissions(state)))lastResult="";
+            if(changed) { preview=null; grid=null; selected=null; movement.clear(); }
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong();
             if(currentGrid) message=payload.message();
+            if(!canControl()) {grid=null;selected=null;preview=null;movement.clear();}
             if(currentGrid && (payload.code().equals("GRID_PENDING") || payload.code().equals("GRID_CANCELLED"))) {grid=null;movement.clear();}
             if(data.has("preview")) preview=data.getAsJsonObject("preview");
             if(data.has("result")) {
-                var result=data.getAsJsonObject("result"); message="Authoritative attack: "+result.get("total")+(result.get("critical").getAsBoolean()?" critical hit":result.get("hit").getAsBoolean()?" hit":" miss");
+                var result=data.getAsJsonObject("result"); message=SrdAttackFeedback.describe(result,actors());lastResult=message;
                 var player=MinecraftClient.getInstance().player;
                 if(presented.add(result.get("action").getAsString())) {
                     if(presented.size()>32) presented.remove(presented.iterator().next());
@@ -53,7 +59,7 @@ public final class ClientSrdCombat {
                             result.get("total").getAsInt()-result.get("chosen").getAsInt(),result.get("keep").getAsInt(),faces.asList().stream().mapToInt(JsonElement::getAsInt).toArray()));
                 }
             }
-            if(data.has("grid") && currentGrid) {
+            if(data.has("grid") && currentGrid && canControl()) {
                 var cells=data.getAsJsonArray("grid"); if(cells.size()>SrdMovement.MAX_NODES) throw new IllegalArgumentException("Grid too large");
                 var nodes=new HashMap<SrdMovement.Cell,SrdMovement.Node>(); SrdMovement.Cell start=null;
                 for(var value:cells) {
@@ -70,11 +76,20 @@ public final class ClientSrdCombat {
     static void send(String operation,JsonObject args) {
         if(encounter==null || !ClientPlayNetworking.canSend(SrdRequestPayload.ID)) { message="Updated SRD server required"; return; }
         UUID request=UUID.randomUUID();
-        if(operation.equals("grid")) {gridRequests.expect(encounter,request);grid=null;movement.clear();message="Requesting grid…";}
+        if(operation.equals("grid")) {selected=null;refresh.requested(encounter,revision,turn,ticks);gridRequests.expect(encounter,request);grid=null;movement.clear();message="Requesting grid…";}
         ClientPlayNetworking.send(new SrdRequestPayload(encounter,turn,request,operation,args.toString()));
+    }
+    public static boolean localParticipant(){var p=MinecraftClient.getInstance().player;return p!=null && SrdViewPolicy.participant(state,p.getUuidAsString());}
+    static boolean active() {return encounter!=null && state.has("state") && !state.get("state").getAsString().equals("ENDED");}
+    static boolean canControl() {return active() && SrdViewPolicy.canControl(state); }
+    static boolean moving() {return state.has("moving") && state.get("moving").getAsBoolean();}
+    static void tick() {
+        ticks++;
+        boolean eligible=SrdCamera.activeEntity(MinecraftClient.getInstance())!=null && canControl() && !moving() && state.get("remainingFeet").getAsInt()>=5;
+        if(refresh.due(encounter,revision,turn,eligible,ticks))send("grid");
     }
     static void send(String operation) { send(operation,new JsonObject()); }
     static JsonArray actors() { return state.has("actors")?state.getAsJsonArray("actors"):new JsonArray(); }
-    static JsonObject current() { for(var a:actors()) if(a.getAsJsonObject().get("id").getAsString().equals(state.get("active").getAsString())) return a.getAsJsonObject(); return null; }
-    public static void open() { MinecraftClient.getInstance().setScreen(new SrdCombatScreen()); }
+    static JsonObject current() {return SrdViewPolicy.current(state);}
+    public static void open() { MinecraftClient.getInstance().setScreen(SrdCombatScreen.entry(null)); }
 }

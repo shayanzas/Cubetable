@@ -112,6 +112,8 @@ public class TacticalCombatClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			ClientCombatState.tick(client);
+            ClientSrdCombat.tick();
+            SrdCamera.tick(client);
             dev.tacticalcombat.client.ui.CubetableHud.tick(client);
             while(DICE_TOOLBAR_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.DiceToolbarScreen(null,false));
             while(QUICK_SHEET_KEY.wasPressed())if(client.player!=null&&client.currentScreen==null)client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(null,false));
@@ -140,6 +142,7 @@ public class TacticalCombatClient implements ClientModInitializer {
 	}
 
 	public static void sendEndTurn() {
+        if(!ClientCombatState.active && ClientSrdCombat.canControl()){ClientSrdCombat.send("endturn");return;}
 		if (ClientCombatState.isMyTurn()) {
 			ClientPlayNetworking.send(new EndTurnPayload(ClientCombatState.stamp()));
 		}
@@ -152,7 +155,9 @@ public class TacticalCombatClient implements ClientModInitializer {
 			if (client.currentScreen == null) {
 				client.setScreen(new TacticalScreen());
 			}
-		} else if (client.currentScreen instanceof TacticalScreen) {
+		} else if (SrdCamera.engaged()) {
+            if(client.currentScreen==null)client.setScreen(new SrdBattlefieldScreen());
+        } else if (client.currentScreen instanceof SrdBattlefieldScreen || client.currentScreen instanceof TacticalScreen) {
 			client.setScreen(null);
 		}
 	}

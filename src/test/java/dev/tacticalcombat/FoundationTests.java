@@ -116,6 +116,7 @@ public final class FoundationTests {
         dev.tacticalcombat.character.RulesProjectionTests.run();
         SrdRulesTests.run();
         SrdMovementTests.run();
+        dev.tacticalcombat.client.SrdWorldInteractionTests.run();
         SrdAuthoringTests.run();
         dev.tacticalcombat.character.SrdResourceFaultTests.run();
         dev.tacticalcombat.character.GameplayTransactionBaselineTests.run();

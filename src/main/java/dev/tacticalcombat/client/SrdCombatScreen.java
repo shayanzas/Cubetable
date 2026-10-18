@@ -12,7 +12,7 @@ import java.util.*;
 public final class SrdCombatScreen extends Screen {
     private int weaponIndex,targetIndex,page;
     private boolean dex,twoHands;
-    private int mode;
+    private int mode,choiceIndex;
     private int rosterPage;
     private long renderedRevision=-2;
     private JsonObject renderedPreview;
@@ -21,8 +21,17 @@ public final class SrdCombatScreen extends Screen {
     private List<SrdMovement.Cell> cells=List.of();
     private final List<String> tieChoice=new ArrayList<>();
     private final Screen parent;
+    private boolean battlefieldOnReady;
     public SrdCombatScreen() {this(null);}
     public SrdCombatScreen(Screen parent) {super(Text.literal("SRD controlled encounter"));this.parent=parent;page=ClientSrdCombat.state.has("state")&&ClientSrdCombat.state.get("state").getAsString().equals("PENDING")?1:2;}
+    public static Screen entry(Screen parent) {
+        var screen=new SrdCombatScreen(parent);screen.battlefieldOnReady=true;return screen;
+    }
+    static void attackTarget(String id) {
+        var screen=new SrdCombatScreen(new SrdBattlefieldScreen());screen.page=0;
+        for(int i=0;i<ClientSrdCombat.actors().size();i++)if(ClientSrdCombat.actors().get(i).getAsJsonObject().get("id").getAsString().equals(id))screen.targetIndex=i;
+        net.minecraft.client.MinecraftClient.getInstance().setScreen(screen);
+    }
     @Override public boolean keyPressed(int key,int scan,int modifiers) {
         if(TacticalCombatClient.QUICK_SHEET_KEY.matchesKey(key,scan)){client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(this,false));return true;}
         if(TacticalCombatClient.DM_QUICK_KEY.matchesKey(key,scan)){client.setScreen(new dev.tacticalcombat.client.ui.QuickPanelScreen(this,true));return true;}
@@ -38,11 +47,12 @@ public final class SrdCombatScreen extends Screen {
     @Override protected void init() {
         clearChildren(); int x=left(),w=panel(),half=(w-4)/2;
         button("Refresh",x,height-24,half,()->ClientSrdCombat.send("state"));
-        button("Close",x+half+4,height-24,half,this::close);
+        button("Battlefield",x+half+4,height-24,half,()->client.setScreen(new SrdBattlefieldScreen()));
         if(ClientSrdCombat.encounter==null) return;
+        button("End turn",x+half+4,height-48,half,()->ClientSrdCombat.send("endturn")).active=ClientSrdCombat.canControl();
         button(List.of("Movement / DM →","Status / initiative →","Attack controls →").get(page),x,46,w,()->{page=(page+1)%3;selected=null;init();});
-        if(page==0) attackControls(x,w,half); else if(page==1) movementControls(x,w,half);
-        else button("Next actors",x,height-48,w,()->{rosterPage++;init();});
+        if(page==0 && ClientSrdCombat.canControl()) attackControls(x,w,half); else if(page==1) movementControls(x,w,half);
+        else button("Next actors",x,height-48,half,()->{rosterPage++;init();});
     }
     private List<String> weapons() {
         var actor=ClientSrdCombat.current(); if(actor==null || !actor.has("weapons")) return List.of("UNARMED");
@@ -63,23 +73,22 @@ public final class SrdCombatScreen extends Screen {
             return;
         }
         button("Weapon: "+weapon(),x,70,w,()->{weaponIndex++;ClientSrdCombat.preview=null;init();});
-        int third=(w-8)/3;
-        button(dex?"DEX":"STR",x,94,third,()->{dex=!dex;ClientSrdCombat.preview=null;init();});
-        button(twoHands?"Two hands":"One hand",x+third+4,94,third,()->{twoHands=!twoHands;ClientSrdCombat.preview=null;init();});
-        button(List.of("Melee","Ranged","Thrown").get(mode),x+2*third+8,94,third,()->{mode=(mode+1)%3;ClientSrdCombat.preview=null;init();});
+        var choices=SrdAttackChoices.forWeapon(weapon(),current!=null&&current.has("monsterAbility")?current.get("monsterAbility").getAsString():null);
+        var choice=choices.get(Math.floorMod(choiceIndex,choices.size()));dex=choice.ability()==dev.tacticalcombat.rules.srd.SrdCharacter.Ability.DEX;
+        twoHands=choice.twoHands();mode=List.of("MELEE","RANGED","THROWN").indexOf(choice.mode().name());
+        button(choice.mode()+" / "+choice.ability()+" / "+(twoHands?"two hands":"one hand"),x,94,w,()->{choiceIndex++;ClientSrdCombat.preview=null;init();});
         button("Target: "+(target()==null?"none":target().get("name").getAsString()+" #"+target().get("entity")),x,118,w,()->{targetIndex++;ClientSrdCombat.preview=null;init();});
         button("Request attack preview",x,142,w,()->{
             if(target()==null) return;
             var args=new JsonObject(); args.addProperty("target",target().get("id").getAsString()); args.addProperty("weapon",weapon()); args.addProperty("ability",dex?"DEX":"STR"); args.addProperty("twoHands",twoHands);args.addProperty("mode",List.of("MELEE","RANGED","THROWN").get(mode)); ClientSrdCombat.send("preview",args);
         });
-        button("End turn",x,height-48,w,()->ClientSrdCombat.send("endturn"));
     }
     private void movementControls(int x,int w,int half) {
-        button("Request reachable grid",x,70,half,()->ClientSrdCombat.send("grid"));
-        button("Cancel route",x+half+4,70,half,()->ClientSrdCombat.send("cancel"));
-        button("Move to selected square",x,height-48,w,()->{
+        button("Request reachable grid",x,70,half,()->ClientSrdCombat.send("grid")).active=ClientSrdCombat.canControl()&&!ClientSrdCombat.moving();
+        button("Cancel route",x+half+4,70,half,()->ClientSrdCombat.send("cancel")).active=ClientSrdCombat.canControl();
+        button("Move selected square",x,height-48,half,()->{
             if(selected==null) return; var args=new JsonObject(); args.addProperty("x",selected.x()); args.addProperty("z",selected.z()); args.addProperty("y",selected.y()); ClientSrdCombat.send("move",args); selected=null;
-        });
+        }).active=ClientSrdCombat.canControl()&&!ClientSrdCombat.moving();
         if(ClientSrdCombat.state.get("manager").getAsBoolean()) {
             button("Retry saved attack",x,94,half,()->ClientSrdCombat.send("retry"));
             button("End encounter",x+half+4,94,half,()->client.setScreen(new net.minecraft.client.gui.screen.ConfirmScreen(yes->{if(yes)ClientSrdCombat.send("end");client.setScreen(this);},Text.literal("End controlled encounter?"),Text.literal("Persistent D&D HP is retained. A failed save remains unresolved."))));
@@ -91,6 +100,9 @@ public final class SrdCombatScreen extends Screen {
         }
     }
     @Override public void tick() {
+        if(battlefieldOnReady && ClientSrdCombat.active() && ClientSrdCombat.state.get("state").getAsString().equals("ACTIVE")) {
+            client.setScreen(new SrdBattlefieldScreen());return;
+        }
         if(renderedRevision!=ClientSrdCombat.revision || renderedPreview!=ClientSrdCombat.preview || !Objects.equals(renderedEncounter,ClientSrdCombat.encounter)) {
             renderedRevision=ClientSrdCombat.revision; renderedPreview=ClientSrdCombat.preview; renderedEncounter=ClientSrdCombat.encounter; selected=null; init();
         }

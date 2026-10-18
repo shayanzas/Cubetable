@@ -1,6 +1,6 @@
 package dev.tacticalcombat.mixin.client;
 
-import dev.tacticalcombat.client.ClientCombatState;
+import dev.tacticalcombat.client.SrdCamera;
 import net.minecraft.client.render.GameRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,7 +12,7 @@ public abstract class GameRendererMixin {
 	/** The first-person hand floats in mid air when the camera is far away, so hide it. */
 	@Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
 	private void tacticalcombat$hideHand(CallbackInfo ci) {
-		if (ClientCombatState.cameraBlend(1.0f) > 0.01f) {
+		if (SrdCamera.cameraBlend(1.0f) > 0.01f) {
 			ci.cancel();
 		}
 	}

@@ -12,7 +12,7 @@ public abstract class InGameHudMixin {
 	/** The mouse is a free cursor in combat, so the screen-centre crosshair would only be misleading. */
 	@Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
 	private void tacticalcombat$hideCrosshair(CallbackInfo ci) {
-		if (ClientCombatState.active) {
+		if (ClientCombatState.active || dev.tacticalcombat.client.SrdCamera.engaged()) {
 			ci.cancel();
 		}
 	}

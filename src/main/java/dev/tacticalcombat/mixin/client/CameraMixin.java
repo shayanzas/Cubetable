@@ -1,6 +1,6 @@
 package dev.tacticalcombat.mixin.client;
 
-import dev.tacticalcombat.client.ClientCombatState;
+import dev.tacticalcombat.client.SrdCamera;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
@@ -33,7 +33,7 @@ public abstract class CameraMixin {
 											   float tickDelta, CallbackInfo ci) {
 		if (inverseView || focusedEntity == null) return;
 
-		float blend = ClientCombatState.cameraBlend(tickDelta);
+		float blend = SrdCamera.cameraBlend(tickDelta);
 		if (blend <= 0.001f) return;
 
 		Camera self = (Camera) (Object) this;
@@ -41,16 +41,16 @@ public abstract class CameraMixin {
 
 		float baseYaw = self.getYaw();
 		float basePitch = self.getPitch();
-		float yaw = baseYaw + MathHelper.wrapDegrees(ClientCombatState.lerpedYaw(tickDelta) - baseYaw) * blend;
-		float pitch = basePitch + (ClientCombatState.camPitch - basePitch) * blend;
+		float yaw = baseYaw + MathHelper.wrapDegrees(SrdCamera.lerpedYaw(tickDelta) - baseYaw) * blend;
+		float pitch = basePitch + (SrdCamera.pitch() - basePitch) * blend;
 		this.setRotation(yaw, pitch);
 
 		Vec3d eye = focusedEntity.getLerpedPos(tickDelta)
 				.add(0, focusedEntity.getEyeHeight(focusedEntity.getPose()), 0);
-		Vec3d focus = eye.lerp(ClientCombatState.lerpedFocus(tickDelta), blend);
+		Vec3d focus = eye.lerp(SrdCamera.lerpedFocus(tickDelta), blend);
 
 		Vec3d back = Vec3d.fromPolar(pitch, yaw).multiply(-1);
-		double wanted = ClientCombatState.lerpedZoom(tickDelta) * blend;
+		double wanted = SrdCamera.lerpedZoom(tickDelta) * blend;
 		Vec3d target = focus.add(back.multiply(wanted));
 
 		// No collision with terrain on purpose: blocks between the camera and the active unit are faded out
