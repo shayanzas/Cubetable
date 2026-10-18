@@ -48,6 +48,11 @@ public final class SrdBattlefieldUiTests {
         var refresh=new SrdGridRefresh();var encounter=UUID.randomUUID();refresh.requested(encounter,1,1,0);
         check(!refresh.due(encounter,2,1,true,21)&&refresh.due(encounter,2,1,true,22),"Dash revision schedules paced read-only grid refresh");
         refresh.requested(encounter,2,1,22);check(!refresh.due(encounter,2,1,true,100),"accepted Dash does not automatically repeat discovery or mutation");
+        state.addProperty("canDodge",true);check(SrdBattlefieldActions.canDodge(state,""),"eligible Dodge advertised by server");
+        check(SrdBattlefieldActions.dodge(state,43,"").keySet().equals(Set.of("campaign","actor","revision")),"Dodge sends no condition or modifier");
+        for(String op:List.of("dodge","dash","confirm","move"))check(!SrdBattlefieldActions.canDodge(state,op),"pending operation disables Dodge");
+        state.addProperty("canDodge",false);check(!SrdBattlefieldActions.canDodge(state,""),"ineligible Dodge suppressed");
+        check(!SrdBattlefieldActions.canDodge(new JsonObject(),""),"disconnected and legacy states cannot Dodge");
         var start=new SrdMovement.Cell(0,0,0);var to=new SrdMovement.Cell(1,0,0);
         var grid=new SrdMovement.Preview(start,30,Map.of(start,new SrdMovement.Node(start,0,null),to,new SrdMovement.Node(to,5,start)),List.of(),false);
         check(SrdBattlefieldModel.retain(to,grid).equals(to),"same revision grid refresh retains legal destination");
@@ -64,8 +69,8 @@ public final class SrdBattlefieldUiTests {
             check(!overlap(l.status(),l.camera()),"header and camera separate");
             check(!overlap(l.context(),l.bar()),"context never hides primary actions");
             check(!overlap(l.toast(),l.bar()),"toast never hides End Turn");
-            int cols=l.narrow()?4:7,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
-            for(int i=0;i<7;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
+            int cols=l.narrow()?4:8,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
+            for(int i=0;i<8;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
         }
         System.out.println("SRD battlefield UI checks passed: "+count);
     }

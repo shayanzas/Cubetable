@@ -54,9 +54,10 @@ public final class ClientSrdCombat {
             if(changed) { preview=null; grid=null; selected=null;hover=null; movement.clear(); }
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong();
             if(currentGrid) message=payload.message();
-            if((Set.of("OK","DASH","PREVIEW","RESULT","SAVE_FAILED","PAUSED").contains(payload.code()) || payload.code().equals("STATE")&&reconciling)){pending="";reconciling=false;}
+            if((Set.of("OK","DASH","DODGE","PREVIEW","RESULT","SAVE_FAILED","PAUSED").contains(payload.code()) || payload.code().equals("STATE")&&reconciling)){pending="";reconciling=false;}
             if(!canControl()) {grid=null;selected=null;preview=null;movement.clear();}
             if(currentGrid && (payload.code().equals("GRID_PENDING") || payload.code().equals("GRID_CANCELLED"))) {grid=null;movement.clear();}
+            if(payload.code().equals("DODGE")){message=payload.message();activity.add("dodge:"+turn,message,ticks);}
             if(payload.code().equals("DASH")){message=payload.message();activity.add("dash:"+turn,message,ticks);}
             if(data.has("preview")) preview=data.getAsJsonObject("preview");
             if(data.has("result")) {

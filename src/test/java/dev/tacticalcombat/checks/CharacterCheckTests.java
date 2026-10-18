@@ -19,6 +19,12 @@ public final class CharacterCheckTests {
         var skills=CreationRules.skills(clazz).stream().sorted().limit(CreationRules.skillCount(clazz)).toList();var expertise=skills.stream().limit(CreationRules.expertiseCount(clazz,level)).toList();s=SheetSections.update(s,"creation",SheetSections.JSON.toJsonTree(new CreationRules.Choices(skills,expertise,"MANUAL")).getAsJsonObject());return s.toString();}
     private static Spec spec(Key k,Mode mode,Visibility v,Set<UUID> recipients,Integer dc){return new Spec(k,mode,"Test check",v,recipients,dc);}
     public static void run()throws Exception{
+        for(var mode:Mode.values()){
+            check(withDodge(mode,false)==mode,"no Dodge preserves requested mode");
+            check(withDodge(mode,true)==(mode==Mode.DISADVANTAGE?Mode.NORMAL:Mode.ADVANTAGE),"Dodge save advantage follows cancellation, never stacks");
+        }
+        check(SrdRules.rollMode(true,true)==SrdRules.RollMode.NORMAL,"Dodge disadvantage and advantage cancel");
+        check(SrdRules.rollMode(false,true)==SrdRules.RollMode.DISADVANTAGE,"Dodge only gives disadvantage");
         var raw=sheet("Rogue",1);var s=JsonParser.parseString(raw).getAsJsonObject();SrdAuthoring.data(s).getAsJsonObject("abilities").addProperty("str",7);raw=s.toString();
         check(keys().size()==30,"six abilities, eighteen skills, six saves");
         for(String clazz:List.of("Barbarian","Bard","Cleric","Druid","Fighter","Monk","Paladin","Ranger","Rogue","Sorcerer","Warlock","Wizard"))for(int level:List.of(1,3,5,6,10,20)){
@@ -63,6 +69,17 @@ public final class CharacterCheckTests {
         for(int i=1;i<16;i++){var p=new CharacterRepository.Principal(UUID.randomUUID(),false);principals.put(p.id(),p);repo.invite(dm,campaign,repo.campaign(campaign).revision(),p.id(),false);UUID c=repo.submit(p,campaign,RulesProfiles.SRD,sheet("Fighter",1));repo.approve(dm,c,1);repo.bind(dm,c,2,p.id(),p.id());targets.add(c);online.add(p.id());}
         var bounded=new CheckService(repo,clock::get,()->10,principals::get);UUID oldest=null;for(int i=0;i<128;i++){if(i>0&&i%20==0)clock.addAndGet(60_000);var groupAtCapacity=bounded.request(dm,campaign,targets,new Spec(ability,Mode.NORMAL,"Capacity "+i,Visibility.DM_ONLY,Set.of(),null),online);if(oldest==null)oldest=groupAtCapacity.get(0).id();check(groupAtCapacity.size()==16,"bounded group slots");}
         check(bounded.list(dm,campaign).size()==CAPACITY,"real capacity filled without eviction");reject(()->bounded.request(dm,campaign,targets,new Spec(ability,Mode.NORMAL,"Overflow",Visibility.DM_ONLY,Set.of(),null),online),"capacity fails closed");UUID old=oldest;check(bounded.execute(other,campaign,old,null)==null,"oldest identity still exists at capacity and hidden result withheld");clock.addAndGet(LIFETIME);reject(()->bounded.execute(other,campaign,old,null),"evicted expired identity cannot replay");
+        var checkContext=new AtomicReference<>(new Context(other.id(),UUID.randomUUID(),false));var dodgeCalls=new AtomicInteger();
+        var contextual=new CheckService(repo,clock::get,()->dodgeCalls.incrementAndGet()%2==1?3:18,principals::get,(camp,ch)->checkContext.get());
+        var dexSpec=spec(new Key(Category.SAVE,"dex"),Mode.NORMAL,Visibility.DM_ONLY,Set.of(),12);
+        var dexRequest=contextual.request(dm,campaign,List.of(second),dexSpec,Set.of(other.id())).getFirst();
+        checkContext.set(new Context(other.id(),checkContext.get().encounter(),true));
+        check(contextual.execute(other,campaign,dexRequest.id(),null)==null,"Dodge request executor receives only hidden acknowledgement");
+        var dexResult=contextual.list(dm,campaign).getFirst().result();check(dexResult.mode()==Mode.ADVANTAGE&&dexResult.faces().equals(List.of(3,18))&&dexResult.kept().equals(List.of(1)),"request samples authoritative Dodge at execution with deterministic RNG");
+        check(contextual.list(player,campaign).isEmpty(),"unrelated player never receives Dodge save outcome");
+        checkContext.set(new Context(other.id(),null,false));check(contextual.execute(other,campaign,dexRequest.id(),null)==null&&dodgeCalls.get()==2,"accepted hidden result never rerolls after encounter ends");
+        var association=contextual.prepare(dm,campaign,second,repo.character(second).revision(),dexSpec,Source.DM_ADJUDICATION,null);checkContext.set(new Context(UUID.randomUUID(),null,true));
+        reject(()->contextual.execute(dm,campaign,association.id(),null),"changed bound actor rejected before dice");check(dodgeCalls.get()==2,"association failure never invokes RNG");
         UiEvents.SESSION.clear();System.out.println("Authoritative character check tests passed: "+count);
     }
 }

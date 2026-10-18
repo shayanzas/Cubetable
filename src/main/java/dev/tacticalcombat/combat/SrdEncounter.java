@@ -34,6 +34,7 @@ public final class SrdEncounter implements Encounter {
     private int turnIndex,round=1;
     private long revision;
     private SrdMovementTurn movement;
+    private final Set<UUID> dodging=new HashSet<>();
     private SrdActionBudget budget=new SrdActionBudget();
     private Intent intent;
     private Transaction transaction;
@@ -172,6 +173,7 @@ public final class SrdEncounter implements Encounter {
     }
     private void establishOrder() { order=groups.stream().flatMap(Collection::stream).toList(); turnIndex=0; beginTurn(); }
     private void beginTurn() {
+        dodging.remove(current().getUuid());
         requests.nextTurn(); budget=new SrdActionBudget(); intent=null; transaction=null;
         state=State.ACTIVE; reason="Controlled public-position free-for-all; no reactions or death saves";
         try { movement=new SrdMovementTurn(current(),this::frame); }
@@ -206,6 +208,33 @@ public final class SrdEncounter implements Encounter {
         var result=movement.request(p,new SrdMovementTurn.Request(id,campaign,RulesProfiles.SRD,turn(),current().getUuid(),request,destination),stepTicks);
         revision++; return result;
     }
+    /** Conservative eligibility: recorded condition/effect prose is not an executable condition system. */
+    private boolean dodgeEligible(LivingEntity actor) {
+        if(state!=State.ACTIVE && state!=State.PAUSED || actor.isSleeping())return false;
+        try {
+            var stats=fresh(actor);if(stats.stats().hp()<=0 || stats.rules().walkingSpeedFeet()<=0)return false;
+            var sheet=JsonParser.parseString(CharacterService.repository().character(stats.character()).sheet()).getAsJsonObject();
+            for(var entry:dev.tacticalcombat.uiapi.SheetSections.read(sheet,"features").getAsJsonArray("entries"))
+                if(Set.of("CONDITION","TEMPORARY").contains(entry.getAsJsonObject().get("kind").getAsString()))return false;
+            return true;
+        }catch(IllegalArgumentException unavailable){return false;}
+    }
+    private void refreshDodge(){if(dodging.removeIf(id->!dodgeEligible(actor(id))))revision++;}
+    boolean dodging(LivingEntity actor){thread();refreshDodge();return dodging.contains(actor.getUuid());}
+    /** Trusted check gateway must associate the exact repository binding with this encounter. */
+    public boolean dodgeSave(UUID character,UUID actorId){
+        thread();var actor=actor(actorId);require(fresh(actor).character().equals(character),"Check actor binding changed");
+        return dodging(actor);
+    }
+    void dodge(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision){
+        thread();require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
+        require(campaign.equals(expectedCampaign) && current().getUuid().equals(expectedActor) && revision==expectedRevision,"Stale Dodge scope or revision");
+        require(!budget.used() && movement!=null && !movement.moving() && transaction==null,"Dodge requires an available action, no route and no pending weapon transaction");
+        require(dodgeEligible(current()),"Dodge unavailable: requires positive speed/HP, an awake actor and no unresolved recorded conditions or temporary effects");
+        CharacterService.repository().requireUnreserved(fresh(current()).character());
+        movement.validatePreview(p);budget.spend();dodging.add(current().getUuid());intent=null;revision++;
+        reason="Controlled action accepted";
+    }
     int dash(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision) {
         thread();
         require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
@@ -237,7 +266,7 @@ public final class SrdEncounter implements Encounter {
                     && SrdTargeting.inspect(other,stats,attacker,a).cover()!=SrdTargeting.Cover.TOTAL) { close=true; break; }
         }
         if(plan.mode()==SrdRules.AttackMode.RANGED) require((plan.weapon()==SrdEquipment.Weapon.LIGHT_CROSSBOW?a.bolts():a.arrows())>0,"No approved virtual ammunition remains");
-        return new SrdTargeting.Target(geometry.feet(),geometry.cover(),geometry.advantage(),geometry.disadvantage() || ranged && (close || geometry.feet()>plan.normalRangeFeet()));
+        return new SrdTargeting.Target(geometry.feet(),geometry.cover(),geometry.advantage(),geometry.disadvantage() || ranged && (close || geometry.feet()>plan.normalRangeFeet()) || dodging(target) && SrdTargeting.canSeeAttacker(target,b,attacker,a));
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdCharacter.Ability ability,boolean twoHands) {
         return preview(p,targetId,weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
@@ -259,7 +288,7 @@ public final class SrdEncounter implements Encounter {
         var attacker=actor(selected.actor); var target=actor(selected.target);
         require(selected.attacker.equals(fresh(attacker)) && selected.defender.equals(fresh(target))
                 && selected.from.equals(attacker.getPos()) && selected.to.equals(target.getPos()),"Attack preview changed; preview again");
-        require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target cover changed; preview again");
+        require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target geometry or defensive benefit changed; preview again");
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
         CharacterService.repository().requireGameplayCapacity();CharacterService.repository().requireUnreserved(selected.attacker.character());CharacterService.repository().requireUnreserved(selected.defender.character());
         budget.reserve(); intent=null;
@@ -337,13 +366,14 @@ public final class SrdEncounter implements Encounter {
     public boolean tick() {
         require(world.getServer().isOnThread(),"Encounter tick requires server thread");
         if(state==State.ENDED) return true;
+        refreshDodge();
         for(var actor:actors) {
             if(!actor.isAlive() || actor.isRemoved() || actor.getWorld()!=world || world.getEntity(actor.getUuid())!=actor) {
-                reason="Actor unavailable; controlled encounter ended"; return true;
+                reason="Actor unavailable; controlled encounter ended"; dodging.clear();return true;
             }
             if(actor instanceof ServerPlayerEntity player && (world.getServer().getPlayerManager().getPlayer(player.getUuid())!=player
                     || !net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player,SrdStatePayload.ID))) {
-                reason="Client disconnected or lost SRD capability; controlled encounter ended"; return true;
+                reason="Client disconnected or lost SRD capability; controlled encounter ended"; dodging.clear();return true;
             }
             try {
                 if(!snapshots.get(actor.getUuid()).equals(CharacterService.srdStats(actor,campaign))) {
@@ -364,12 +394,12 @@ public final class SrdEncounter implements Encounter {
             actor.setVelocity(Vec3d.ZERO); actor.fallDistance=0;
             if(actor instanceof MobEntity mob) { mob.setAiDisabled(true); mob.getNavigation().stop(); }
         }
-        return false;
+        refreshDodge();return false;
     }
     public void end() {
         require(world.getServer().isOnThread(),"Encounter cleanup requires server thread");
         if(state==State.ENDED) return;
-        state=State.ENDED;
+        state=State.ENDED;dodging.clear();
         revision++;
         for(var actor:actors) {
             // A failed partial claim must not alter another encounter's participant.
@@ -383,13 +413,14 @@ public final class SrdEncounter implements Encounter {
     void authorizeViewer(CharacterRepository.Principal p) {thread();require(viewer(p),"Encounter permission denied");}
     public JsonObject presentation(CharacterRepository.Principal p) {return snapshot(p);}
     JsonObject snapshot(CharacterRepository.Principal p) {
-        authorizeViewer(p);
+        authorizeViewer(p);refreshDodge();
         var data=new JsonObject(); data.addProperty("state",state.name()); data.addProperty("turn",turn()); data.addProperty("round",round);
         data.addProperty("campaign",campaign.toString()); data.addProperty("manager",manager(p));
         data.addProperty("reason",reason); data.addProperty("actionUsed",budget.used());
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         data.addProperty("moving",movement!=null && movement.moving());
+        data.addProperty("canDodge",state==State.ACTIVE && current()!=null && controls(p,current()) && !budget.used() && movement!=null && !movement.moving() && transaction==null && dodgeEligible(current()));
         if(current()!=null && controls(p,current())) data.addProperty("dashFeet",movement==null?0:movement.speedFeet());
         data.addProperty("dimension",world.getRegistryKey().getValue().toString());
         var entries=new JsonArray();
@@ -401,6 +432,7 @@ public final class SrdEncounter implements Encounter {
             entry.addProperty("initiative",initiative.containsKey(id)?initiative.get(id).total():0);
             entry.addProperty("controlled",controls(p,actor));
             if(controls(p,actor)) {
+                entry.addProperty("dodging",dodging.contains(id));
                 entry.addProperty("hp",stats.hp()); entry.addProperty("maximumHp",stats.maximumHp()); entry.addProperty("temporaryHp",stats.temporaryHp());
                 entry.addProperty("arrows",stats.arrows());entry.addProperty("bolts",stats.bolts());entry.addProperty("daggers",stats.daggers());
                 var monsterIdentity=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(snapshots.get(id).character()).sheet()).getAsJsonObject());

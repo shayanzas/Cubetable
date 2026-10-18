@@ -13,6 +13,13 @@ public final class SrdTargeting {
     public enum Cover { NONE(0), HALF(2), THREE_QUARTERS(5), TOTAL(0); public final int ac; Cover(int ac) {this.ac=ac;} }
     public record Target(double feet,Cover cover,boolean advantage,boolean disadvantage) {}
     private SrdTargeting() {}
+    /** Conservative normal-sight mapping: loaded geometry plus Minecraft eye ray, no camera state.
+     * Special senses and tabletop lighting are not inferred from descriptive monster traits. */
+    public static boolean canSeeAttacker(LivingEntity defender,SrdCharacter d,LivingEntity attacker,SrdCharacter a){
+        if(attacker.isInvisible() || defender.isSleeping() || defender.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.BLINDNESS)
+                || defender.hasStatusEffect(net.minecraft.entity.effect.StatusEffects.DARKNESS))return false;
+        return inspect(defender,d,attacker,a).cover()!=Cover.TOTAL && defender.canSee(attacker);
+    }
     public static double feet(LivingEntity a,SrdCharacter ca,LivingEntity b,SrdCharacter cb) {
         double widths=(SrdTerrain.footprint(ca.size())+SrdTerrain.footprint(cb.size()))/2d;
         double dx=Math.max(0,Math.abs(a.getX()-b.getX())-widths+1);

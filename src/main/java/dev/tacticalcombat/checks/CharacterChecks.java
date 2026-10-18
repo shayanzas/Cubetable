@@ -11,6 +11,10 @@ public final class CharacterChecks {
     private CharacterChecks() {}
     public enum Category { ABILITY, SKILL, SAVE }
     public enum Mode { NORMAL, ADVANTAGE, DISADVANTAGE }
+    public static Mode withDodge(Mode chosen,boolean dodge){
+        if(!dodge)return chosen;
+        return chosen==Mode.DISADVANTAGE?Mode.NORMAL:Mode.ADVANTAGE;
+    }
     public record Key(Category category,String id) {
         public Key {Objects.requireNonNull(category);require(category==Category.SKILL?SKILLS.containsKey(id):CreationRules.ABILITIES.contains(id),"Unknown check identifier");}
         public String ability(){return category==Category.SKILL?SKILLS.get(id):id;}

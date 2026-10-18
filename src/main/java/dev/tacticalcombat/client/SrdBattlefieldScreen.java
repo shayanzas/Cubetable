@@ -18,7 +18,7 @@ public final class SrdBattlefieldScreen extends Screen {
     private final SrdBattlefieldModel model=new SrdBattlefieldModel();
     private static int stepTicks=4;
     private SrdBattlefieldModel.Layout layout;
-    private RpgButton move,attack,confirm,end,dash,previewButton,confirmAttack;
+    private RpgButton move,attack,confirm,end,dash,dodge,previewButton,confirmAttack;
     private final List<SrdAttackChoices.Choice> choices=new ArrayList<>();
     private int choiceIndex,choicePage,scroll;
     private boolean history,options;
@@ -52,12 +52,12 @@ public final class SrdBattlefieldScreen extends Screen {
     private void rebuild(){
         if(layout==null)return;
         clearChildren();previewButton=confirmAttack=null;
-        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?4:7,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
-        String[] titles={"Move","Attack","Confirm move","End Turn","History","More","Dash"};
-        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();},this::dash};
-        for(int i=0;i<7;i++){
+        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?4:8,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
+        String[] titles={"Move","Attack","Confirm move","End Turn","History","More","Dash","Dodge"};
+        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();},this::dash,this::dodge};
+        for(int i=0;i<8;i++){
             var b=button(titles[i],i==3?"End this SRD turn; never automatic":i==4?"Recent authorized movement, turns and outcomes":"",bar.x()+5+(i%cols)*(w+gap),bar.y()+4+(i/cols)*(h+2),w,h,actions[i]);
-            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);if(i==6)dash=b;
+            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);if(i==6)dash=b;if(i==7)dodge=b;
         }
         var cam=layout.camera();int cw=(cam.w()-8)/2;
         if(!(height<240&&contextVisible())) {
@@ -94,6 +94,12 @@ public final class SrdBattlefieldScreen extends Screen {
         previewButton=button("Preview","No cost: request an authoritative attack preview",x,by,(inner-3)/2,18,this::requestPreview);
         button("Options "+(choicePage+1)+"/"+pages,"More supported weapon/ability/hand choices",x+(inner+3)/2,by,(inner-3)/2,18,()->{choicePage++;rebuild();});
     }
+    private void dodge(){
+        if(!SrdBattlefieldActions.canDodge(ClientSrdCombat.state,ClientSrdCombat.pending))return;
+        ClientSrdCombat.send("dodge",SrdBattlefieldActions.dodge(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
+        ClientSrdCombat.preview=null;model.tool=SrdBattlefieldModel.Tool.MOVE;rebuild();
+    }
+    private String dodgeLabel(JsonObject actor){return actor!=null&&actor.has("dodging")&&actor.get("dodging").getAsBoolean()?" · DODGING":"";}
     private void dash(){
         if(!SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending))return;
         ClientSrdCombat.send("dash",SrdBattlefieldActions.dash(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
@@ -126,6 +132,8 @@ public final class SrdBattlefieldScreen extends Screen {
         String key=model.target+model.tool+ClientSrdCombat.canControl();
         if(!key.equals(built)||shownPreview!=ClientSrdCombat.preview){built=key;shownPreview=ClientSrdCombat.preview;rebuild();}
         boolean ready=ready();move.active=ready;attack.active=ready&&!ClientSrdCombat.state.get("actionUsed").getAsBoolean();
+        dodge.active=SrdBattlefieldActions.canDodge(ClientSrdCombat.state,ClientSrdCombat.pending);
+        dodge.hint(!ready?unavailable():dodge.active?"Dodge: spends normal action; seen attacks have disadvantage, Dexterity saves advantage until next turn while eligible":"Dodge unavailable: action spent, zero speed/HP, asleep or recorded conditions/effects need DM review");
         dash.active=SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending);
         dash.setMessage(Text.literal("Dash"+(ClientSrdCombat.state.has("dashFeet")?" +"+ClientSrdCombat.state.get("dashFeet"):"")));
         dash.hint(!ready?unavailable():dash.active?"Dash: +"+ClientSrdCombat.state.get("dashFeet")+" ft this turn; spends your normal action; does not move you":"Normal action unavailable");
@@ -159,7 +167,7 @@ public final class SrdBattlefieldScreen extends Screen {
         int icon=a!=null&&a.get("controlled").getAsBoolean()?GOLD:0xFF9BAEBE;
         g.fill(r.x()+7,r.y()+9,r.x()+14,r.y()+16,icon);g.fill(r.x()+4,r.y()+18,r.x()+17,r.y()+24,icon);
         line(g,"CURRENT TURN · Round "+(ClientSrdCombat.state.has("round")?ClientSrdCombat.state.get("round"):"—"),r.x()+23,r.y()+5,r.w()-28,GOLD);
-        line(g,name(a)+" · "+type(a),r.x()+23,r.y()+17,r.w()-28,TEXT);
+        line(g,name(a)+dodgeLabel(a)+" · "+type(a),r.x()+23,r.y()+17,r.w()-28,TEXT);
         line(g,SrdBattlefieldModel.hp(a)+" · Init "+(a==null?"—":a.get("initiative")),r.x()+6,r.y()+30,r.w()-12,TEXT);
         String resources=ClientSrdCombat.active()?ClientSrdCombat.state.get("remainingFeet")+" ft · Action "+(ClientSrdCombat.state.get("actionUsed").getAsBoolean()?"spent":"ready")+" · Bonus unsupported":"No active encounter";
         if(ClientSrdCombat.state.has("state")&&!ClientSrdCombat.state.get("state").getAsString().equals("ACTIVE"))resources=ClientSrdCombat.state.get("state").getAsString()+" · "+ClientSrdCombat.state.get("reason").getAsString();
@@ -184,7 +192,7 @@ public final class SrdBattlefieldScreen extends Screen {
             if(e==null||!e.getUuidAsString().equals(a.get("id").getAsString()))continue;
             var point=SrdWorldPicker.label(client,e);if(point==null||overPanel(point[0],point[1]))continue;
             String prefix=a.get("id").getAsString().equals(actorId())?(e==client.player?"TURN · SELF · ":"TURN · "):e==client.player?"SELF · ":a.get("controlled").getAsBoolean()?"CONTROL · ":"ACTOR · ";
-            String text=textRenderer.trimToWidth(prefix+name(a),150);int w=textRenderer.getWidth(text),x=MathHelper.clamp(point[0]-w/2,2,Math.max(2,width-w-2)),y=MathHelper.clamp(point[1],2,height-12);
+            String text=textRenderer.trimToWidth(prefix+name(a)+dodgeLabel(a),150);int w=textRenderer.getWidth(text),x=MathHelper.clamp(point[0]-w/2,2,Math.max(2,width-w-2)),y=MathHelper.clamp(point[1],2,height-12);
             g.fill(x-3,y-2,x+w+3,y+10,0xC0181C22);g.drawText(textRenderer,text,x,y,a.get("id").getAsString().equals(actorId())?GOLD:TEXT,false);
         }
     }
@@ -212,7 +220,7 @@ public final class SrdBattlefieldScreen extends Screen {
         if(options){
             if(r.h()>145){line(g,"PACE: "+stepTicks+" ticks / square",x,y+67,w,GOLD);line(g,"Bonus actions / abilities: not implemented",x,y+81,w,MUTED);line(g,"Wheel zoom · middle drag orbit/tilt",x,y+97,w,MUTED);line(g,"WASD pan · right-click / Esc cancel",x,y+109,w,MUTED);line(g,"Camera occluders fade; solids block picking",x,y+121,w,MUTED);}return;
         }
-        line(g,name(target())+" · "+type(target()),x,y,w,GOLD);
+        line(g,name(target())+dodgeLabel(target())+" · "+type(target()),x,y,w,GOLD);
         if(model.tool!=SrdBattlefieldModel.Tool.ATTACK){
             line(g,SrdBattlefieldModel.hp(target()),x,y+16,w,TEXT);line(g,model.target.equals(actorId())?"Current actor":"Visible combatant · affiliation unspecified",x,y+30,w,MUTED);line(g,"Choose Attack below for supported actions",x,y+44,w,MUTED);return;
         }

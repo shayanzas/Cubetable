@@ -5,6 +5,14 @@ import java.util.*;
 /** Only intent fields leave the UI. Server replies alone provide costs, dice, damage and HP. */
 public final class SrdBattlefieldActions {
     private SrdBattlefieldActions() {}
+    public static boolean canDodge(JsonObject state,String pending){
+        return pending.isEmpty()&&SrdViewPolicy.canControl(state)&&state.has("canDodge")&&state.get("canDodge").getAsBoolean()
+            &&!state.get("moving").getAsBoolean()&&!state.get("actionUsed").getAsBoolean();
+    }
+    public static JsonObject dodge(JsonObject state,long revision,String pending){
+        if(!canDodge(state,pending))throw new IllegalArgumentException("Dodge unavailable for this actor/action state");
+        var args=new JsonObject();args.addProperty("campaign",state.get("campaign").getAsString());args.addProperty("actor",state.get("active").getAsString());args.addProperty("revision",revision);return args;
+    }
     public static boolean canDash(JsonObject state,String pending){
         return pending.isEmpty() && SrdViewPolicy.canControl(state) && state.has("dashFeet") && state.get("dashFeet").getAsInt()>0
             && !state.get("actionUsed").getAsBoolean() && !state.get("moving").getAsBoolean();

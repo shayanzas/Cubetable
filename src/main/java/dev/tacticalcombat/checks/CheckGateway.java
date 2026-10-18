@@ -18,7 +18,20 @@ public final class CheckGateway {
     private static final java.security.SecureRandom RANDOM=new java.security.SecureRandom();
     private CheckGateway() {}
     public static void clear(){service=null;repository=null;notified.clear();}
-    private static CheckService service(ServerPlayerEntity p){var repo=CharacterService.repository();if(service==null||repository!=repo){repository=repo;var server=p.getServer();service=new CheckService(repo,System::currentTimeMillis,()->RANDOM.nextInt(20)+1,id->{var player=server.getPlayerManager().getPlayer(id);return player==null?new CharacterRepository.Principal(id,false):CharacterService.principal(player);});}return service;}
+    private static CheckService service(ServerPlayerEntity p){var repo=CharacterService.repository();if(service==null||repository!=repo){repository=repo;var server=p.getServer();service=new CheckService(repo,System::currentTimeMillis,()->RANDOM.nextInt(20)+1,id->{var player=server.getPlayerManager().getPlayer(id);return player==null?new CharacterRepository.Principal(id,false):CharacterService.principal(player);},(campaign,character)->context(p,campaign,character));}return service;}
+    private static CheckService.Context context(ServerPlayerEntity requester,UUID campaign,UUID character){
+        var repo=CharacterService.repository();UUID binding=repo.binding(character);
+        if(binding==null)return new CheckService.Context(null,null,false);
+        net.minecraft.entity.Entity actor=null;
+        for(var world:requester.getServer().getWorlds()){actor=world.getEntity(binding);if(actor!=null)break;}
+        if(actor==null)return new CheckService.Context(binding,null,false);
+        var encounter=CombatManager.encounter(actor);
+        if(encounter instanceof dev.tacticalcombat.combat.SrdEncounter srd){
+            require(srd.campaign().equals(campaign),"Check campaign differs from bound actor encounter");
+            return new CheckService.Context(binding,srd.id(),srd.dodgeSave(character,binding));
+        }
+        return new CheckService.Context(binding,encounter==null?null:encounter.id(),false);
+    }
     private static UUID encounter(ServerPlayerEntity p){var e=CombatManager.encounter(p);return e==null?null:e.id();}
     private static CheckService.Spec spec(JsonObject a){fields(a,"category key mode purpose visibility recipients dc");var recipients=new HashSet<UUID>();require(a.get("recipients").isJsonArray()&&a.getAsJsonArray("recipients").size()<=16,"Bounded recipient array required");for(var r:a.getAsJsonArray("recipients"))require(recipients.add(UUID.fromString(r.getAsString())),"Duplicate recipient");Integer dc=a.get("dc").isJsonNull()?null:integer(a,"dc");return new CheckService.Spec(new CharacterChecks.Key(CharacterChecks.Category.valueOf(string(a,"category")),string(a,"key")),CharacterChecks.Mode.valueOf(string(a,"mode")),string(a,"purpose"),CheckService.Visibility.valueOf(string(a,"visibility")),recipients,dc);}
     public static JsonObject handle(ServerPlayerEntity p,Operation op,JsonObject a){require(p.getServer().isOnThread(),"Character checks require server thread");var repo=CharacterService.repository();var who=CharacterService.principal(p);var campaign=CharacterService.selected(p);require(repo.member(who,campaign),"Selected campaign membership required");var svc=service(p);var out=new JsonObject();out.addProperty("campaign",campaign.toString());out.addProperty("manager",repo.manages(who,campaign));
