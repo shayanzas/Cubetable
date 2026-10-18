@@ -53,6 +53,19 @@ public final class SrdBattlefieldUiTests {
         for(String op:List.of("dodge","dash","confirm","move"))check(!SrdBattlefieldActions.canDodge(state,op),"pending operation disables Dodge");
         state.addProperty("canDodge",false);check(!SrdBattlefieldActions.canDodge(state,""),"ineligible Dodge suppressed");
         check(!SrdBattlefieldActions.canDodge(new JsonObject(),""),"disconnected and legacy states cannot Dodge");
+        state.addProperty("canPosture",true);state.addProperty("actionUsed",true);
+        check(SrdBattlefieldActions.canPosture(state,""),"posture is available after action spent");
+        check(SrdBattlefieldActions.posture(state,44,"").keySet().equals(Set.of("campaign","actor","revision")),"posture request carries no costs or condition value");
+        for(String op:List.of("drop_prone","stand","move","confirm"))check(!SrdBattlefieldActions.canPosture(state,op),"pending blocks posture");
+        state.addProperty("canPosture",false);check(!SrdBattlefieldActions.canPosture(state,""),"insufficient movement and zero speed are server-disabled");
+        check(!SrdBattlefieldActions.canPosture(new JsonObject(),""),"disconnect has no posture capability");state.addProperty("actionUsed",false);
+        for(boolean attacker:new boolean[]{false,true})for(boolean defender:new boolean[]{false,true})for(boolean advantage:new boolean[]{false,true})for(boolean disadvantage:new boolean[]{false,true})for(double feet:new double[]{0,5,5.001,10,30}){
+            var base=new dev.tacticalcombat.combat.SrdTargeting.Target(feet,dev.tacticalcombat.combat.SrdTargeting.Cover.NONE,advantage,disadvantage);
+            var modified=dev.tacticalcombat.combat.SrdTargeting.posture(base,attacker,defender);
+            check(modified.advantage()==(advantage||defender&&feet<=5)&&modified.disadvantage()==(disadvantage||attacker||defender&&feet>5),"posture combines server distance and existing sources");
+        }
+        var dodgeProne=dev.tacticalcombat.combat.SrdTargeting.posture(new dev.tacticalcombat.combat.SrdTargeting.Target(5,dev.tacticalcombat.combat.SrdTargeting.Cover.NONE,false,true),false,true);
+        check(SrdRules.rollMode(dodgeProne.advantage(),dodgeProne.disadvantage())==SrdRules.RollMode.NORMAL,"near Prone plus Dodge cancels");
         var start=new SrdMovement.Cell(0,0,0);var to=new SrdMovement.Cell(1,0,0);
         var grid=new SrdMovement.Preview(start,30,Map.of(start,new SrdMovement.Node(start,0,null),to,new SrdMovement.Node(to,5,start)),List.of(),false);
         check(SrdBattlefieldModel.retain(to,grid).equals(to),"same revision grid refresh retains legal destination");
@@ -69,8 +82,8 @@ public final class SrdBattlefieldUiTests {
             check(!overlap(l.status(),l.camera()),"header and camera separate");
             check(!overlap(l.context(),l.bar()),"context never hides primary actions");
             check(!overlap(l.toast(),l.bar()),"toast never hides End Turn");
-            int cols=l.narrow()?4:8,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
-            for(int i=0;i<8;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
+            int cols=l.narrow()?3:9,w=(l.bar().w()-10-3*(cols-1))/cols,h=l.narrow()?18:22;
+            for(int i=0;i<9;i++){var r=new SrdBattlefieldModel.Rect(l.bar().x()+5+(i%cols)*(w+3),l.bar().y()+4+(i/cols)*(h+2),w,h);check(r.x()+r.w()<=l.bar().x()+l.bar().w()&&r.y()+r.h()<=l.bar().y()+l.bar().h(),"all primary buttons including End Turn bounded");}
         }
         System.out.println("SRD battlefield UI checks passed: "+count);
     }

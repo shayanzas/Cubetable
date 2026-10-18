@@ -10,6 +10,7 @@
       "dev.tacticalcombat.combat.DmWorkspaceGameTests",
       "dev.tacticalcombat.combat.SrdDashGameTests",
       "dev.tacticalcombat.combat.SrdDodgeGameTests",
+      "dev.tacticalcombat.combat.SrdProneGameTests",
       "dev.tacticalcombat.combat.SrdWorldInteractionGameTests",
       "dev.tacticalcombat.combat.AuthorityGameTests",
       "dev.tacticalcombat.combat.PhaseOneGameTests",

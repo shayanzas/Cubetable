@@ -32,6 +32,7 @@ public class GameplayTransactionGameTests implements FabricGameTest {
         ServerPlayerEntity p=null;try(var f=new Fixture(ctx)){p=manager(f);var player=p;var a=f.actor(1,1,true);var b=f.actor(2,1,true);var dice=new Dice(20,1,15);var e=begin(f,dice,a,b);var who=CharacterService.principal(p);var armed=new java.util.concurrent.atomic.AtomicBoolean(true);
             f.field.set(null,SrdSaveFault.failFinalCommit(f.dir.resolve("state.json"),armed::get));var intent=e.preview(who,b.getUuid(),SrdEquipment.Weapon.UNARMED,SrdCharacter.Ability.STR,false);var result=e.confirm(who,intent.id());var repo=CharacterService.repository();
             check(result.state==SrdEncounter.TransactionState.SAVE_FAILED&&repo.gameplayReceipt(intent.id()).status()==GameplayReceipt.Status.PREPARED&&repo.srdSnapshot(b.getUuid(),f.campaign).stats().hp()==10,"durable prep precedes failed final write with unchanged HP");
+            rejects(()->e.posture(who,e.campaign(),e.current().getUuid(),e.revision(),true),"posture cannot bypass failed weapon reservation");
             rejects(()->e.dodge(who,e.campaign(),e.current().getUuid(),e.revision()),"Dodge cannot bypass failed prepared weapon reservation");
             rejects(()->e.dash(who,e.campaign(),e.current().getUuid(),e.revision()),"Dash cannot bypass failed prepared weapon reservation");
             var pendingPacket=new SrdRequestPayload(e.id(),e.turn(),UUID.randomUUID(),"confirm",args("intent",intent.id()).toString());

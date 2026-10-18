@@ -26,7 +26,8 @@ public final class SrdMovementTurn {
     private final Supplier<Frame> context;
     private final Frame initial;
     private CharacterRepository.SrdSnapshot snapshot;
-    private final SrdTerrain terrain;
+    private SrdTerrain terrain;
+    private boolean prone;
     private final TurnRequests requests;
     private final int speed;
     private int budget;
@@ -52,7 +53,8 @@ public final class SrdMovementTurn {
         completedPreview=preview;
     }
 
-    public SrdMovementTurn(LivingEntity actor,Supplier<Frame> context) {
+    public SrdMovementTurn(LivingEntity actor,Supplier<Frame> context) {this(actor,context,false);}
+    public SrdMovementTurn(LivingEntity actor,Supplier<Frame> context,boolean prone) {
         this.actor=Objects.requireNonNull(actor); this.context=Objects.requireNonNull(context);
         initialWorld=actor.getWorld();
         requireServerThread();
@@ -63,10 +65,18 @@ public final class SrdMovementTurn {
         if(!CharacterService.mayJoin(actor,initial.campaign,RulesProfiles.get(RulesProfiles.SRD)))
             throw new IllegalArgumentException("Actor campaign selection conflicts with movement encounter");
         if(snapshot.stats().hp()==0) throw new IllegalArgumentException("Zero-HP movement is unsupported before recovery rules");
-        terrain=new SrdTerrain(actor,snapshot.stats()); anchor=terrain.currentCell();
+        this.prone=prone;terrain=new SrdTerrain(actor,snapshot.stats(),prone); anchor=terrain.currentCell();
         if(actor.getPos().squaredDistanceTo(terrain.position(anchor))>1e-6 || terrain.landing(anchor)!=Reason.OK)
             throw new IllegalArgumentException("SRD movement requires a supported, centered starting footprint");
         speed=snapshot.rules().walkingSpeedFeet(); budget=speed; requests=new TurnRequests(initial.encounter); requests.nextTurn();
+    }
+    void posture(CharacterRepository.Principal principal,boolean nextProne){
+        validatePreview(principal);
+        if(prone==nextProne)throw new IllegalArgumentException(nextProne?"Already Prone":"Already standing");
+        int cost=nextProne?0:SrdMovement.standingCost(speed);
+        if(!nextProne&&(speed==0||remainingFeet()<cost))throw new IllegalArgumentException("Not enough movement or zero speed; cannot stand");
+        var nextTerrain=new SrdTerrain(actor,snapshot.stats(),nextProne);
+        spent+=cost;prone=nextProne;terrain=nextTerrain;completedPreview=null;
     }
     public int speedFeet() { return speed; }
     /** Encounter spends the normal action in the same server-thread operation. Never moves/refunds. */

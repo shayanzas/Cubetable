@@ -34,6 +34,7 @@ public final class SrdEncounter implements Encounter {
     private int turnIndex,round=1;
     private long revision;
     private SrdMovementTurn movement;
+    private final Set<UUID> prone=new HashSet<>();
     private final Set<UUID> dodging=new HashSet<>();
     private SrdActionBudget budget=new SrdActionBudget();
     private Intent intent;
@@ -176,7 +177,7 @@ public final class SrdEncounter implements Encounter {
         dodging.remove(current().getUuid());
         requests.nextTurn(); budget=new SrdActionBudget(); intent=null; transaction=null;
         state=State.ACTIVE; reason="Controlled public-position free-for-all; no reactions or death saves";
-        try { movement=new SrdMovementTurn(current(),this::frame); }
+        try { movement=new SrdMovementTurn(current(),this::frame,prone.contains(current().getUuid())); }
         catch(IllegalArgumentException denied) { state=State.PAUSED; reason=denied.getMessage(); movement=null; }
         revision++;
         dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.TURN,List.of(current().getUuid()),"Turn started",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,actors.stream().filter(a->a instanceof ServerPlayerEntity).map(Entity::getUuid).collect(java.util.stream.Collectors.toSet()));
@@ -235,6 +236,17 @@ public final class SrdEncounter implements Encounter {
         movement.validatePreview(p);budget.spend();dodging.add(current().getUuid());intent=null;revision++;
         reason="Controlled action accepted";
     }
+    boolean prone(LivingEntity actor){return prone.contains(actor.getUuid());}
+    void posture(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision,boolean nextProne){
+        thread();require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
+        require(campaign.equals(expectedCampaign)&&current().getUuid().equals(expectedActor)&&revision==expectedRevision,"Stale posture scope or revision");
+        require(movement!=null&&!movement.moving()&&(transaction==null||transaction.state==TransactionState.COMMITTED),"Finish movement or resolve pending weapon transaction first");
+        var latest=fresh(current());require(latest.stats().hp()>0,"Posture changes unavailable at zero HP");CharacterService.repository().requireUnreserved(latest.character());
+        require(prone(current())!=nextProne,nextProne?"Already Prone":"Already standing");
+        movement.posture(p,nextProne);
+        if(nextProne)prone.add(current().getUuid());else prone.remove(current().getUuid());
+        intent=null;revision++;reason="Controlled posture updated";
+    }
     int dash(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision) {
         thread();
         require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
@@ -266,7 +278,7 @@ public final class SrdEncounter implements Encounter {
                     && SrdTargeting.inspect(other,stats,attacker,a).cover()!=SrdTargeting.Cover.TOTAL) { close=true; break; }
         }
         if(plan.mode()==SrdRules.AttackMode.RANGED) require((plan.weapon()==SrdEquipment.Weapon.LIGHT_CROSSBOW?a.bolts():a.arrows())>0,"No approved virtual ammunition remains");
-        return new SrdTargeting.Target(geometry.feet(),geometry.cover(),geometry.advantage(),geometry.disadvantage() || ranged && (close || geometry.feet()>plan.normalRangeFeet()) || dodging(target) && SrdTargeting.canSeeAttacker(target,b,attacker,a));
+        return SrdTargeting.posture(new SrdTargeting.Target(geometry.feet(),geometry.cover(),geometry.advantage(),geometry.disadvantage() || ranged && (close || geometry.feet()>plan.normalRangeFeet()) || dodging(target) && SrdTargeting.canSeeAttacker(target,b,attacker,a)),prone(attacker),prone(target));
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdCharacter.Ability ability,boolean twoHands) {
         return preview(p,targetId,weapon,SrdRules.AttackMode.MELEE,ability,twoHands);
@@ -399,7 +411,7 @@ public final class SrdEncounter implements Encounter {
     public void end() {
         require(world.getServer().isOnThread(),"Encounter cleanup requires server thread");
         if(state==State.ENDED) return;
-        state=State.ENDED;dodging.clear();
+        state=State.ENDED;dodging.clear();prone.clear();
         revision++;
         for(var actor:actors) {
             // A failed partial claim must not alter another encounter's participant.
@@ -420,6 +432,10 @@ public final class SrdEncounter implements Encounter {
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         data.addProperty("moving",movement!=null && movement.moving());
+        if(current()!=null&&controls(p,current())){
+            data.addProperty("prone",prone(current()));data.addProperty("standCost",movement==null?0:SrdMovement.standingCost(movement.speedFeet()));
+            data.addProperty("canPosture",state==State.ACTIVE&&movement!=null&&!movement.moving()&&(transaction==null||transaction.state==TransactionState.COMMITTED)&&(!prone(current())||movement.speedFeet()>0&&movement.remainingFeet()>=SrdMovement.standingCost(movement.speedFeet())));
+        }
         data.addProperty("canDodge",state==State.ACTIVE && current()!=null && controls(p,current()) && !budget.used() && movement!=null && !movement.moving() && transaction==null && dodgeEligible(current()));
         if(current()!=null && controls(p,current())) data.addProperty("dashFeet",movement==null?0:movement.speedFeet());
         data.addProperty("dimension",world.getRegistryKey().getValue().toString());
@@ -432,7 +448,7 @@ public final class SrdEncounter implements Encounter {
             entry.addProperty("initiative",initiative.containsKey(id)?initiative.get(id).total():0);
             entry.addProperty("controlled",controls(p,actor));
             if(controls(p,actor)) {
-                entry.addProperty("dodging",dodging.contains(id));
+                entry.addProperty("dodging",dodging.contains(id));entry.addProperty("prone",prone.contains(id));
                 entry.addProperty("hp",stats.hp()); entry.addProperty("maximumHp",stats.maximumHp()); entry.addProperty("temporaryHp",stats.temporaryHp());
                 entry.addProperty("arrows",stats.arrows());entry.addProperty("bolts",stats.bolts());entry.addProperty("daggers",stats.daggers());
                 var monsterIdentity=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(snapshots.get(id).character()).sheet()).getAsJsonObject());

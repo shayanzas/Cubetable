@@ -17,13 +17,15 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     private final LivingEntity actor;
     private final ServerWorld world;
     private final int footprint;
+    private final boolean prone;
     private final SearchCache cache;
-    public SrdTerrain(LivingEntity actor,SrdCharacter stats) {
+    public SrdTerrain(LivingEntity actor,SrdCharacter stats) {this(actor,stats,false);}
+    public SrdTerrain(LivingEntity actor,SrdCharacter stats,boolean prone) {
         if(!(actor.getWorld() instanceof ServerWorld server)) throw new IllegalArgumentException("Server terrain required");
-        this.actor=actor; world=server; footprint=footprint(stats.size()); cache=null;
+        this.actor=actor; this.prone=prone; world=server; footprint=footprint(stats.size()); cache=null;
     }
     private SrdTerrain(SrdTerrain source,SearchCache cache) {
-        actor=source.actor;world=source.world;footprint=source.footprint;this.cache=cache;
+        actor=source.actor;prone=source.prone;world=source.world;footprint=source.footprint;this.cache=cache;
     }
     public record Metrics(long blockReads,long collisionChecks,long occupancyQueries,long occupantDecodes,
                           long occupancyChecks,long steps,long cacheHits,int retainedEntries) {}
@@ -75,7 +77,7 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
     public Preview search(Cell start,int feet) { return measuredSearch(start,feet).preview(); }
     public SearchResult measuredSearch(Cell start,int feet) {
         if(!world.getServer().isOnThread()) throw new IllegalStateException("SRD search requires server thread");
-        if(feet<0 || feet>300) throw new IllegalArgumentException("Invalid movement allowance");
+        if(feet<0 || feet>dev.tacticalcombat.rules.srd.SrdMovement.MAX_TURN_FEET) throw new IllegalArgumentException("Invalid movement allowance");
         var scope=capture(start,feet);
         var preview=dev.tacticalcombat.rules.srd.SrdMovement.search(start,feet,new SrdTerrain(this,scope));
         return new SearchResult(preview,new Metrics(scope.blockReads,scope.collisionChecks,scope.occupancyQueries,
@@ -230,7 +232,7 @@ public final class SrdTerrain implements dev.tacticalcombat.rules.srd.SrdMovemen
             if(landing!=Reason.OK) { failure=landing; continue; }
             Reason sweep=sweep(from,to);
             if(sweep!=Reason.OK) { failure=sweep; continue; }
-            int feet=difficult(to)?10:5;
+            int feet=dev.tacticalcombat.rules.srd.SrdMovement.stepCost(difficult(to),prone);
             return new Step(to,feet,Reason.OK);
         }
         return Step.denied(guess,failure);

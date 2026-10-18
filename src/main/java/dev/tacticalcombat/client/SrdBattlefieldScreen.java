@@ -18,7 +18,7 @@ public final class SrdBattlefieldScreen extends Screen {
     private final SrdBattlefieldModel model=new SrdBattlefieldModel();
     private static int stepTicks=4;
     private SrdBattlefieldModel.Layout layout;
-    private RpgButton move,attack,confirm,end,dash,dodge,previewButton,confirmAttack;
+    private RpgButton move,attack,confirm,end,dash,dodge,posture,previewButton,confirmAttack;
     private final List<SrdAttackChoices.Choice> choices=new ArrayList<>();
     private int choiceIndex,choicePage,scroll;
     private boolean history,options;
@@ -52,12 +52,12 @@ public final class SrdBattlefieldScreen extends Screen {
     private void rebuild(){
         if(layout==null)return;
         clearChildren();previewButton=confirmAttack=null;
-        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?4:8,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
-        String[] titles={"Move","Attack","Confirm move","End Turn","History","More","Dash","Dodge"};
-        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();},this::dash,this::dodge};
-        for(int i=0;i<8;i++){
+        var bar=layout.bar();boolean twoRows=layout.narrow();int cols=twoRows?3:9,h=twoRows?18:22,gap=3,w=(bar.w()-10-gap*(cols-1))/cols;
+        String[] titles={"Move","Attack","Confirm move","End Turn","History","More","Dash","Dodge","Prone"};
+        Runnable[] actions={()->tool(SrdBattlefieldModel.Tool.MOVE),()->tool(SrdBattlefieldModel.Tool.ATTACK),this::confirmMove,()->{ClientSrdCombat.send("endturn");ClientSrdCombat.preview=null;},()->{history=!history;options=false;scroll=0;rebuild();},()->{options=!options;history=false;scroll=0;rebuild();},this::dash,this::dodge,this::posture};
+        for(int i=0;i<9;i++){
             var b=button(titles[i],i==3?"End this SRD turn; never automatic":i==4?"Recent authorized movement, turns and outcomes":"",bar.x()+5+(i%cols)*(w+gap),bar.y()+4+(i/cols)*(h+2),w,h,actions[i]);
-            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);if(i==6)dash=b;if(i==7)dodge=b;
+            if(i==0)move=b;if(i==1)attack=b;if(i==2)confirm=b;if(i==3)end=b.primary(true);if(i==6)dash=b;if(i==7)dodge=b;if(i==8)posture=b;
         }
         var cam=layout.camera();int cw=(cam.w()-8)/2;
         if(!(height<240&&contextVisible())) {
@@ -94,12 +94,18 @@ public final class SrdBattlefieldScreen extends Screen {
         previewButton=button("Preview","No cost: request an authoritative attack preview",x,by,(inner-3)/2,18,this::requestPreview);
         button("Options "+(choicePage+1)+"/"+pages,"More supported weapon/ability/hand choices",x+(inner+3)/2,by,(inner-3)/2,18,()->{choicePage++;rebuild();});
     }
+    private void posture(){
+        if(!SrdBattlefieldActions.canPosture(ClientSrdCombat.state,ClientSrdCombat.pending))return;
+        String op=ClientSrdCombat.state.get("prone").getAsBoolean()?"stand":"drop_prone";
+        ClientSrdCombat.send(op,SrdBattlefieldActions.posture(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
+        ClientSrdCombat.preview=null;model.tool=SrdBattlefieldModel.Tool.MOVE;rebuild();
+    }
     private void dodge(){
         if(!SrdBattlefieldActions.canDodge(ClientSrdCombat.state,ClientSrdCombat.pending))return;
         ClientSrdCombat.send("dodge",SrdBattlefieldActions.dodge(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
         ClientSrdCombat.preview=null;model.tool=SrdBattlefieldModel.Tool.MOVE;rebuild();
     }
-    private String dodgeLabel(JsonObject actor){return actor!=null&&actor.has("dodging")&&actor.get("dodging").getAsBoolean()?" · DODGING":"";}
+    private String dodgeLabel(JsonObject actor){if(actor==null)return "";return (actor.has("dodging")&&actor.get("dodging").getAsBoolean()?" · DODGING":"")+(actor.has("prone")&&actor.get("prone").getAsBoolean()?" · PRONE":"");}
     private void dash(){
         if(!SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending))return;
         ClientSrdCombat.send("dash",SrdBattlefieldActions.dash(ClientSrdCombat.state,ClientSrdCombat.revision,ClientSrdCombat.pending));
@@ -132,6 +138,10 @@ public final class SrdBattlefieldScreen extends Screen {
         String key=model.target+model.tool+ClientSrdCombat.canControl();
         if(!key.equals(built)||shownPreview!=ClientSrdCombat.preview){built=key;shownPreview=ClientSrdCombat.preview;rebuild();}
         boolean ready=ready();move.active=ready;attack.active=ready&&!ClientSrdCombat.state.get("actionUsed").getAsBoolean();
+        posture.active=SrdBattlefieldActions.canPosture(ClientSrdCombat.state,ClientSrdCombat.pending);
+        boolean prone=ClientSrdCombat.state.has("prone")&&ClientSrdCombat.state.get("prone").getAsBoolean();
+        posture.setMessage(Text.literal(prone?"Stand "+ClientSrdCombat.state.get("standCost"):"Drop Prone"));
+        posture.hint(!ready?unavailable():prone?"Stand up: "+ClientSrdCombat.state.get("standCost")+" ft movement; no action cost. Requires positive speed and enough movement":"Drop Prone: no action or movement cost; crawling costs 10 ft per ordinary square, 15 in difficult terrain");
         dodge.active=SrdBattlefieldActions.canDodge(ClientSrdCombat.state,ClientSrdCombat.pending);
         dodge.hint(!ready?unavailable():dodge.active?"Dodge: spends normal action; seen attacks have disadvantage, Dexterity saves advantage until next turn while eligible":"Dodge unavailable: action spent, zero speed/HP, asleep or recorded conditions/effects need DM review");
         dash.active=SrdBattlefieldActions.canDash(ClientSrdCombat.state,ClientSrdCombat.pending);
@@ -203,7 +213,7 @@ public final class SrdBattlefieldScreen extends Screen {
         if(!ClientSrdCombat.pending.isEmpty())info="Server pending: "+ClientSrdCombat.pending+" · More → Refresh state";
         else if(ClientSrdCombat.moving())info="Route in progress · completed steps consume movement";
         else if(ClientSrdCombat.activity.toast(ClientSrdCombat.ticks)!=null&&ClientSrdCombat.activity.toast(ClientSrdCombat.ticks).id().startsWith("denied:"))info=ClientSrdCombat.activity.toast(ClientSrdCombat.ticks).text();
-        else if(cell!=null){var choice=ClientSrdCombat.movement.select(cell);info="Route "+choice.costFeet().orElse(0)+" ft  →  "+choice.remainingFeet()+" ft left"+(ClientSrdCombat.selected==null?" · Click to select":" · Confirm move");}
+        else if(cell!=null){var choice=ClientSrdCombat.movement.select(cell);info=(ClientSrdCombat.state.has("prone")&&ClientSrdCombat.state.get("prone").getAsBoolean()?"Crawl ":"Route ")+choice.costFeet().orElse(0)+" ft  →  "+choice.remainingFeet()+" ft left"+(ClientSrdCombat.selected==null?" · Click to select":" · Confirm move");}
         else if(ClientSrdCombat.unavailableHover!=null)info="Unavailable destination — choose highlighted reachable ground";
         else if(!ClientSrdCombat.canControl())info="Inspect only — not your controlled turn";
         else if(ClientSrdCombat.state.get("remainingFeet").getAsInt()<5)info="Movement exhausted · Attack or End Turn";

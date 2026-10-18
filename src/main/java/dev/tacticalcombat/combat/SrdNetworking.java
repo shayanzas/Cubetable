@@ -116,6 +116,12 @@ public final class SrdNetworking {
                     var result=encounter.move(p,request.request(),new SrdMovement.Cell(integer(args,"x"),integer(args,"z"),args.get("y").getAsDouble()),args.has("stepTicks")?integer(args,"stepTicks"):1);
                     message=result.message(); if(!result.accepted()) code="REJECTED";
                 }
+                case "drop_prone", "stand" -> {
+                    if(!args.keySet().equals(Set.of("campaign","actor","revision")))throw new IllegalArgumentException("Posture accepts only expected campaign, actor and revision");
+                    boolean dropping=request.operation().equals("drop_prone");
+                    encounter.posture(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact(),dropping);
+                    SrdGridJobs.cancel(player.getUuid());message=dropping?"Dropped Prone; no action or movement spent; movement now crawls":"Stood up; half-speed movement cost spent; action unchanged";code="POSTURE";
+                }
                 case "dodge" -> {
                     if(!args.keySet().equals(Set.of("campaign","actor","revision")))throw new IllegalArgumentException("Dodge accepts only expected campaign, actor and revision");
                     encounter.dodge(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact());

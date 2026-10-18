@@ -28,7 +28,7 @@ public final class SrdBattlefieldModel {
     public record Rect(int x,int y,int w,int h){public boolean contains(double x,double y){return x>=this.x&&x<this.x+w&&y>=this.y&&y<this.y+h;}}
     public record Layout(Rect status,Rect camera,Rect bar,Rect context,Rect toast,boolean narrow) {}
     public static Layout layout(int width,int height){
-        int margin=6,barH=height<240?42:46,top=76;
+        int margin=6,barH=width<560?64:46,top=Math.min(76,height-barH-12);
         boolean narrow=width<560;
         int side=Math.min(258,width-12),contextY=height<240?6:top+4,contextH=Math.min(190,height-contextY-barH-20);
         return new Layout(new Rect(margin,margin,Math.min(width-94,narrow?270:330),top-6),

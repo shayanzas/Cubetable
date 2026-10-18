@@ -12,6 +12,10 @@ public final class SrdMovementTests {
         throw new AssertionError(why);
     }
     public static void run() {
+        check(SrdMovement.stepCost(false,false)==5&&SrdMovement.stepCost(true,false)==10,"ordinary and difficult steps retained");
+        check(SrdMovement.stepCost(false,true)==10&&SrdMovement.stepCost(true,true)==15,"crawl adds five feet, not multiplicative doubling of difficulty");
+        for(int speed=0;speed<=300;speed++)check(SrdMovement.standingCost(speed)==speed/2,"half speed rounded down in whole feet");
+        rejects(()->SrdMovement.standingCost(-1),"negative standing speed forbidden");rejects(()->SrdMovement.standingCost(301),"unsupported standing speed forbidden");
         Cell start=new Cell(0,0,1);
         Terrain flat=(from,dx,dz)->new Step(new Cell(from.x()+dx,from.z()+dz,1),5,Reason.OK);
         for(int feet:new int[]{0,4,5,20,25,29,30,40}) {
@@ -40,6 +44,9 @@ public final class SrdMovementTests {
         check(weighted.reachable().get(new Cell(1,0,1)).costFeet()==10,"difficult terrain costs ten feet");
         check(weighted.reachable().get(new Cell(2,0,1)).costFeet()==10,"Dijkstra chooses cheaper diagonal detour");
         check(!weighted.pathTo(new Cell(2,0,1)).contains(new Cell(1,0,1)),"route actually avoids expensive square");
+        var crawling=SrdMovement.search(start,15,(from,dx,dz)->new Step(new Cell(from.x()+dx,from.z()+dz,1),15,Reason.OK));
+        check(crawling.pathTo(new Cell(1,0,1)).size()==1&&crawling.reachable().get(new Cell(1,0,1)).costFeet()==15,"preview parent-chain supports difficult crawling cost");
+        check(!crawling.reachable().containsKey(new Cell(2,0,1)),"crawl budget prevents second difficult step");
         Terrain blocked=(from,dx,dz)->Step.denied(new Cell(from.x()+dx,from.z()+dz,from.y()),Reason.BLOCKED);
         var closed=SrdMovement.search(start,30,blocked);
         check(closed.reachable().size()==1 && closed.boundaries().size()==8,"blocked edges available for preview");

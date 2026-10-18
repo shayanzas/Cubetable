@@ -13,6 +13,10 @@ public final class SrdTargeting {
     public enum Cover { NONE(0), HALF(2), THREE_QUARTERS(5), TOTAL(0); public final int ac; Cover(int ac) {this.ac=ac;} }
     public record Target(double feet,Cover cover,boolean advantage,boolean disadvantage) {}
     private SrdTargeting() {}
+    public static Target posture(Target base,boolean attackerProne,boolean defenderProne){
+        return new Target(base.feet(),base.cover(),base.advantage()||defenderProne&&base.feet()<=5,
+            base.disadvantage()||attackerProne||defenderProne&&base.feet()>5);
+    }
     /** Conservative normal-sight mapping: loaded geometry plus Minecraft eye ray, no camera state.
      * Special senses and tabletop lighting are not inferred from descriptive monster traits. */
     public static boolean canSeeAttacker(LivingEntity defender,SrdCharacter d,LivingEntity attacker,SrdCharacter a){

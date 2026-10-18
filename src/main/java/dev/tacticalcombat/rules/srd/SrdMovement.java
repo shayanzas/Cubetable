@@ -8,6 +8,9 @@ public final class SrdMovement {
     public static final int MAX_NODES=4096;
     /** Maximum supported speed (300) plus one normal-action Dash. Search work stays node-bounded. */
     public static final int MAX_TURN_FEET=600;
+    public static int stepCost(boolean difficult,boolean prone){return 5+(difficult?5:0)+(prone?5:0);}
+    /** General SRD round-down rule, in whole feet; never round the charge to grid squares. */
+    public static int standingCost(int speed){if(speed<0||speed>300)throw new IllegalArgumentException("Invalid speed");return speed/2;}
     public record Cell(int x,int z,double y) {
         public Cell {
             if(Math.abs((long)x)>30000000 || Math.abs((long)z)>30000000 || !Double.isFinite(y) || Math.abs(y)>4096)
@@ -19,7 +22,7 @@ public final class SrdMovement {
     public record Step(Cell to,int feet,Reason reason) {
         public Step {
             Objects.requireNonNull(to); Objects.requireNonNull(reason);
-            if(reason==Reason.OK && feet!=5 && feet!=10) throw new IllegalArgumentException("Unsupported step cost");
+            if(reason==Reason.OK && feet!=5 && feet!=10 && feet!=15) throw new IllegalArgumentException("Unsupported step cost");
         }
         public static Step denied(Cell to,Reason reason) { return new Step(to,0,reason); }
     }
@@ -40,7 +43,7 @@ public final class SrdMovement {
                     if(node.costFeet!=0 || node.parent!=null) throw new IllegalArgumentException("Invalid preview start");
                 } else {
                     Node parent=reachable.get(node.parent);
-                    if(parent==null || node.costFeet-parent.costFeet!=5 && node.costFeet-parent.costFeet!=10)
+                    if(parent==null || node.costFeet-parent.costFeet!=5 && node.costFeet-parent.costFeet!=10 && node.costFeet-parent.costFeet!=15)
                         throw new IllegalArgumentException("Invalid/cyclic preview parent chain");
                 }
             }
