@@ -118,6 +118,7 @@ public final class FoundationTests {
         SrdMovementTests.run();
         dev.tacticalcombat.client.SrdTraversalTests.run();
         dev.tacticalcombat.client.SrdBattlefieldCorrectionTests.run();
+        dev.tacticalcombat.client.SrdRollsRecoveryTests.run();
         dev.tacticalcombat.client.SrdWorldInteractionTests.run();
         dev.tacticalcombat.client.SrdBattlefieldUiTests.run();
         dev.tacticalcombat.client.ui.DmWorkspaceTests.run();

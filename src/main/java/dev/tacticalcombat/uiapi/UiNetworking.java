@@ -55,8 +55,8 @@ public final class UiNetworking {
         String admission=SESSIONS.admit(player.getUuid(),request.sequence(),player.getServer().getOverworld().getTime());
         if(!admission.equals("OK")) return new UiReplyPayload(request.sequence(),admission,"Request repeated or too frequent; refresh before retrying","{}");
         try {
-            require(library!=null,"Library service unavailable");require(request.json().length()<=UiRequestPayload.LIMIT,"Request too large");CharacterRepository.checkDepth(request.json(),24);
-            var op=Operation.valueOf(request.operation());var args=JsonParser.parseString(request.json()).getAsJsonObject();
+            if(library==null)return new UiReplyPayload(request.sequence(),"UNAVAILABLE","Library service unavailable; refresh after server recovery","{}");require(request.json().length()<=UiRequestPayload.LIMIT,"Request too large");CharacterRepository.checkDepth(request.json(),24);
+            var op=Operation.valueOf(request.operation());var parsed=JsonParser.parseString(request.json());require(parsed.isJsonObject(),"Object request required");var args=parsed.getAsJsonObject();
             if(op==Operation.CHARACTER_GET) {
                 UUID character=id(args,"character");
                 try {CharacterService.repository().visible(CharacterService.principal(player),character);}
@@ -67,29 +67,13 @@ public final class UiNetworking {
             if(response.code().equals("OK")) {
                 if(op==Operation.CAPABILITIES) response.data().addProperty("canCreateCampaign",CharacterService.principal(player).admin());
                 // Only resolve identities already present in this authorized read model. Never enumerate accounts.
-                var names=new JsonObject();collectNames(player,response.data(),names,0);if(!names.isEmpty()) response.data().add("playerNames",names);
+                var names=AuthorizedNames.collect(response.data(),id->{var online=player.getServer().getPlayerManager().getPlayer(id);return online!=null?online.getName().getString():player.getServer().getUserCache()==null?"Unknown offline player":player.getServer().getUserCache().getByUuid(id).map(profile->profile.getName()).orElse("Unknown offline player");});if(!names.isEmpty()) response.data().add("playerNames",names);
             }
             require(response.data().toString().length()<=UiReplyPayload.LIMIT,"Result too large");
             return new UiReplyPayload(request.sequence(),response.code(),response.message(),response.data().toString());
         } catch(java.io.IOException e) {return new UiReplyPayload(request.sequence(),"STORAGE_ERROR","Health capture failed; refresh before retrying","{}");}
-        catch(RuntimeException e) {return new UiReplyPayload(request.sequence(),"REJECTED","Invalid UI request or unavailable service","{}");}
-    }
-    private static void collectNames(ServerPlayerEntity p,JsonElement value,JsonObject names,int depth) {
-        if(depth>4 || names.size()>=256 || value==null || value.isJsonNull()) return;
-        if(value.isJsonArray()) {for(var e:value.getAsJsonArray()) collectNames(p,e,names,depth+1);return;}
-        if(!value.isJsonObject()) return;
-        for(var entry:value.getAsJsonObject().entrySet()) {
-            if(Set.of("sheet","history","origin","policy").contains(entry.getKey())) continue;
-            if(Set.of("owner","controller","offered","members","dms").contains(entry.getKey())) {
-                var ids=entry.getValue().isJsonArray()?entry.getValue().getAsJsonArray():new JsonArray();
-                if(!entry.getValue().isJsonArray()) ids.add(entry.getValue());
-                for(var e:ids) if(!e.isJsonNull() && names.size()<256) {
-                    UUID id=UUID.fromString(e.getAsString());var online=p.getServer().getPlayerManager().getPlayer(id);
-                    String name=online!=null?online.getName().getString():p.getServer().getUserCache()==null?"Unknown offline player":p.getServer().getUserCache().getByUuid(id).map(profile->profile.getName()).orElse("Unknown offline player");
-                    names.addProperty(id.toString(),name.substring(0,Math.min(80,name.length())));
-                }
-            } else collectNames(p,entry.getValue(),names,depth+1);
-        }
+        catch(IllegalArgumentException | JsonParseException e) {return new UiReplyPayload(request.sequence(),"REJECTED","Invalid UI request; refresh the form before retrying","{}");}
+        catch(RuntimeException e) {var failure=UiDiagnostics.fault(request.operation(),e);return new UiReplyPayload(request.sequence(),failure.code(),failure.message(),"{}");}
     }
     private static JsonObject world(ServerPlayerEntity p,Operation op,JsonObject a) throws java.io.IOException {
         var repo=CharacterService.repository();var who=CharacterService.principal(p);var out=new JsonObject();

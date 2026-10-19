@@ -428,6 +428,14 @@ public final class SrdEncounter implements Encounter {
         authorizeViewer(p);refreshDodge();
         var data=new JsonObject(); data.addProperty("state",state.name()); data.addProperty("turn",turn()); data.addProperty("round",round);
         data.addProperty("campaign",campaign.toString()); data.addProperty("manager",manager(p));
+        if(manager(p)) {
+            var recovery=new JsonObject();boolean paused=state==State.PAUSED;
+            boolean unresolved=transaction!=null&&transaction.state!=TransactionState.COMMITTED;
+            recovery.addProperty("kind",!paused?"NONE":unresolved?"SAVE_FAILED":"ADJUDICATION");
+            recovery.addProperty("canHeal",paused&&!unresolved);
+            recovery.addProperty("canRetry",paused&&transaction!=null&&transaction.state==TransactionState.SAVE_FAILED);
+            recovery.addProperty("maximumHealing",1024);data.add("recovery",recovery);
+        }
         data.addProperty("reason",reason); data.addProperty("actionUsed",budget.used());
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());

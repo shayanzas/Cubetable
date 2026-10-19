@@ -25,6 +25,7 @@ public final class SrdCombatScreen extends Screen {
     public SrdCombatScreen() {this(null);}
     public SrdCombatScreen(Screen parent) {super(Text.literal("SRD controlled encounter"));this.parent=parent;page=ClientSrdCombat.state.has("state")&&ClientSrdCombat.state.get("state").getAsString().equals("PENDING")?1:2;}
     public static Screen entry(Screen parent) {
+        if(ClientSrdCombat.state.has("state")&&ClientSrdCombat.state.get("state").getAsString().equals("PAUSED"))return new SrdRecoveryScreen(parent);
         var screen=new SrdCombatScreen(parent);screen.battlefieldOnReady=true;return screen;
     }
     static void attackTarget(String id) {

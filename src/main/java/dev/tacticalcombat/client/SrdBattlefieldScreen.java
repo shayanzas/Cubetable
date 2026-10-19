@@ -68,7 +68,7 @@ public final class SrdBattlefieldScreen extends Screen {
             },enabled);
         }
         var cam=layout.camera();boolean recovery=manager()&&ClientSrdCombat.state.has("state")&&ClientSrdCombat.state.get("state").getAsString().equals("PAUSED");
-        button(recovery?"Recover":"Center",recovery?"Existing authorized DM recovery/adjudication controls":"Recenter on active actor",cam.x(),cam.y(),45,18,()->{if(recovery)client.setScreen(new SrdCombatScreen(this));else SrdCamera.pan=Vec3d.ZERO;},true);
+        button(recovery?"Recover":"Center",recovery?"Existing authorized DM recovery/adjudication controls":"Recenter on active actor",cam.x(),cam.y(),45,18,()->{if(recovery)client.setScreen(new SrdRecoveryScreen(this));else SrdCamera.pan=Vec3d.ZERO;},true);
         button("↻","Read-only refresh; never repeats a gameplay action",cam.x()+48,cam.y(),25,18,ClientSrdCombat::refreshReadOnly,true);
         if(pace){pacePopup=SrdBattlefieldPresentation.popup(bar.x()+bar.w()/2,bar.y(),142,92,width,height,bar);int[] values={1,2,4,6};String[] names={"Fast","Brisk","Walk","Slow"};for(int i=0;i<4;i++){int value=values[i];button(names[i]+(stepTicks==value?" ✓":""),value+" ticks per square; timing only",pacePopup.x()+4,pacePopup.y()+4+i*Math.min(21,(pacePopup.h()-8)/4),pacePopup.w()-8,Math.min(18,(pacePopup.h()-8)/4-2),()->{stepTicks=value;pace=false;rebuild();},true);}}
         if(help)helpPopup=SrdBattlefieldPresentation.popup(width/2,bar.y(),280,70,width,height,bar);

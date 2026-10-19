@@ -124,8 +124,10 @@ public final class UiApiService {
             require(out.toString().length()<=65536,"Result too large; request a smaller section");return new Reply("OK",op+" successful",out);
         } catch(java.io.IOException e) {return new Reply("STORAGE_ERROR","Save failed; no success was acknowledged. Reload before retrying.",new JsonObject());}
         catch(RuntimeException e) {
+            if(e instanceof JsonParseException || e instanceof UnsupportedOperationException || UiDiagnostics.recordValidation(e))return new Reply("REJECTED","Invalid UI field shape; refresh the form before retrying",new JsonObject());
+            if(!(e instanceof IllegalArgumentException))return UiDiagnostics.fault(op.name(),e);
             String msg=e.getMessage()==null?"Invalid request":e.getMessage();String lower=msg.toLowerCase(Locale.ROOT);
-            String code=msg.startsWith("Stale")?"CONFLICT":lower.contains("unavailable")?"UNAVAILABLE":lower.matches(".*(permission|only |ownership|membership|locked|forbidden|unbind).*" )?"FORBIDDEN":"REJECTED";
+            String code=msg.startsWith("Stale")?"CONFLICT":lower.contains("unavailable")?"UNAVAILABLE":lower.matches(".*(permission|authority|only |ownership|membership|locked|forbidden|unbind).*" )?"FORBIDDEN":"REJECTED";
             return new Reply(code,msg.substring(0,Math.min(240,msg.length())),new JsonObject());
         }
     }

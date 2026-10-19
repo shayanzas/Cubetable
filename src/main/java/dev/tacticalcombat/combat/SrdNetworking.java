@@ -168,7 +168,13 @@ public final class SrdNetworking {
                 }
                 case "endturn" -> encounter.endTurn(p);
                 case "retry" -> { encounter.retry(p); message=encounter.reason(); code=encounter.state()==SrdEncounter.State.PAUSED?"PAUSED":"OK"; }
-                case "heal" -> encounter.heal(p,UUID.fromString(args.get("target").getAsString()),integer(args,"amount"));
+                case "heal" -> {
+                    if(!args.keySet().equals(Set.of("target","amount","revision")))throw new IllegalArgumentException("Healing requires target, amount and reviewed encounter revision");
+                    if(!CharacterService.selected(player).equals(encounter.campaign()))throw new IllegalArgumentException("Selected campaign changed; refresh recovery");
+                    if(args.get("revision").getAsBigDecimal().longValueExact()!=encounter.revision())throw new IllegalArgumentException("Stale recovery review; refresh before healing");
+                    int amount=integer(args,"amount");if(amount<1||amount>1024)throw new IllegalArgumentException("Healing amount must be 1..1024");
+                    encounter.heal(p,UUID.fromString(args.get("target").getAsString()),amount);message=encounter.reason();
+                }
                 case "end" -> { encounter.stop(p); return new SrdStatePayload(encounter.id(),Long.MAX_VALUE,"ENDED","Encounter ended","{}"); }
                 default -> throw new IllegalArgumentException("Unsupported SRD operation");
             }

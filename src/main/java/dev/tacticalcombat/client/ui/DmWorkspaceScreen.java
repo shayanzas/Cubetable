@@ -35,7 +35,18 @@ public final class DmWorkspaceScreen extends RpgScreen {
     private void clearData(){context=data=detail=encounters=stages=checkTargets=inbox=null;placementToken="";confirmed=null;}
     private boolean available(){return fresh&&!busy&&context!=null;}
     private void watch(JsonObject snapshot){if(!snapshot.has("panelToken"))return;ClientRulesWatch.panel(this,UUID.fromString(text(snapshot,"panelToken")),revoked->{if(client.currentScreen!=this)return;generation++;busy=false;fresh=false;confirmed=null;placementToken="";if(revoked){clearData();model.revoke();operation="";message="Campaign manager access changed. Refresh to verify access.";build();}else{message="Server state changed; updating authorized data…";refreshPending=true;refreshAt=Math.max(refreshAt,ticks+15);}});}
-    private void fetch(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> accept){request(op,args,r->{if(!r.code().equals("OK")){fresh=false;clearData();ClientRulesWatch.close(this);if(r.code().equals("FORBIDDEN")){model.revoke();operation="";}message=r.message();build();return;}watch(r.data());accept.accept(r.data());});}
+    private void fetch(UiApiService.Operation op,JsonObject args,Consumer<JsonObject> accept){request(op,args,r->{
+        if(!r.code().equals("OK")){
+            fresh=false;confirmed=null;
+            if(r.code().equals("FORBIDDEN")||op==DM_QUICK){clearData();ClientRulesWatch.close(this);model.revoke();operation="";}
+            else if(op==CHECK_TARGETS||op==CHECK_INBOX){checkTargets=null;inbox=null;}
+            message=op+": "+r.code()+" · "+r.message()+" Refresh to retry this read.";build();return;
+        }
+        if(op!=DM_QUICK&&r.data().has("campaign")&&!text(r.data(),"campaign").equals(model.campaign)){
+            generation++;fresh=false;clearData();operation="";message="Campaign changed. Refresh to verify current access.";build();return;
+        }
+        watch(r.data());accept.accept(r.data());
+    });}
     private void reload(){
         if(busy)return;refreshPending=false;fresh=false;placementToken="";
         fetch(DM_QUICK,args("page",page),root->{if(!model.campaign.equals(text(root,"campaign"))){operation="";stageOperation=UUID.randomUUID();}model.campaign(text(root,"campaign"));context=root;
@@ -82,7 +93,7 @@ public final class DmWorkspaceScreen extends RpgScreen {
     }
 
     private void confirm(String title,String detail,Runnable run){confirmedTitle=title;confirmedText=detail;confirmed=run;build();}
-    private void mutate(UiApiService.Operation op,JsonObject a,Consumer<JsonObject> done){if(!available())return;fresh=false;request(op,a,r->{if(!r.code().equals("OK")){clearData();ClientRulesWatch.close(this);if(r.code().equals("FORBIDDEN")){model.revoke();operation="";}message=r.message()+" Refresh to reconcile; no mutation is repeated automatically.";fresh=false;build();return;}fresh=true;message=r.message();done.accept(r.data());});}
+    private void mutate(UiApiService.Operation op,JsonObject a,Consumer<JsonObject> done){if(!available())return;fresh=false;request(op,a,r->{if(!r.code().equals("OK")){confirmed=null;placementToken="";if(r.code().equals("FORBIDDEN")){clearData();ClientRulesWatch.close(this);model.revoke();operation="";}else if(model.tab==DmWorkspaceModel.Tab.ROLLS){checkTargets=inbox=null;}message=op+": "+r.code()+" · "+r.message()+" Refresh to reconcile; no mutation is repeated automatically.";fresh=false;build();return;}fresh=true;message=r.message();done.accept(r.data());});}
     private void build(){
         if(frame==null)return;boolean ownFocus=canvas!=null&&getFocused()==canvas;String focusKey=canvas==null?"":canvas.focusedKey();var cursors=canvas==null?Map.<String,Integer>of():canvas.cursors();if(ownFocus)setFocused(null);int offset=canvas==null?model.scrolls.getOrDefault(model.tab,0):canvas.position();if(canvas!=null)remove(canvas);
         manualRoll=stageSave=null;canvas=new CharacterCanvas(new UiLayout.Rect(frame.x()+6,frame.y()+102,frame.width()-12,Math.max(12,frame.height()-140)));addDrawableChild(canvas); // selectors render above this clipped content
@@ -121,7 +132,7 @@ public final class DmWorkspaceScreen extends RpgScreen {
     private void encounters(){
         if(encounters==null||data==null){line("Loading encounters and eligible participants…",RpgTheme.MUTED);return;}
         title("Encounter dashboard");line("Ready nearby: "+array(data,"actors").asList().stream().filter(a->flag(a.getAsJsonObject(),"eligible")).count()+" · selected: "+model.participants.size(),RpgTheme.TEXT);
-        var live=ClientSrdCombat.workspaceState();if(text(live,"campaign").equals(text(context,"campaign"))){title("Watched encounter · "+text(live,"state")+" · round "+text(live,"round"));line("Movement "+text(live,"remainingFeet")+" ft · action "+(flag(live,"actionUsed")?"spent / reserved":"available"),RpgTheme.TEXT);for(var v:array(live,"actors")){var a=v.getAsJsonObject();line((text(live,"active").equals(text(a,"id"))?"CURRENT TURN · ":"")+text(a,"name")+" · initiative "+text(a,"initiative")+" · "+SrdBattlefieldModel.hp(a),RpgTheme.TEXT);}action("Return to tactical battlefield","Preserve SRD state and camera",true,this::returnBattlefield);}
+        var live=ClientSrdCombat.workspaceState();if(text(live,"campaign").equals(text(context,"campaign"))){title("Watched encounter · "+text(live,"state")+" · round "+text(live,"round"));line("Movement "+text(live,"remainingFeet")+" ft · action "+(flag(live,"actionUsed")?"spent / reserved":"available"),RpgTheme.TEXT);for(var v:array(live,"actors")){var a=v.getAsJsonObject();line((text(live,"active").equals(text(a,"id"))?"CURRENT TURN · ":"")+text(a,"name")+" · initiative "+text(a,"initiative")+" · "+SrdBattlefieldModel.hp(a),RpgTheme.TEXT);}if(text(live,"state").equals("PAUSED")&&flag(live,"manager"))action("Paused encounter: heal / review / end…","Explicit manager adjudication; healing does not resume combat",true,()->client.setScreen(new SrdRecoveryScreen(this)));action("Return to tactical battlefield","Preserve SRD state and camera",true,this::returnBattlefield);}
         if(array(encounters,"encounters").isEmpty())line("No active controlled encounter in the selected campaign.",RpgTheme.MUTED);
         for(var v:array(encounters,"encounters")){var e=v.getAsJsonObject();String id=text(e,"encounter");title(text(e,"state")+" · "+text(e,"actors"));line(text(e,"reason"),RpgTheme.MUTED);action("Inspect initiative / watch encounter","Read-only watch; does not start or advance combat",true,()->fetch(ENCOUNTER_WATCH,args("encounter",id),r->{fresh=true;build();}));action("End this encounter…","Persistent HP and resources remain committed",true,()->confirm("End controlled encounter?",text(e,"actors")+". Prepared transactions remain subject to J2 recovery.",()->mutate(ENCOUNTER_END,args("encounter",id),r->reload())));}
         action("Start selected participants ("+model.participants.size()+")…","Select ready actors below or in Actors / Scene",model.participants.size()>=2,this::start);actorRows();action("Gameplay Transaction Review","Advanced J2 recovery; no automatic resource replay",true,()->client.setScreen(new GameplayRecoveryScreen(this)));action("Saved encounter stages…","Templates and placement are separate from combat activation",true,()->client.setScreen(new EncounterStagesScreen(this)));
@@ -144,7 +155,7 @@ public final class DmWorkspaceScreen extends RpgScreen {
         title("Discovered actors · choose participants in slot order");actorRows();
     }
     private void rolls(){
-        if(checkTargets==null||inbox==null){line("Loading authorized check targets and inbox…",RpgTheme.MUTED);return;}
+        if(checkTargets==null||inbox==null){line(busy?"Loading authorized check targets and inbox…":"Roll data unavailable. Use Refresh above; no check will execute.",RpgTheme.MUTED);return;}
         title("Roll console · server-owned outcomes");
         choose("workflow","Workflow",options("REQUEST","Request player checks","ADJUDICATED","DM-adjudicated character check","MANUAL","Manual dice"),()->workflow,v->{workflow=v;model.targets.clear();});
         if(workflow.equals("MANUAL")){manual();}else{
