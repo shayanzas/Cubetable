@@ -36,7 +36,8 @@
       "dev.tacticalcombat.combat.CharacterCheckGameTests",
       "dev.tacticalcombat.combat.SrdTraversalGameTests",
       "dev.tacticalcombat.combat.SrdBattlefieldUiGameTests",
-      "dev.tacticalcombat.combat.SrdRecoveryGameTests"
+      "dev.tacticalcombat.combat.SrdRecoveryGameTests",
+      "dev.tacticalcombat.combat.DmWorkspaceRedesignGameTests"
     ]
   },
   "depends": {
