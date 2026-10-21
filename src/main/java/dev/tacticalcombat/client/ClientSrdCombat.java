@@ -13,7 +13,8 @@ import java.util.*;
 public final class ClientSrdCombat {
     static UUID encounter;
     static long revision=-1,turn;
-    static JsonObject state=new JsonObject(),preview;
+    static JsonObject state=new JsonObject(),preview,reactionPreview;
+    private static String announcedOpportunity="";
     static String lastResult="",lastResultId="",lastResultSummary="";
     static String message="No SRD encounter selected";
     static String lastFailure="";
@@ -27,7 +28,7 @@ public final class ClientSrdCombat {
     static boolean validPreview(String target){return SrdBattlefieldActions.matchesPreview(state,preview,target,revision);}
     private static final SrdGridRequests gridRequests=new SrdGridRequests();
     private static final SrdGridRefresh refresh=new SrdGridRefresh();
-    static long ticks;
+    static long ticks,opportunityReceivedTick;
     static final SrdRecentActivity activity=new SrdRecentActivity();
     static String pending="";
     private static boolean reconciling;
@@ -40,9 +41,9 @@ public final class ClientSrdCombat {
     public static JsonObject workspaceState(){return state.deepCopy();}
     public static void battlefield(){MinecraftClient.getInstance().setScreen(new SrdBattlefieldScreen());}
     public static SrdMovementPreview.Details movementDetails(){return movement.details(selected!=null?selected:hover);}
-    public static boolean hideVanillaHotbar(){var mc=MinecraftClient.getInstance();return SrdBattlefieldPresentation.hideHotbar(SrdCamera.engaged(),ClientCombatState.active,mc.currentScreen instanceof SrdBattlefieldScreen,mc.player!=null&&mc.world!=null);}
+    public static boolean hideVanillaHotbar(){var mc=MinecraftClient.getInstance();return SrdBattlefieldPresentation.hideHotbar(SrdCamera.engaged(),ClientCombatState.active,(mc.currentScreen instanceof SrdBattlefieldScreen||mc.currentScreen instanceof SrdReactionScreen),mc.player!=null&&mc.world!=null);}
     public static UUID hudEncounter() {return encounter;}
-    public static void clear() { encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=hoverEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";lastResultId="";lastResultSummary="";activity.clear();pending="";reconciling=false;hover=null;unavailableHover=null;lastFailure="";failureSerial=0;SrdCamera.clear();SrdMotion.clear();SrdCombatEffects.clear();previewGate.clear();replies.clear();gridRevision=-1;BlockFade.clear(); }
+    public static void clear() { reactionPreview=null;announcedOpportunity=""; encounter=null; revision=-1; turn=0; state=new JsonObject(); preview=null; grid=null; focusEntity=hoverEntity=-1;presented.clear();movement.clear();gridRequests.clear();refresh.clear();selected=null;lastResult="";lastResultId="";lastResultSummary="";activity.clear();pending="";reconciling=false;hover=null;unavailableHover=null;lastFailure="";failureSerial=0;SrdCamera.clear();SrdMotion.clear();SrdCombatEffects.clear();previewGate.clear();replies.clear();gridRevision=-1;BlockFade.clear(); }
     public static void receive(SrdStatePayload payload) {
         if(encounter!=null&&!encounter.equals(payload.encounter())&&Set.of("REJECTED","STORAGE_ERROR","PREVIEW").contains(payload.code()))return;
         boolean matchingReply=true;
@@ -52,7 +53,7 @@ public final class ClientSrdCombat {
         if(payload.code().equals("ENDED")) {
             if(payload.encounter().equals(encounter)){clear();var player=MinecraftClient.getInstance().player;if(player!=null)player.sendMessage(net.minecraft.text.Text.literal(payload.message()),true);} message=payload.message(); return;
         }
-        if(payload.code().equals("REJECTED") || payload.code().equals("STORAGE_ERROR")) { message=payload.message();lastFailure=payload.message();failureSerial++;preview=null;
+        if(payload.code().equals("REJECTED") || payload.code().equals("STORAGE_ERROR")) { message=payload.message();lastFailure=payload.message();failureSerial++;preview=null;reactionPreview=null;
             if(pending.equals("move")){grid=null;selected=null;hover=null;movement.clear();gridRequests.clear();refresh.clear();}
             movement.context(revision,message,grid==null);pending="";activity.add("denied:"+ticks,message,ticks); return; }
         if(payload.encounter().equals(encounter) && payload.revision()<revision) return;
@@ -66,12 +67,13 @@ public final class ClientSrdCombat {
             if(!SrdViewPolicy.permissions(data).equals(SrdViewPolicy.permissions(state))){lastResult="";lastResultId="";lastResultSummary="";lastFailure="";activity.clear();SrdCombatEffects.clear();}
             if(!Objects.equals(data.get("active"),state.get("active"))){var a=SrdViewPolicy.current(data);if(a!=null)activity.add("turn:"+data.get("turn"),"Turn: "+a.get("name").getAsString(),ticks);}
             if(data.has("remainingFeet") && state.has("remainingFeet") && Objects.equals(data.get("active"),state.get("active")) && data.get("remainingFeet").getAsInt()<state.get("remainingFeet").getAsInt())activity.add("move:"+payload.revision(),"Movement committed · "+data.get("remainingFeet")+" ft remaining",ticks);
-            if(changed) { preview=null; grid=null; selected=null;hover=null; movement.clear(); }
+            if(changed) { reactionPreview=null;preview=null; grid=null; selected=null;hover=null; movement.clear(); }
             if(!Objects.equals(data.get("active"),state.get("active"))||!Objects.equals(data.get("turn"),state.get("turn"))||!SrdViewPolicy.permissions(data).equals(SrdViewPolicy.permissions(state))){previewGate.clear();replies.clear();pending="";reconciling=false;}
+            if(pending.startsWith("reaction_")&&(!data.has("opportunity")||state.has("opportunity")&&!data.getAsJsonObject("opportunity").get("id").equals(state.getAsJsonObject("opportunity").get("id")))){pending="";replies.clear();}
             encounter=payload.encounter(); revision=payload.revision(); state=data; turn=data.get("turn").getAsLong();
             SrdMotion.accept(encounter.toString(),data);
             if(currentGrid) message=payload.message();
-            if((matchingReply&&Set.of("OK","DASH","DODGE","POSTURE","PREVIEW","RESULT","SAVE_FAILED","PAUSED").contains(payload.code()) || payload.code().equals("STATE")&&reconciling)){pending="";reconciling=false;}
+            if((matchingReply&&Set.of("OK","DASH","DODGE","DISENGAGE","REACTION_PREVIEW","REACTION_DECLINED","POSTURE","PREVIEW","RESULT","SAVE_FAILED","PAUSED").contains(payload.code()) || payload.code().equals("STATE")&&reconciling)){pending="";reconciling=false;}
             if(!canControl()) {grid=null;selected=null;preview=null;movement.clear();}
             if(currentGrid && (payload.code().equals("GRID_PENDING") || payload.code().equals("GRID_CANCELLED"))) {grid=null;movement.clear();}
             if(payload.code().equals("POSTURE")){message=payload.message();activity.add("posture:"+revision,message,ticks);}
@@ -80,6 +82,16 @@ public final class ClientSrdCombat {
             if(data.has("state")&&data.get("state").getAsString().equals("PAUSED"))activity.add("pause:"+revision,"Encounter paused — DM adjudication required",ticks);
             if(data.has("preview")&&data.has("previewRequest")&&previewGate.accepts(encounter.toString(),turn,data.get("active").getAsString(),data.get("previewRequest").getAsString(),data.getAsJsonObject("preview"))){
                 preview=data.getAsJsonObject("preview");activity.add("preview:"+preview.get("id"),"Preview ready · "+preview.get("attack").getAsString()+" · "+preview.get("range").getAsString(),ticks);
+            }
+            if(!data.has("opportunity"))reactionPreview=null;
+            if(matchingReply&&data.has("reactionPreview")&&data.has("opportunity")){
+                var candidate=data.getAsJsonObject("reactionPreview");var prompt=data.getAsJsonObject("opportunity");
+                if(candidate.get("trigger").equals(prompt.get("id"))&&candidate.get("actor").equals(prompt.get("reactor"))&&candidate.get("target").equals(prompt.get("target"))&&candidate.get("revision").getAsLong()==revision)reactionPreview=candidate;
+            }
+            if(payload.code().equals("DISENGAGE")||payload.code().equals("REACTION_DECLINED")){message=payload.message();activity.add("reaction:"+revision,message,ticks);}
+            if(data.has("opportunity")){
+                opportunityReceivedTick=ticks;String offered=data.getAsJsonObject("opportunity").get("id").getAsString();
+                if(!offered.equals(announcedOpportunity)){announcedOpportunity=offered;var mc=MinecraftClient.getInstance();mc.setScreen(new SrdReactionScreen(mc.currentScreen));}
             }
             if(data.has("result")) {
                 var result=data.getAsJsonObject("result"); message=SrdAttackFeedback.describe(result,actors());lastResultSummary=SrdAttackFeedback.summary(result,actors());lastResult=message;lastResultId=result.get("action").getAsString();

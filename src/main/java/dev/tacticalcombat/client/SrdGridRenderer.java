@@ -32,6 +32,12 @@ public final class SrdGridRenderer {
             outline(buffer,matrix,x,y,z,.92f,selected?.07f:.025f,color);
             if(route&&!start)quad(buffer,matrix,x+.32f,y,z+.32f,.28f,.28f,color);
         }
+        if(ClientSrdCombat.canControl()&&ClientSrdCombat.state.has("pendingRoute")){
+            var remaining=ClientSrdCombat.state.getAsJsonArray("pendingRoute");
+            for(int i=0;i<Math.min(120,remaining.size());i++){var c=remaining.get(i).getAsJsonArray();if(c.size()!=3)continue;
+                outline(buffer,matrix,c.get(0).getAsFloat()+.12f,c.get(1).getAsFloat()+.04f,c.get(2).getAsFloat()+.12f,.76f,.035f,0xCCE3BD70);
+            }
+        }
         // Red surface marker is an unavailable hover cue only; it is never a movement destination.
         var invalid=ClientSrdCombat.unavailableHover;
         if(invalid!=null&&ClientSrdCombat.canControl()&&!ClientSrdCombat.moving())outline(buffer,matrix,(float)Math.floor(invalid.x)+.15f,(float)invalid.y+.04f,(float)Math.floor(invalid.z)+.15f,.7f,.045f,0xCCCF7C73);

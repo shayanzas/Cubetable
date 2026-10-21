@@ -37,6 +37,22 @@ public final class SrdEncounter implements Encounter {
     private final Set<UUID> prone=new HashSet<>();
     private final Set<UUID> dodging=new HashSet<>();
     private SrdActionBudget budget=new SrdActionBudget();
+    private final Map<UUID,SrdReactionBudget> reactions=new HashMap<>();
+    private boolean disengaged;
+    private Opportunity opportunity;
+    private Vec3d departureFrom,departureTo;
+    private List<UUID> departureCandidates=List.of();
+    private long reactionIntentRevision=-1;
+    private final Set<UUID> considered=new HashSet<>();
+    private static final int REACTION_TICKS=400;
+    private long clock;
+    private static final class Opportunity {
+        final UUID id=UUID.randomUUID(),reactor,mover;
+        final long deadline;
+        final List<ReactionChoice> choices;
+        Opportunity(UUID reactor,UUID mover,long deadline,List<ReactionChoice> choices){this.reactor=reactor;this.mover=mover;this.deadline=deadline;this.choices=choices;}
+    }
+    record ReactionChoice(SrdEquipment.Weapon weapon,SrdCharacter.Ability ability,boolean twoHands) {}
     private Intent intent;
     private Transaction transaction;
     private final SrdRules.Dice dice;
@@ -55,6 +71,7 @@ public final class SrdEncounter implements Encounter {
     private SrdEncounter(ServerWorld world,UUID campaign,List<LivingEntity> actors,SrdRules.Dice dice) {
         this.world=world; this.campaign=campaign; this.actors=List.copyOf(actors);
         this.dice=dice;
+        actors.forEach(a->reactions.put(a.getUuid(),new SrdReactionBudget()));
     }
     /** Trusted admission API, deliberately package-private until the complete live gate is verified. */
     static SrdEncounter start(ServerWorld world,CharacterRepository.Principal requester,UUID campaign,List<LivingEntity> actors) {
@@ -175,9 +192,10 @@ public final class SrdEncounter implements Encounter {
     private void establishOrder() { order=groups.stream().flatMap(Collection::stream).toList(); turnIndex=0; beginTurn(); }
     private void beginTurn() {
         dodging.remove(current().getUuid());
+        reactions.get(current().getUuid()).refresh();disengaged=false;clearDeparture();
         requests.nextTurn(); budget=new SrdActionBudget(); intent=null; transaction=null;
-        state=State.ACTIVE; reason="Controlled public-position free-for-all; no reactions or death saves";
-        try { movement=new SrdMovementTurn(current(),this::frame,prone.contains(current().getUuid())); }
+        state=State.ACTIVE; reason="Controlled public-position free-for-all; opportunity reactions; no death saves";
+        try { movement=new SrdMovementTurn(current(),this::frame,prone.contains(current().getUuid())); movement.departure(this::departure); }
         catch(IllegalArgumentException denied) { state=State.PAUSED; reason=denied.getMessage(); movement=null; }
         revision++;
         dev.tacticalcombat.uiapi.UiEvents.SESSION.safePublish(UUID.randomUUID(),campaign,id,turn(),dev.tacticalcombat.uiapi.UiEvents.Kind.TURN,List.of(current().getUuid()),"Turn started",null,dev.tacticalcombat.uiapi.UiEvents.Visibility.RECIPIENTS_AND_DM,actors.stream().filter(a->a instanceof ServerPlayerEntity).map(Entity::getUuid).collect(java.util.stream.Collectors.toSet()));
@@ -185,6 +203,7 @@ public final class SrdEncounter implements Encounter {
     private SrdMovementTurn.Frame frame() { return new SrdMovementTurn.Frame(id,campaign,RulesProfiles.SRD,turn(),state==State.ACTIVE?current().getUuid():null); }
     void endTurn(CharacterRepository.Principal p) {
         thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required");
+        require(opportunity==null,"Resolve the pending reaction first");
         require(transaction==null || transaction.state==TransactionState.COMMITTED,"Resolve pending storage transaction first");
         if(movement!=null) movement.cancel(p);
         turnIndex++; if(turnIndex==order.size()) { turnIndex=0; round++; } beginTurn();
@@ -261,8 +280,71 @@ public final class SrdEncounter implements Encounter {
         return movement.speedFeet();
     }
     void cancelMove(CharacterRepository.Principal p) {
-        thread(); require(state==State.ACTIVE && controls(p,current()),"Active actor or campaign manager required"); movement.cancel(p); revision++;
+        thread(); require(state==State.ACTIVE && controls(p,current()) && opportunity==null,"Resolve pending reaction first or permission denied"); movement.cancel(p);clearDeparture(); revision++;
     }
+    void disengage(CharacterRepository.Principal p,UUID expectedCampaign,UUID expectedActor,long expectedRevision){
+        thread();require(state==State.ACTIVE&&controls(p,current()),"Active actor or campaign manager required");
+        require(campaign.equals(expectedCampaign)&&current().getUuid().equals(expectedActor)&&revision==expectedRevision,"Stale Disengage scope or revision");
+        require(!budget.used()&&movement!=null&&!movement.moving()&&transaction==null&&opportunity==null,"Disengage requires an available action and no pending route/transaction");
+        require(fresh(current()).stats().hp()>0,"Cannot Disengage at zero HP");CharacterService.repository().requireUnreserved(fresh(current()).character());movement.validatePreview(p);
+        budget.spend();disengaged=true;intent=null;revision++;reason="Disengage accepted; normal action spent; movement protected this turn";
+    }
+    private void clearDeparture(){opportunity=null;departureFrom=departureTo=null;departureCandidates=List.of();reactionIntentRevision=-1;considered.clear();}
+    private boolean reactionEligible(LivingEntity reactor){
+        if(!reactions.get(reactor.getUuid()).available()||reactor.isSleeping())return false;
+        try{
+            var s=fresh(reactor);if(s.stats().hp()<=0)return false;
+            var sheet=JsonParser.parseString(CharacterService.repository().character(s.character()).sheet()).getAsJsonObject();
+            for(var e:dev.tacticalcombat.uiapi.SheetSections.read(sheet,"features").getAsJsonArray("entries"))
+                if(Set.of("CONDITION","TEMPORARY").contains(e.getAsJsonObject().get("kind").getAsString()))return false;
+            CharacterService.repository().requireUnreserved(s.character());return true;
+        }catch(IllegalArgumentException unavailable){return false;}
+    }
+    private List<ReactionChoice> reactionChoices(LivingEntity reactor,Vec3d from,Vec3d to){
+        if(!reactionEligible(reactor))return List.of();
+        var a=fresh(reactor);var b=fresh(current());
+        if(!SrdTargeting.canSeeAttacker(reactor,a.stats(),current(),b.stats()))return List.of();
+        var monster=MonsterProfiles.identity(JsonParser.parseString(CharacterService.repository().character(a.character()).sheet()).getAsJsonObject());
+        var weapons=new LinkedHashSet<SrdEquipment.Weapon>();if(monster==null)weapons.add(SrdEquipment.Weapon.UNARMED);weapons.addAll(a.stats().weapons());
+        var choices=new ArrayList<ReactionChoice>();
+        for(var w:weapons){if(w.ranged)continue;
+            var abilities=monster!=null?List.of(monster.get("source").getAsString().endsWith(":zombie")?SrdCharacter.Ability.STR:SrdCharacter.Ability.DEX):w.has(SrdEquipment.Property.FINESSE)?List.of(SrdCharacter.Ability.STR,SrdCharacter.Ability.DEX):List.of(SrdCharacter.Ability.STR);
+            for(var ability:abilities)for(boolean hands:w.has(SrdEquipment.Property.VERSATILE)?List.of(false,true):List.of(w.has(SrdEquipment.Property.TWO_HANDED))){
+                try{var plan=a.rules().plan(w,SrdRules.AttackMode.MELEE,ability,hands);
+                    if(SrdReactionBudget.leavesReach(SrdTargeting.feet(reactor.getPos(),a.stats(),from,b.stats()),SrdTargeting.feet(reactor.getPos(),a.stats(),to,b.stats()),plan.reachFeet())){legalTarget(reactor,current(),plan);choices.add(new ReactionChoice(w,ability,hands));}
+                }catch(IllegalArgumentException unsupported){}
+            }
+        }return List.copyOf(choices);
+    }
+    private boolean departure(Vec3d from,Vec3d to){
+        if(disengaged)return true;
+        if(!from.equals(departureFrom)||!to.equals(departureTo)){clearDeparture();departureFrom=from;departureTo=to;departureCandidates=order.stream().filter(candidate->!candidate.equals(current().getUuid())&&!reactionChoices(actor(candidate),from,to).isEmpty()).toList();}
+        if(opportunity!=null)return false;
+        for(UUID candidate:departureCandidates){if(candidate.equals(current().getUuid())||considered.contains(candidate))continue;
+            var options=reactionChoices(actor(candidate),from,to);considered.add(candidate);
+            if(!options.isEmpty()){opportunity=new Opportunity(candidate,current().getUuid(),clock+REACTION_TICKS,options);intent=null;revision++;reason="Movement interrupted — awaiting reaction";return false;}
+        }return true;
+    }
+    private void requireOpportunity(CharacterRepository.Principal p,UUID trigger,UUID reactor,UUID mover,UUID expectedCampaign,long expectedRevision){
+        thread();require(state==State.ACTIVE&&opportunity!=null&&opportunity.id.equals(trigger)&&opportunity.reactor.equals(reactor)&&opportunity.mover.equals(mover)&&campaign.equals(expectedCampaign)&&revision==expectedRevision,"Stale reaction scope or revision");
+        require(controls(p,actor(reactor))&&clock<opportunity.deadline&&reactionEligible(actor(reactor)),"Reaction expired or controller/eligibility changed");
+        require(movement!=null&&movement.moving()&&current().getUuid().equals(mover)&&current().getPos().equals(departureFrom),"Departure no longer pending");
+        require(transaction==null||transaction.state==TransactionState.COMMITTED,"Resolve pending transaction first");
+    }
+    Intent reactionPreview(CharacterRepository.Principal p,UUID trigger,UUID reactor,UUID mover,UUID expectedCampaign,long expectedRevision,ReactionChoice choice){
+        requireOpportunity(p,trigger,reactor,mover,expectedCampaign,expectedRevision);
+        require(opportunity.choices.contains(choice)&&reactionChoices(actor(reactor),departureFrom,departureTo).contains(choice),"Melee departure option no longer valid");
+        var result=buildPreview(p,actor(reactor),actor(mover),choice.weapon,SrdRules.AttackMode.MELEE,choice.ability,choice.twoHands);reactionIntentRevision=revision;return result;
+    }
+    Transaction reactionConfirm(CharacterRepository.Principal p,UUID trigger,UUID reactor,UUID mover,UUID expectedCampaign,long expectedRevision,UUID intentId){
+        requireOpportunity(p,trigger,reactor,mover,expectedCampaign,expectedRevision);var selected=intent;
+        require(reactionIntentRevision==revision&&selected!=null&&selected.id.equals(intentId)&&selected.requester.equals(p.id())&&selected.turn==turn()&&selected.actor.equals(reactor)&&selected.target.equals(mover),"Stale reaction intent");
+        require(selected.attacker.equals(fresh(actor(reactor)))&&selected.defender.equals(fresh(current()))&&selected.from.equals(actor(reactor).getPos())&&selected.to.equals(current().getPos()),"Reaction participants changed");
+        require(reactionChoices(actor(reactor),departureFrom,departureTo).contains(new ReactionChoice(selected.weapon,selected.ability,selected.twoHands))&&selected.geometry.equals(legalTarget(actor(reactor),current(),selected.plan)),"Reaction geometry changed");
+        var result=acceptAttack(p,selected,true);if(result.state==TransactionState.COMMITTED)finishOpportunity();return result;
+    }
+    void reactionDecline(CharacterRepository.Principal p,UUID trigger,UUID reactor,UUID mover,UUID expectedCampaign,long expectedRevision){requireOpportunity(p,trigger,reactor,mover,expectedCampaign,expectedRevision);finishOpportunity();reason="Reaction declined; no reaction spent";}
+    private void finishOpportunity(){opportunity=null;intent=null;if(transaction!=null&&transaction.state==TransactionState.COMMITTED&&transaction.plan.reactionCost()==1)transaction=null;revision++;}
     private SrdTargeting.Target legalTarget(LivingEntity attacker,LivingEntity target,SrdRules.AttackPlan plan) {
         require(attacker!=target && fresh(attacker).stats().hp()>0 && fresh(target).stats().hp()>0,"Actor or target cannot act at zero HP");
         var a=fresh(attacker).stats(); var b=fresh(target).stats();
@@ -285,7 +367,10 @@ public final class SrdEncounter implements Encounter {
     }
     Intent preview(CharacterRepository.Principal p,UUID targetId,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands) {
         thread(); require(state==State.ACTIVE && controls(p,current()) && !budget.used() && !movement.moving(),"No eligible active action");
-        var attacker=current(); var target=actor(targetId); var a=fresh(attacker); var b=fresh(target);
+        return buildPreview(p,current(),actor(targetId),weapon,mode,ability,twoHands);
+    }
+    private Intent buildPreview(CharacterRepository.Principal p,LivingEntity attacker,LivingEntity target,SrdEquipment.Weapon weapon,SrdRules.AttackMode mode,SrdCharacter.Ability ability,boolean twoHands){
+        UUID targetId=target.getUuid();var a=fresh(attacker); var b=fresh(target);
         var monster=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(a.character()).sheet()).getAsJsonObject());
         if(monster!=null){require(a.stats().weapons().contains(weapon),"Monster action is not supported");require(ability==(monster.get("source").getAsString().endsWith(":zombie")?SrdCharacter.Ability.STR:SrdCharacter.Ability.DEX),"Use the reviewed monster attack ability");}
         var plan=a.rules().plan(weapon,mode,ability,twoHands);
@@ -301,14 +386,18 @@ public final class SrdEncounter implements Encounter {
         require(selected.attacker.equals(fresh(attacker)) && selected.defender.equals(fresh(target))
                 && selected.from.equals(attacker.getPos()) && selected.to.equals(target.getPos()),"Attack preview changed; preview again");
         require(selected.geometry.equals(legalTarget(attacker,target,selected.plan)),"Target geometry or defensive benefit changed; preview again");
+        return acceptAttack(p,selected,false);
+    }
+    private Transaction acceptAttack(CharacterRepository.Principal p,Intent selected,boolean reaction) {
         // Acceptance happens once, before RNG. A storage failure retains these exact dice and expected revision.
         CharacterService.repository().requireGameplayCapacity();CharacterService.repository().requireUnreserved(selected.attacker.character());CharacterService.repository().requireUnreserved(selected.defender.character());
-        budget.reserve(); intent=null;
+        if(reaction)reactions.get(selected.actor).reserve();else budget.reserve(); intent=null;
         var roll=selected.attacker.rules().attack(selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,
                 selected.defender.rules().armorClass()+selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage(),dice);
         var health=SrdHealth.of(selected.defender.stats()).damage(List.of(roll.damage()),selected.defender.stats());
         var repo=CharacterService.repository();var attack=new GameplayActionPlan.Attack(selected.weapon,selected.plan.mode(),selected.ability,selected.twoHands,selected.geometry.cover().ac,selected.geometry.advantage(),selected.geometry.disadvantage());
         var plan=GameplayActionPlan.weapon(selected.id,p.id(),campaign,id,selected.turn,selected.attacker,repo.controller(selected.attacker.character()),selected.defender,repo.controller(selected.defender.character()),attack,roll);
+        if(reaction)plan=plan.asReaction();
         transaction=new Transaction(selected,roll,health,plan); persistTransaction(p); return transaction;
     }
     private void persistTransaction(CharacterRepository.Principal requester) {
@@ -319,13 +408,13 @@ public final class SrdEncounter implements Encounter {
             repo.commitGameplay(requester,transaction.plan.operation(),transaction.plan.fingerprint());
             // Persistence is authoritative even if a later movement/presentation update fails.
             transaction.state=TransactionState.COMMITTED;
-            if(!wasCommitted)budget.committed();
+            if(!wasCommitted){if(transaction.plan.reactionCost()==1)reactions.get(transaction.intent.actor).commit();else budget.committed();}
             afterDurableCommit.run();
             var saved=List.of(repo.srdSnapshot(transaction.intent.actor,campaign),repo.srdSnapshot(transaction.intent.target,campaign));
             for(var snapshot:saved)snapshots.put(snapshot.actor(),snapshot);
-            movement.reconcileResources(saved.getFirst());
-            if(transaction.health.zeroHp()) { state=State.PAUSED; reason="Zero D&D HP: encounter paused for DM healing or termination; no death saves"; }
-            else { state=State.ACTIVE; reason=transaction.roll.hit()?"Attack committed":"Miss committed; action spent"; }
+            movement.reconcileResources(saved.stream().filter(s->s.actor().equals(current().getUuid())).findFirst().orElseThrow());
+            if(transaction.health.zeroHp()) { movement.halt();state=State.PAUSED; reason="Zero D&D HP: encounter paused for DM healing or termination; no death saves"; }
+            else { state=State.ACTIVE; reason=transaction.plan.reactionCost()==1?(transaction.roll.hit()?"Opportunity attack committed; reaction spent":"Opportunity attack missed; reaction spent"):(transaction.roll.hit()?"Attack committed":"Miss committed; action spent"); }
         } catch(java.io.IOException failure) {
             transaction.state=TransactionState.SAVE_FAILED; state=State.PAUSED;
             boolean durable=CharacterService.repository().gameplayReceipt(transaction.plan.operation())!=null;
@@ -358,6 +447,7 @@ public final class SrdEncounter implements Encounter {
         thread(); require(manager(p) && state==State.PAUSED && transaction!=null && transaction.state==TransactionState.SAVE_FAILED,"No failed transaction or permission denied");
         fresh(actor(transaction.intent.actor));fresh(actor(transaction.intent.target));
         persistTransaction(p);
+        if(transaction.state==TransactionState.COMMITTED && transaction.plan.reactionCost()==1)finishOpportunity();
     }
     void heal(CharacterRepository.Principal p,UUID target,int amount) throws java.io.IOException {
         thread(); require(manager(p) && state==State.PAUSED,"Healing adjudication requires a paused encounter and campaign manager");
@@ -371,13 +461,17 @@ public final class SrdEncounter implements Encounter {
     boolean admit(CharacterRepository.Principal p,dev.tacticalcombat.net.SrdRequestPayload request) {
         thread();
         if(!viewer(p) || state==State.ENDED) return false;
-        if(state==State.ACTIVE && !controls(p,current())) return false;
+        boolean reaction=Set.of("reaction_preview","reaction_confirm","reaction_decline").contains(request.operation());
+        if(reaction){if(state!=State.ACTIVE||opportunity==null||!controls(p,actor(opportunity.reactor)))return false;}
+        else if(state==State.ACTIVE && (!controls(p,current()) || opportunity!=null&&!request.operation().equals("end"))) return false;
         if(state==State.PAUSED && !manager(p)) return false;
         return requests.accept(request.encounter(),request.turn(),request.request());
     }
     public boolean tick() {
         require(world.getServer().isOnThread(),"Encounter tick requires server thread");
         if(state==State.ENDED) return true;
+        clock++;
+        if(state==State.ACTIVE && opportunity!=null && (clock>=opportunity.deadline || !reactionEligible(actor(opportunity.reactor))))finishOpportunity();
         refreshDodge();
         for(var actor:actors) {
             if(!actor.isAlive() || actor.isRemoved() || actor.getWorld()!=world || world.getEntity(actor.getUuid())!=actor) {
@@ -394,7 +488,7 @@ public final class SrdEncounter implements Encounter {
             } catch(RuntimeException unavailable) { if(state!=State.PAUSED) revision++; state=State.PAUSED; reason="Character unavailable; adjudication required"; }
             if(state==State.ACTIVE && actor==current() && movement!=null) {
                 var result=movement.tick(); anchors.put(actor.getUuid(),actor.getPos());
-                if(!result.accepted()) { reason=result.message(); revision++; }
+                if(!result.accepted()) { if(opportunity!=null)finishOpportunity();reason=result.message(); revision++; }
                 else if(result.message().equals("Step completed")) { intent=null; revision++; }
                 if(movement.closed()) state=State.PAUSED;
             }
@@ -411,7 +505,7 @@ public final class SrdEncounter implements Encounter {
     public void end() {
         require(world.getServer().isOnThread(),"Encounter cleanup requires server thread");
         if(state==State.ENDED) return;
-        state=State.ENDED;dodging.clear();prone.clear();
+        state=State.ENDED;dodging.clear();prone.clear();clearDeparture();reactions.clear();
         revision++;
         for(var actor:actors) {
             // A failed partial claim must not alter another encounter's participant.
@@ -440,8 +534,17 @@ public final class SrdEncounter implements Encounter {
         data.addProperty("active",current()==null?"":current().getUuid().toString());
         data.addProperty("remainingFeet",movement==null?0:movement.remainingFeet());
         data.addProperty("moving",movement!=null && movement.moving());
+        data.addProperty("reactionWaiting",opportunity!=null);
+        if(opportunity!=null && controls(p,actor(opportunity.reactor))){
+            var prompt=new JsonObject();prompt.addProperty("id",opportunity.id.toString());prompt.addProperty("reactor",opportunity.reactor.toString());prompt.addProperty("target",opportunity.mover.toString());
+            prompt.addProperty("ticksRemaining",Math.max(0,opportunity.deadline-clock));prompt.addProperty("revision",revision);
+            var options=new JsonArray();for(var choice:opportunity.choices){var o=new JsonObject();o.addProperty("weapon",choice.weapon.name());o.addProperty("ability",choice.ability.name());o.addProperty("twoHands",choice.twoHands);options.add(o);}prompt.add("choices",options);data.add("opportunity",prompt);
+        }
+        data.addProperty("canDisengage",state==State.ACTIVE && current()!=null && controls(p,current()) && !budget.used() && movement!=null && !movement.moving() && transaction==null);
+        if(current()!=null && controls(p,current()))data.addProperty("disengaged",disengaged);
         if(movement!=null&&movement.motion()!=null)data.add("motion",movement.motion());
         if(current()!=null&&controls(p,current())){
+            if(movement!=null)data.add("pendingRoute",movement.pendingRoute());
             data.addProperty("routeStatus",movement==null?"Unavailable":movement.routeStatus());
             data.addProperty("prone",prone(current()));data.addProperty("standCost",movement==null?0:SrdMovement.standingCost(movement.speedFeet()));
             data.addProperty("canPosture",state==State.ACTIVE&&movement!=null&&!movement.moving()&&(transaction==null||transaction.state==TransactionState.COMMITTED)&&(!prone(current())||movement.speedFeet()>0&&movement.remainingFeet()>=SrdMovement.standingCost(movement.speedFeet())));
@@ -458,7 +561,7 @@ public final class SrdEncounter implements Encounter {
             entry.addProperty("initiative",initiative.containsKey(id)?initiative.get(id).total():0);
             entry.addProperty("controlled",controls(p,actor));
             if(controls(p,actor)) {
-                entry.addProperty("dodging",dodging.contains(id));entry.addProperty("prone",prone.contains(id));
+                if(reactions.containsKey(id))entry.addProperty("reaction",reactions.get(id).state().name());entry.addProperty("dodging",dodging.contains(id));entry.addProperty("prone",prone.contains(id));
                 entry.addProperty("hp",stats.hp()); entry.addProperty("maximumHp",stats.maximumHp()); entry.addProperty("temporaryHp",stats.temporaryHp());
                 entry.addProperty("arrows",stats.arrows());entry.addProperty("bolts",stats.bolts());entry.addProperty("daggers",stats.daggers());
                 var monsterIdentity=dev.tacticalcombat.rules.srd.MonsterProfiles.identity(com.google.gson.JsonParser.parseString(CharacterService.repository().character(snapshots.get(id).character()).sheet()).getAsJsonObject());

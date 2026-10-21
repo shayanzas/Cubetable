@@ -42,7 +42,13 @@ public class SrdWorldInteractionGameTests implements FabricGameTest {
             check(feedback.get("hpBefore").getAsInt()==22&&feedback.get("hpAfter").getAsInt()==21&&feedback.get("rolledDamage").getAsInt()==1,"DM receives exact committed damage and HP");
             var end=new SrdMovement.Cell(f.origin.getX()+3,f.origin.getZ()+5,f.origin.getY()+1);
             var after=e.move(who,UUID.randomUUID(),end);check(after.accepted(),"move after attack accepted: "+after.message());
-            for(int i=0;i<4;i++)e.tick();
+            for(int i=0;i<4;i++){
+                e.tick();
+                if(SrdReactionGameTests.prompt(e,who)!=null){
+                    check(SrdReactionGameTests.id(SrdReactionGameTests.prompt(e,who),"reactor").equals(husk.getUuid()),"leaving Husk reach offers its new reaction before departure");
+                    SrdReactionGameTests.decline(e,who);e.tick();
+                }
+            }
             check(e.grid(who).remainingFeet()==0 && e.turn()==turn && e.actionUsed(),"remaining distance spent without resetting action or turn");
             check(CharacterService.srdStats(husk,f.campaign).stats().hp()==21,"verified source NPC HP committed");
             e.endTurn(who);check(e.current()==husk && e.turn()!=turn,"same account switches to NPC turn");

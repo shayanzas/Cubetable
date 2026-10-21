@@ -12,6 +12,11 @@ public final class SrdBattlefieldActions {
         if(!canPosture(state,pending))throw new IllegalArgumentException("Posture change unavailable");
         var args=new JsonObject();args.addProperty("campaign",state.get("campaign").getAsString());args.addProperty("actor",state.get("active").getAsString());args.addProperty("revision",revision);return args;
     }
+    public static boolean canDisengage(JsonObject state,String pending){return pending.isEmpty()&&SrdViewPolicy.canControl(state)&&state.has("canDisengage")&&state.get("canDisengage").getAsBoolean();}
+    public static JsonObject disengage(JsonObject state,long revision,String pending){
+        if(!canDisengage(state,pending))throw new IllegalArgumentException("Disengage unavailable");
+        var a=new JsonObject();a.addProperty("campaign",state.get("campaign").getAsString());a.addProperty("actor",state.get("active").getAsString());a.addProperty("revision",revision);return a;
+    }
     public static boolean canDodge(JsonObject state,String pending){
         return pending.isEmpty()&&SrdViewPolicy.canControl(state)&&state.has("canDodge")&&state.get("canDodge").getAsBoolean()
             &&!state.get("moving").getAsBoolean()&&!state.get("actionUsed").getAsBoolean();

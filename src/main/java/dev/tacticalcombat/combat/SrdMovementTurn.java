@@ -46,6 +46,9 @@ public final class SrdMovementTurn {
         var t=new com.google.gson.JsonArray();t.add(to.x);t.add(to.y);t.add(to.z);
         data.add("from",f);data.add("to",t);return data;
     }
+    @FunctionalInterface interface Departure { boolean allow(Vec3d from,Vec3d to); }
+    private Departure departure=(from,to)->true;
+    void departure(Departure hook){departure=Objects.requireNonNull(hook);}
     private Cell anchor;
     private List<Cell> route=List.of();
     private CharacterRepository.Principal controller;
@@ -103,6 +106,8 @@ public final class SrdMovementTurn {
     public int remainingFeet() { return budget-spent; }
     public boolean moving() { return !route.isEmpty(); }
     public boolean closed() { return closed; }
+    com.google.gson.JsonArray pendingRoute(){var out=new com.google.gson.JsonArray();for(var c:route){var p=new com.google.gson.JsonArray();p.add(c.x());p.add(c.y());p.add(c.z());out.add(p);}return out;}
+    void halt(){requireServerThread();route=List.of();completedPreview=null;routeStatus="Route stopped for adjudication; completed steps remain charged";}
     /** Called only after the owning encounter atomically commits this actor's resource changes. Never resets spent feet. */
     void reconcileResources(CharacterRepository.SrdSnapshot latest) {
         requireServerThread();
@@ -198,7 +203,9 @@ public final class SrdMovementTurn {
         }
         if(total>remainingFeet()) { route=List.of(); return result(false,"Remaining route exceeds movement allowance"); }
         if(waitTicks>0){waitTicks--;return result(true,"Paced movement; next step pending");}
-        Cell next=route.getFirst(); place(next); lastFrom=anchor;lastTo=next;lastStepTicks=stepTicks;stepSequence++; anchor=next; spent+=firstCost;waitTicks=stepTicks-1;
+        Cell next=route.getFirst();
+        if(!departure.allow(terrain.position(anchor),terrain.position(next)))return result(true,"Movement interrupted — awaiting reaction");
+        place(next); lastFrom=anchor;lastTo=next;lastStepTicks=stepTicks;stepSequence++; anchor=next; spent+=firstCost;waitTicks=stepTicks-1;
         route=List.copyOf(route.subList(1,route.size()));
         return result(true,"Step completed");
     }

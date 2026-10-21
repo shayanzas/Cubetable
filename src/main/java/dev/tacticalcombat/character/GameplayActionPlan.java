@@ -22,9 +22,10 @@ public record GameplayActionPlan(int version,UUID operation,UUID requester,UUID 
     }
     private record Identity(int version,UUID operation,UUID requester,UUID campaign,UUID encounter,long turn,Participant attacker,Participant target,Attack attack,SrdRules.AttackResult outcome) {}
     public GameplayActionPlan {
-        if(version!=VERSION)throw new UnsupportedOperationException("Unknown gameplay plan version");
+        if(version!=VERSION && version!=2)throw new UnsupportedOperationException("Unknown gameplay plan version");
         Objects.requireNonNull(operation);Objects.requireNonNull(requester);Objects.requireNonNull(campaign);Objects.requireNonNull(encounter);Objects.requireNonNull(attacker);Objects.requireNonNull(target);Objects.requireNonNull(attack);Objects.requireNonNull(outcome);
         require(turn>0&&!attacker.character.equals(target.character)&&!attacker.actor.equals(target.actor),"Invalid action scope");
+        require(version!=2||attack.mode==SrdRules.AttackMode.MELEE,"Reaction requires a melee attack");
         // Reconstruct from fixed faces to verify decoding without asking RNG for another outcome.
         var faces=new ArrayDeque<Integer>(outcome.roll().faces());faces.addAll(outcome.damageFaces());
         var checked=SrdRules.attack(attacker.before,attack.weapon,attack.mode,attack.ability,attack.twoHands,target.before.armorClass()+attack.cover,attack.advantage,attack.disadvantage,sides->{require(!faces.isEmpty(),"Missing fixed dice");int n=faces.removeFirst();require(n>=1&&n<=sides,"Invalid fixed die");return n;});
@@ -44,7 +45,10 @@ public record GameplayActionPlan(int version,UUID operation,UUID requester,UUID 
     private static Resources attackerAfter(SrdCharacter c,Attack a){int arrows=c.arrows(),bolts=c.bolts(),daggers=c.daggers();if(a.mode==SrdRules.AttackMode.THROWN)daggers--;else if(a.mode==SrdRules.AttackMode.RANGED){if(a.weapon==SrdEquipment.Weapon.LIGHT_CROSSBOW)bolts--;else arrows--;}return new Resources(c.hp(),c.temporaryHp(),arrows,bolts,daggers);}
     private static Resources targetAfter(SrdCharacter c,SrdRules.AttackResult outcome){var health=SrdHealth.of(c).damage(List.of(outcome.damage()),c);return new Resources(health.current(),health.temporary(),c.arrows(),c.bolts(),c.daggers());}
     public List<Participant> participants(){return List.of(attacker,target);}
-    public int actionCost(){return 1;}
+    /** Version 1 is a normal action; version 2 is one encounter-local reaction. */
+    public int actionCost(){return version==1?1:0;}
+    public int reactionCost(){return version==2?1:0;}
+    public GameplayActionPlan asReaction(){return new GameplayActionPlan(2,operation,requester,campaign,encounter,turn,attacker,target,attack,outcome,null);}
     /** Future typed effects require a new plan version; v1 cannot carry arbitrary effects or clocks. */
     public int effectsVersion(){return 0;}
     private static String hash(Object value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical(new Gson().toJsonTree(value)).getBytes(StandardCharsets.UTF_8)));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}}

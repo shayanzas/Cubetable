@@ -29,6 +29,21 @@ public final class GameplayTransactionTests {
     static GameplayActionPlan plan(Fixture f){return plan(f.repo,f.dm,f.campaign,f.actor,f.target,true,true);}
     public static void run()throws Exception{
         Path dir=Files.createTempDirectory("j2-durable-");try{
+            for(boolean hit:List.of(false,true)){
+                var f=fixture(dir.resolve("reaction-"+hit+".json"));
+                var normal=plan(f.repo,f.dm,f.campaign,f.actor,f.target,false,hit);var reaction=normal.asReaction();
+                check(normal.actionCost()==1&&normal.reactionCost()==0&&reaction.actionCost()==0&&reaction.reactionCost()==1,"versioned action versus reaction semantics");
+                check(!normal.fingerprint().equals(reaction.fingerprint()),"cost semantics included in canonical fingerprint");
+                rejects(()->plan(f).asReaction(),"ranged plan cannot become opportunity attack");
+                f.repo.prepareGameplay(f.dm,reaction);var prepared=new CharacterRepository(f.path);
+                check(prepared.gameplayReceipt(reaction.operation()).plan().equals(reaction)&&prepared.srdSnapshot(f.target,f.campaign).stats().hp()==10,"version2 prepared restart retains fixed outcome with unchanged HP");
+                prepared.commitGameplay(f.dm,reaction.operation(),reaction.fingerprint());var loaded=new CharacterRepository(f.path);
+                check(loaded.gameplayReceipt(reaction.operation()).plan().reactionCost()==1&&loaded.srdSnapshot(f.target,f.campaign).stats().hp()==(hit?9:10),"version2 committed restart preserves correct hit/miss");
+                var bytes=Files.readString(f.path);loaded.commitGameplay(f.dm,reaction.operation(),reaction.fingerprint());check(Files.readString(f.path).equals(bytes),"reaction receipt replay has no second write");
+                rejects(()->loaded.prepareGameplay(f.dm,normal),"same operation cannot switch reaction into normal action");
+                rejects(()->new GameplayActionPlan(3,reaction.operation(),reaction.requester(),reaction.campaign(),reaction.encounter(),reaction.turn(),reaction.attacker(),reaction.target(),reaction.attack(),reaction.outcome(),null),"unknown future action version rejected");
+            }
+
             for(boolean ranged:List.of(false,true))for(boolean hit:List.of(false,true)){
                 var f=fixture(dir.resolve("parity-"+ranged+hit+".json"));var plan=plan(f.repo,f.dm,f.campaign,f.actor,f.target,ranged,hit);var before=f.repo.state();var prepared=f.repo.prepareGameplay(f.dm,plan);
                 check(prepared.status()==GameplayReceipt.Status.PREPARED&&f.repo.state().characters().equals(before.characters()),"prepare changes no gameplay quantities");

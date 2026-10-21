@@ -468,7 +468,7 @@ public final class CharacterRepository {
         if(type.isEnum()&&!value.isJsonNull()&&java.util.Arrays.stream(type.getEnumConstants()).noneMatch(e->((Enum<?>)e).name().equals(value.getAsString())))throw new UnsupportedOperationException("Unknown gameplay enum value");
         if(type.isRecord()){
             if(type==GameplayReceipt.class||type==GameplayActionPlan.class){
-                var object=value.getAsJsonObject();if(!object.has("version")||object.get("version").getAsBigDecimal().intValueExact()!=1)throw new UnsupportedOperationException("Unknown gameplay metadata version");
+                var object=value.getAsJsonObject();if(!object.has("version")||!(object.get("version").getAsBigDecimal().intValueExact()==1 || type==GameplayActionPlan.class&&object.get("version").getAsBigDecimal().intValueExact()==2))throw new UnsupportedOperationException("Unknown gameplay metadata version");
                 if(type==GameplayReceipt.class&&(!object.has("status")||java.util.Arrays.stream(GameplayReceipt.Status.values()).noneMatch(s->s.name().equals(object.get("status").getAsString()))))throw new UnsupportedOperationException("Unknown gameplay receipt status");
                 if(type==GameplayActionPlan.class)require(object.has("fingerprint")&&!object.get("fingerprint").isJsonNull()&&object.get("fingerprint").getAsString().matches("[0-9a-f]{64}"),"Missing gameplay fingerprint");
             }

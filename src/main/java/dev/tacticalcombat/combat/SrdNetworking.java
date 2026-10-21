@@ -122,6 +122,29 @@ public final class SrdNetworking {
                     encounter.posture(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact(),dropping);
                     SrdGridJobs.cancel(player.getUuid());message=dropping?"Dropped Prone; no action or movement spent; movement now crawls":"Stood up; half-speed movement cost spent; action unchanged";code="POSTURE";
                 }
+                case "disengage" -> {
+                    if(!args.keySet().equals(Set.of("campaign","actor","revision")))throw new IllegalArgumentException("Disengage accepts only expected scope");
+                    if(!CharacterService.selected(player).equals(encounter.campaign()))throw new IllegalArgumentException("Selected campaign changed");
+                    encounter.disengage(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact());code="DISENGAGE";message=encounter.reason();
+                }
+                case "reaction_preview", "reaction_confirm", "reaction_decline" -> {
+                    var keys=new HashSet<>(Set.of("campaign","actor","target","trigger","revision"));
+                    if(request.operation().equals("reaction_preview"))keys.addAll(Set.of("weapon","ability","twoHands"));
+                    if(request.operation().equals("reaction_confirm"))keys.add("intent");
+                    if(!args.keySet().equals(keys))throw new IllegalArgumentException("Invalid reaction fields");
+                    if(!CharacterService.selected(player).equals(encounter.campaign()))throw new IllegalArgumentException("Selected campaign changed");
+                    UUID trigger=UUID.fromString(args.get("trigger").getAsString()),reactor=UUID.fromString(args.get("actor").getAsString()),target=UUID.fromString(args.get("target").getAsString()),campaign=UUID.fromString(args.get("campaign").getAsString());long expected=args.get("revision").getAsBigDecimal().longValueExact();
+                    if(request.operation().equals("reaction_preview")){
+                        var intent=encounter.reactionPreview(p,trigger,reactor,target,campaign,expected,new SrdEncounter.ReactionChoice(SrdEquipment.Weapon.valueOf(args.get("weapon").getAsString()),SrdCharacter.Ability.valueOf(args.get("ability").getAsString()),args.get("twoHands").getAsBoolean()));
+                        var preview=new JsonObject();var plan=intent.plan();preview.addProperty("id",intent.id().toString());preview.addProperty("trigger",trigger.toString());preview.addProperty("actor",reactor.toString());preview.addProperty("target",target.toString());preview.addProperty("revision",encounter.revision());preview.addProperty("turn",encounter.turn());
+                        preview.addProperty("weapon",plan.weapon().name());preview.addProperty("modifier",plan.attackModifier());preview.addProperty("rollMode",SrdRules.rollMode(intent.geometry().advantage(),intent.geometry().disadvantage()||plan.disadvantage()).name());preview.addProperty("damage",plan.dice()==0?Integer.toString(plan.flatDamage()):plan.dice()+"d"+plan.sides()+" + "+plan.flatDamage());preview.addProperty("reach",plan.reachFeet());preview.addProperty("cover",intent.geometry().cover().name());preview.addProperty("cost","One reaction; normal action unchanged");extra.add("reactionPreview",preview);code="REACTION_PREVIEW";message="Opportunity attack preview — confirm or decline";
+                    }else if(request.operation().equals("reaction_decline")){encounter.reactionDecline(p,trigger,reactor,target,campaign,expected);code="REACTION_DECLINED";message=encounter.reason();}
+                    else{var result=encounter.reactionConfirm(p,trigger,reactor,target,campaign,expected,UUID.fromString(args.get("intent").getAsString()));code=result.state==SrdEncounter.TransactionState.COMMITTED?"RESULT":"SAVE_FAILED";message=encounter.reason();
+                        if(result.state==SrdEncounter.TransactionState.COMMITTED){extra.add("result",result(result.plan,p));
+                            for(var watcher:player.getServer().getPlayerManager().getPlayerList())if(watcher!=player&&encounter.id().equals(WATCHING.get(watcher.getUuid()))&&(watcher.getUuid().equals(reactor)||CharacterService.repository().manages(CharacterService.principal(watcher),encounter.campaign()))){var authorized=new JsonObject();authorized.add("result",result(result.plan,CharacterService.principal(watcher)));send(watcher,state(encounter,CharacterService.principal(watcher),"RESULT",message,authorized));}
+                        }
+                    }
+                }
                 case "dodge" -> {
                     if(!args.keySet().equals(Set.of("campaign","actor","revision")))throw new IllegalArgumentException("Dodge accepts only expected campaign, actor and revision");
                     encounter.dodge(p,UUID.fromString(args.get("campaign").getAsString()),UUID.fromString(args.get("actor").getAsString()),args.get("revision").getAsBigDecimal().longValueExact());
@@ -199,7 +222,7 @@ public final class SrdNetworking {
         return new SrdStatePayload(request.encounter(),0,"RECEIPT",message,extra.toString());
     }
     static JsonObject result(GameplayActionPlan plan,CharacterRepository.Principal viewer){
-        var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("action",plan.operation().toString());roll.addProperty("turn",plan.turn());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
+        var outcome=plan.outcome();var roll=new JsonObject();roll.addProperty("reaction",plan.reactionCost()==1);roll.addProperty("action",plan.operation().toString());roll.addProperty("turn",plan.turn());roll.addProperty("hit",outcome.hit());roll.addProperty("critical",outcome.critical());roll.addProperty("chosen",outcome.roll().chosen());roll.addProperty("total",outcome.roll().total());
         var faces=new JsonArray();outcome.roll().faces().forEach(faces::add);roll.add("faces",faces);var damage=new JsonArray();outcome.damageFaces().forEach(damage::add);roll.add("damageFaces",damage);
         var attack=plan.attack();var mode=SrdRules.rollMode(attack.advantage(),attack.disadvantage()||SrdRules.plan(plan.attacker().before(),attack.weapon(),attack.mode(),attack.ability(),attack.twoHands()).disadvantage());roll.addProperty("keep",mode==SrdRules.RollMode.NORMAL?0:mode==SrdRules.RollMode.ADVANTAGE?1:2);
         roll.addProperty("actor",plan.attacker().actor().toString());roll.addProperty("target",plan.target().actor().toString());

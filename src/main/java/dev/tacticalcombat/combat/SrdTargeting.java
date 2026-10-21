@@ -25,10 +25,13 @@ public final class SrdTargeting {
         return inspect(defender,d,attacker,a).cover()!=Cover.TOTAL && defender.canSee(attacker);
     }
     public static double feet(LivingEntity a,SrdCharacter ca,LivingEntity b,SrdCharacter cb) {
+        return feet(a.getPos(),ca,b.getPos(),cb);
+    }
+    public static double feet(Vec3d a,SrdCharacter ca,Vec3d b,SrdCharacter cb) {
         double widths=(SrdTerrain.footprint(ca.size())+SrdTerrain.footprint(cb.size()))/2d;
-        double dx=Math.max(0,Math.abs(a.getX()-b.getX())-widths+1);
-        double dz=Math.max(0,Math.abs(a.getZ()-b.getZ())-widths+1);
-        return 5*Math.max(Math.max(dx,dz),Math.abs(a.getY()-b.getY()));
+        double dx=Math.max(0,Math.abs(a.x-b.x)-widths+1);
+        double dz=Math.max(0,Math.abs(a.z-b.z)-widths+1);
+        return 5*Math.max(Math.max(dx,dz),Math.abs(a.y-b.y));
     }
     /** Sixteen target-face samples (4 across by 4 high); collision shapes, not camera fading.
      * Blocked fraction: <1/2 none, >=1/2 half, >=3/4 three-quarters, all total.

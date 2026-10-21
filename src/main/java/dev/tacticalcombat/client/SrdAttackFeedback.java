@@ -11,7 +11,7 @@ public final class SrdAttackFeedback {
         String text=actor+" → "+target+"\n"+(r.get("critical").getAsBoolean()?"CRITICAL HIT":r.get("hit").getAsBoolean()?"HIT":"MISS")+" · "+mode+" · attack "+r.get("total");
         if(r.has("hpBefore"))text+="\nHP loss "+Math.max(0,r.get("hpBefore").getAsInt()-r.get("hpAfter").getAsInt())+" · HP "+r.get("hpAfter")+(r.get("zeroHp").getAsBoolean()?" · DM review":"");
         else if(r.has("rolledDamage"))text+="\nRolled damage "+r.get("rolledDamage")+" · HP private";
-        return text;
+        return r.has("reaction")&&r.get("reaction").getAsBoolean()?"Reaction used · "+text:text;
     }
     public static String describe(JsonObject r,JsonArray actors){
         String text=(r.has("actor")?name(actors,r.get("actor").getAsString())+" → "+name(actors,r.get("target").getAsString())+": ":"")
@@ -22,6 +22,6 @@ public final class SrdAttackFeedback {
         if(r.has("hpBefore"))text+="; target HP "+r.get("hpBefore")+" → "+r.get("hpAfter")+"; temp "+r.get("temporaryBefore")+" → "+r.get("temporaryAfter")+(r.get("zeroHp").getAsBoolean()?"; ZERO HP — paused for DM, no automatic death":"");
         else text+="; target HP private";
         if(r.has("hpBefore"))text+="; HP loss "+Math.max(0,r.get("hpBefore").getAsInt()-r.get("hpAfter").getAsInt())+"; temp absorbed "+Math.max(0,r.get("temporaryBefore").getAsInt()-r.get("temporaryAfter").getAsInt());
-        return text;
+        return r.has("reaction")&&r.get("reaction").getAsBoolean()?"Reaction used · "+text:text;
     }
 }

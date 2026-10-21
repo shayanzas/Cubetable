@@ -9,7 +9,7 @@ public final class SrdBattlefieldPresentation {
     private SrdBattlefieldPresentation(){}
     public record Layout(Rect status,Rect initiative,Rect camera,Rect bar,Rect history) {}
     public static Layout layout(int w,int h){
-        int barH=w<440?46:25,barY=h-barH-5;
+        int barH=w<700?46:25,barY=h-barH-5;
         int statusW=Math.min(240,w-88),statusH=h<220?34:47;
         return new Layout(new Rect(5,5,statusW,statusH),new Rect(5,statusH+8,w-10,22),
                 new Rect(w-78,5,73,22),new Rect(5,barY,w-10,barH),new Rect(5,Math.max(5,barY-Math.min(150,barY-10)-4),Math.min(320,w-10),Math.min(150,barY-10)));
